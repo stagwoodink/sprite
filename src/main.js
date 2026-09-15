@@ -59,7 +59,7 @@ discordBtn.title = 'Join the Discord';
 // Text for now, a real icon later — toggles the same Controls modal as "?".
 const helpBtn = document.createElement('button');
 helpBtn.className = 'version-tab-icon version-tab-help';
-helpBtn.textContent = '[?]';
+helpBtn.textContent = '?';
 helpBtn.title = 'Controls';
 helpBtn.addEventListener('click', () => keybindHelp.toggle());
 

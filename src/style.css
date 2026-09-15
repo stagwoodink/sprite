@@ -213,7 +213,7 @@ h1, h2, .header-text {
   display: flex;
   align-items: center;
   padding: 2px 8px;
-  font-size: 24px;
+  font-size: var(--font-body);
   color: var(--text-secondary);
   text-decoration: none;
 }
@@ -270,7 +270,7 @@ h1, h2, .header-text {
   display: flex;
   align-items: center;
   padding: 2px 8px;
-  font-size: 24px;
+  font-size: var(--font-body);
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -341,13 +341,13 @@ h1, h2, .header-text {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 16px;
+  width: 24px;
   display: none;
   align-items: center;
   justify-content: center;
   background: var(--bg-hover);
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--font-body);
 }
 .frame-tile:hover .frame-delete { display: flex; }
 
@@ -357,7 +357,7 @@ h1, h2, .header-text {
   width: 0;
   transition: width 100ms ease;
 }
-.frame-insert-gap:hover { width: 16px; }
+.frame-insert-gap:hover { width: 24px; }
 .frame-insert-btn {
   position: absolute;
   inset: 0;
@@ -880,7 +880,7 @@ h1, h2, .header-text {
   border: 1px solid var(--border-strong);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 24px;
+  font-size: var(--font-body);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -889,13 +889,13 @@ h1, h2, .header-text {
    plain character (Braille all-dots, reads as a grip texture), sized by
    font-size like every other icon so it drops onto the same grid. */
 .drag-handle {
-  flex: 0 0 16px;
+  flex: 0 0 24px;
   height: 100%;
   cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--font-body);
   color: var(--text-secondary);
 }
 .drag-handle:hover { color: var(--text-primary); }

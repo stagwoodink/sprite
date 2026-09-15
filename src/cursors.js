@@ -7,13 +7,15 @@ function svgCursor(inner, size, hotspot) {
   return `url("data:image/svg+xml,${svg}") ${hotspot.x} ${hotspot.y}`;
 }
 
+// Every cursor below shares one 18x18 canvas and 1.5 stroke-width so no
+// tool's reticle reads as bigger/heavier than another's.
 const DOT = svgCursor(
-  `<circle cx='8' cy='8' r='2' fill='${ACCENT}'/><circle cx='8' cy='8' r='6' fill='none' stroke='${ACCENT}' stroke-width='1'/>`,
-  16, { x: 8, y: 8 },
+  `<circle cx='9' cy='9' r='2' fill='${ACCENT}'/><circle cx='9' cy='9' r='7' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
+  18, { x: 9, y: 9 },
 );
 
 const BRUSH = svgCursor(
-  `<circle cx='9' cy='9' r='7' fill='none' stroke='${ACCENT}' stroke-width='1' stroke-dasharray='2,2'/>`,
+  `<circle cx='9' cy='9' r='7' fill='none' stroke='${ACCENT}' stroke-width='1.5' stroke-dasharray='2,2'/>`,
   18, { x: 9, y: 9 },
 );
 
@@ -23,8 +25,8 @@ const BUCKET = svgCursor(
 );
 
 const MARQUEE = svgCursor(
-  `<rect x='2' y='2' width='12' height='12' fill='none' stroke='${ACCENT}' stroke-width='1' stroke-dasharray='2,2'/>`,
-  16, { x: 2, y: 2 },
+  `<rect x='2' y='2' width='14' height='14' fill='none' stroke='${ACCENT}' stroke-width='1.5' stroke-dasharray='2,2'/>`,
+  18, { x: 2, y: 2 },
 );
 
 // Diamond motif, per the design system's suggestion to reuse the Stagwood
