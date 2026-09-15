@@ -23,11 +23,10 @@
 
   /* m3x6 native grid: unitsPerEm 1024 with a 6px-tall glyph cell (see the "3x6"
      naming convention shared with m5x7/m6x11) — font-size must be an integer
-     multiple of 6 or glyphs blur off-grid. 16/32 (multiples of 16) do not
-     satisfy this for m3x6 specifically; 18/36 (multiples of 6, same 2x ratio
-     the spec proposed) are used instead. */
-  --font-body: 18px;
-  --font-header: 36px;
+     multiple of 6 or glyphs blur off-grid. Bumped up from the original
+     18/36 for legibility — still both multiples of 6. */
+  --font-body: 24px;
+  --font-header: 48px;
 
   --unit: 4px;
 }
@@ -38,7 +37,7 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-base);
+  background: var(--bg-elevated);
   color: var(--text-primary);
   font-family: 'm3x6', monospace;
   font-size: var(--font-body);
@@ -70,7 +69,7 @@ h1, h2, .header-text {
   flex: 0 0 auto;
   display: flex;
   align-items: stretch;
-  background: var(--bg-base);
+  background: var(--bg-elevated);
   transition: margin 120ms ease;
 }
 

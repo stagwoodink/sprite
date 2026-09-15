@@ -2,6 +2,9 @@ import { getPixel, blendColors } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
 
 const CANVAS_BG = '#0A0A0A';
+const CHECKER_LIGHT = '#DEDEDE';
+const CHECKER_DARK = '#CFCFCF';
+const CHECKER_CELL = 4; // canvas pixels per checker square — an 8x8 sprite reads as a 2x2 checkerboard
 const GRID_COLOR = 'rgba(255, 255, 255, 0.06)';
 const SELECTION_COLOR = '#BE1425';
 const RULER_H = 14;
@@ -18,6 +21,8 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
   const { scale, ox, oy } = computeViewport(model, viewW, viewH);
   const w = model.width * scale;
   const h = model.height * scale;
+
+  drawCheckerboard(ctx, model, scale, ox, oy);
 
   if (onionFrames) {
     for (const ghost of onionFrames) drawGhost(ctx, model, ghost, scale, ox, oy);
@@ -53,6 +58,20 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
 
   if (selection) {
     drawSelection(ctx, selection, scale, ox, oy);
+  }
+}
+
+// Transparency checkerboard under the sprite, sized so the checker density
+// itself signals resolution: a fixed 4-canvas-pixel cell means an 8x8 sprite
+// reads as a 2x2 checkerboard, 16x16 as 4x4, and so on as the canvas grows.
+function drawCheckerboard(ctx, model, scale, ox, oy) {
+  for (let cy = 0, gy = 0; cy < model.height; cy += CHECKER_CELL, gy++) {
+    const cellH = Math.min(CHECKER_CELL, model.height - cy) * scale;
+    for (let cx = 0, gx = 0; cx < model.width; cx += CHECKER_CELL, gx++) {
+      const cellW = Math.min(CHECKER_CELL, model.width - cx) * scale;
+      ctx.fillStyle = (gx + gy) % 2 === 0 ? CHECKER_LIGHT : CHECKER_DARK;
+      ctx.fillRect(ox + cx * scale, oy + cy * scale, cellW, cellH);
+    }
   }
 }
 
