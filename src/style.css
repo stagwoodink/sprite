@@ -498,15 +498,38 @@ h1, h2, .header-text {
 }
 .file-stack { margin-top: auto; }
 .file-row {
-  padding: var(--unit);
+  display: flex;
+  align-items: stretch;
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   cursor: pointer;
+  overflow: hidden;
+}
+.file-row:hover { background: var(--bg-hover); }
+.file-row.active { background: var(--accent); color: var(--text-primary); }
+
+.file-row-name {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  padding: var(--unit);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.file-row:hover { background: var(--bg-hover); }
-.file-row.active { background: var(--accent); color: var(--text-primary); }
+
+/* Resize button: slides in from the right on hover, no context menu needed. */
+.file-resize-btn {
+  flex: 0 0 0;
+  width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--bg-hover);
+  border-left: 1px solid var(--hairline);
+  transition: flex-basis 120ms ease, width 120ms ease;
+}
+.file-row:hover .file-resize-btn { flex-basis: 32px; width: 32px; }
 
 .project-footer {
   display: flex;
@@ -623,6 +646,27 @@ h1, h2, .header-text {
 }
 .layer-row:hover { background: #2A2A2E; }
 .layer-row.active { background: var(--accent); }
+
+/* Opacity slider: slides in from the left on hover, drag up/down to set
+   the layer's opacity — no right-click/menu needed. */
+.opacity-slider {
+  position: relative;
+  flex: 0 0 0;
+  width: 0;
+  overflow: hidden;
+  background: var(--bg-hover);
+  border-right: 1px solid var(--hairline);
+  cursor: ns-resize;
+  transition: flex-basis 120ms ease, width 120ms ease;
+}
+.layer-row:hover .opacity-slider { flex-basis: 8px; width: 8px; }
+.opacity-slider-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--accent);
+}
 
 .layer-thumb {
   position: relative;

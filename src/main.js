@@ -271,28 +271,11 @@ function redrawLayersPanel() {
     onToggleVisible: (i) => { file.layers[i].visible = !file.layers[i].visible; draw(); autosave(); },
     onDelete: (i) => { deleteLayer(file, i); bindActiveFile(); draw(); autosave(); },
     onReorder: (from, to) => { reorderLayer(file, from, to); draw(); autosave(); },
-    onOpenOpacity: (i, anchor) => openOpacitySlider(anchor, file.layers[i], () => { draw(); autosave(); }),
+    // Live drag feedback is cheap (canvas only); autosave/thumbnail
+    // refresh happens once when the drag ends, not on every tick.
+    onOpacityChange: (i, value) => { file.layers[i].opacity = value; renderCanvas(); },
+    onOpacityCommit: () => { redrawLayersPanel(); autosave(); },
   });
-}
-
-function openOpacitySlider(anchor, layer, onChange) {
-  document.querySelectorAll('.opacity-popup').forEach((el) => el.remove());
-  const popup = document.createElement('div');
-  popup.className = 'color-picker-popup opacity-popup';
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = 0;
-  slider.max = 100;
-  slider.value = Math.round(layer.opacity * 100);
-  slider.addEventListener('input', () => { layer.opacity = Number(slider.value) / 100; onChange(); });
-  popup.append(slider);
-  const rect = anchor.getBoundingClientRect();
-  popup.style.left = rect.right + 4 + 'px';
-  popup.style.top = rect.top + 'px';
-  document.body.append(popup);
-  setTimeout(() => window.addEventListener('pointerdown', function onOutside(e) {
-    if (!popup.contains(e.target)) { popup.remove(); window.removeEventListener('pointerdown', onOutside); }
-  }), 0);
 }
 
 function redrawTimelinePanel() {

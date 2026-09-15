@@ -30,6 +30,36 @@ export function renderLayersPanel(container, file, callbacks) {
     row.className = 'layer-row' + (i === file.activeLayerIndex ? ' active' : '');
     row.draggable = true;
 
+    // Hover-revealed vertical slider, left of the thumbnail — drag up/down
+    // to change opacity, no right-click/menu needed.
+    const opacitySlider = document.createElement('div');
+    opacitySlider.className = 'opacity-slider';
+    opacitySlider.title = 'Drag to change layer opacity';
+    const opacityFill = document.createElement('div');
+    opacityFill.className = 'opacity-slider-fill';
+    opacityFill.style.height = Math.round(layer.opacity * 100) + '%';
+    opacitySlider.append(opacityFill);
+
+    function setOpacityFromEvent(e) {
+      const r = opacitySlider.getBoundingClientRect();
+      const value = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
+      opacityFill.style.height = Math.round(value * 100) + '%';
+      callbacks.onOpacityChange(i, value);
+    }
+    opacitySlider.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      opacitySlider.setPointerCapture(e.pointerId);
+      setOpacityFromEvent(e);
+      const move = (ev) => setOpacityFromEvent(ev);
+      const up = () => {
+        opacitySlider.removeEventListener('pointermove', move);
+        opacitySlider.removeEventListener('pointerup', up);
+        callbacks.onOpacityCommit();
+      };
+      opacitySlider.addEventListener('pointermove', move);
+      opacitySlider.addEventListener('pointerup', up);
+    });
+
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'layer-thumb';
     const canvasEl = document.createElement('canvas');
@@ -40,10 +70,6 @@ export function renderLayersPanel(container, file, callbacks) {
     thumbWrap.addEventListener('click', (e) => {
       e.stopPropagation();
       callbacks.onToggleVisible(i);
-    });
-    thumbWrap.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      callbacks.onOpenOpacity(i, thumbWrap);
     });
 
     const label = document.createElement('div');
@@ -58,7 +84,7 @@ export function renderLayersPanel(container, file, callbacks) {
       callbacks.onDelete(i);
     });
 
-    row.append(thumbWrap, label, del);
+    row.append(opacitySlider, thumbWrap, label, del);
     row.addEventListener('click', () => callbacks.onSelect(i));
     row.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', String(i)));
     row.addEventListener('dragover', (e) => e.preventDefault());

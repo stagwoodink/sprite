@@ -43,15 +43,30 @@ export function renderProjectPanel(container, project, callbacks) {
   project.files.forEach((file, i) => {
     const row = document.createElement('div');
     row.className = 'file-row' + (i === project.activeFileIndex ? ' active' : '');
-    row.textContent = file.name;
     row.addEventListener('click', () => {
       project.activeFileIndex = i;
       callbacks.onChange();
     });
-    row.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      openFileContextMenu(row, file, callbacks);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'file-row-name';
+    nameEl.textContent = file.name;
+    nameEl.title = 'Double-click to rename';
+    nameEl.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startInlineEdit(nameEl, file.name, (v) => { if (v) { file.name = v; callbacks.onChange(); } });
     });
+
+    const resizeBtn = document.createElement('div');
+    resizeBtn.className = 'file-resize-btn';
+    resizeBtn.title = 'Resize canvas';
+    resizeBtn.textContent = '⤡'; // diagonal-arrows resize glyph
+    resizeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSizePopup(resizeBtn, (w, h) => callbacks.onResizeFile(file, w, h));
+    });
+
+    row.append(nameEl, resizeBtn);
     fileStack.append(row);
   });
 
@@ -112,12 +127,4 @@ function openSizePopup(anchor, onPick) {
     label,
     onClick: () => onPick(w, h),
   })));
-}
-
-// Merged Rename + Resize Canvas slide-out (§1 flagged assumption 4).
-function openFileContextMenu(anchor, file, callbacks) {
-  openSlideOut(anchor, [
-    { label: 'Rename', onClick: () => startInlineEdit(anchor, file.name, (v) => { if (v) { file.name = v; callbacks.onChange(); } }) },
-    { label: 'Resize Canvas', onClick: () => openSizePopup(anchor, (w, h) => callbacks.onResizeFile(file, w, h)) },
-  ]);
 }
