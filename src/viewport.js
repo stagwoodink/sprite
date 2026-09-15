@@ -7,9 +7,12 @@ export function fitScale(model, viewW, viewH) {
   return Math.max(1, Math.floor(Math.min(viewW / model.width, viewH / model.height)));
 }
 
-// Zoom in until a single canvas pixel fills the whole visible area (§6).
+// Zoom in until at least MIN_VISIBLE_PX canvas pixels still span the
+// shorter viewport dimension — past that, scrolling/panning stops being
+// useful (nothing left to navigate to within view).
+const MIN_VISIBLE_PX = 16;
 export function maxZoomScale(viewW, viewH) {
-  return Math.max(1, Math.min(viewW, viewH));
+  return Math.max(1, Math.min(viewW, viewH) / MIN_VISIBLE_PX);
 }
 
 // How far out the user can manually zoom (wheel, End) — further than plain
