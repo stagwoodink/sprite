@@ -8,11 +8,12 @@ function darken(hex, amount) {
   return '#' + [r, g, b].map((v) => clampDark(v).toString(16).padStart(2, '0')).join('');
 }
 
-// Palette belongs to the Project (§4, §7.2) — a single instance for now;
-// Phase 7 swaps this out per-project.
-export function createPalette(container, onChange) {
+// Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
+// loaded/created Project's own palette object; the returned `state` is that
+// same live object (mutated in place) so main.js can persist it directly.
+export function createPalette(container, initial, onChange) {
   const preset = PRESETS[DEFAULT_PRESET];
-  const state = {
+  const state = initial && initial.chips && initial.chips.length ? initial : {
     chips: [...preset.chips],
     primary: preset.chips[0],
     secondary: preset.chips[1] || preset.chips[0],

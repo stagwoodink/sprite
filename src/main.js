@@ -8,13 +8,20 @@ import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
 import { createProject, activeFile as getActiveFile, addFile } from './project.js';
 import { activePixels, resizeCanvas } from './pixi-file.js';
 import { renderProjectPanel } from './project-panel.js';
+import { chooseBackend, loadProject, saveProject, debounce } from './persistence.js';
 
 const canvas = document.getElementById('pixi-canvas');
 const ctx = canvas.getContext('2d');
 const paletteBar = document.getElementById('palette-bar');
 const projectPanel = document.getElementById('project-panel');
 
-const project = createProject('My Project');
+// Autosave (§10, §18): every committed change writes to whichever backend
+// was resolved (real folder via FSA, or the IndexedDB fallback), debounced
+// so a fast drag-stroke doesn't fire one write per pixel.
+const backend = await chooseBackend();
+const project = (await loadProject(backend)) || createProject('My Project');
+const autosave = debounce(() => saveProject(backend, project));
+autosave();
 
 // `model` is a stable view object; switching files/layers/frames re-points
 // model.pixels at that combination's array in place (same reference the
@@ -37,7 +44,7 @@ let projectPinned = false;
 let selectionMask = null;
 let selectionRender = null;
 
-const palette = createPalette(paletteBar, () => {});
+const palette = createPalette(paletteBar, project.palette, () => autosave());
 const colors = { primary: () => palette.getPrimary(), secondary: () => palette.getSecondary() };
 
 const selectionApi = {
@@ -57,7 +64,7 @@ const selectionApi = {
 
 // Undo/redo lives on the active PixiFile (§5, §10) — this just resolves it.
 const history = {
-  commit: (cmd) => commitCommand(getActiveFile(project), cmd),
+  commit: (cmd) => { commitCommand(getActiveFile(project), cmd); autosave(); },
 };
 
 function resize() {
@@ -74,12 +81,13 @@ function draw() {
 function redrawProjectPanel() {
   renderProjectPanel(projectPanel, project, {
     onChange: () => { bindActiveFile(); selectionApi.clear(); redrawProjectPanel(); draw(); },
-    onAddFile: (w, h) => { addFile(project, `sprite${project.files.length + 1}`, w, h); bindActiveFile(); redrawProjectPanel(); draw(); },
+    onAddFile: (w, h) => { addFile(project, `sprite${project.files.length + 1}`, w, h); bindActiveFile(); redrawProjectPanel(); draw(); autosave(); },
     onResizeFile: (file, w, h) => {
       resizeCanvas(file, w, h);
       if (file === getActiveFile(project)) bindActiveFile();
       redrawProjectPanel();
       draw();
+      autosave();
     },
   });
 }
@@ -141,10 +149,10 @@ window.addEventListener('keydown', (e) => {
     deleteSelectionOrHover();
   } else if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
     e.preventDefault();
-    if (undoCmd(getActiveFile(project), model)) draw();
+    if (undoCmd(getActiveFile(project), model)) { draw(); autosave(); }
   } else if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
     e.preventDefault();
-    if (redoCmd(getActiveFile(project), model)) draw();
+    if (redoCmd(getActiveFile(project), model)) { draw(); autosave(); }
   }
 });
 
