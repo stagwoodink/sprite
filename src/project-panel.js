@@ -63,7 +63,7 @@ export function renderProjectPanel(container, project, callbacks) {
   const exportBtn = chunkyTextButton('Export', () => callbacks.onExport && callbacks.onExport());
   footer.append(importBtn, exportBtn);
 
-  container.append(header, fileList, footer);
+  container.append(fileList, header, footer);
 }
 
 function chunkyIconButton(glyph, title, onClick) {

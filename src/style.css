@@ -447,7 +447,7 @@ h1, h2, .header-text {
   display: flex;
   align-items: stretch;
   height: 32px;
-  border-bottom: 1px solid var(--hairline);
+  border-top: 1px solid var(--hairline); /* divider from the file list above it */
 }
 .project-name {
   flex: 1 1 auto;
