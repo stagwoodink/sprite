@@ -21,12 +21,12 @@ function savePrefs(prefs) {
 // clicking that format again toggles black; right-click sets it to the
 // current secondary color.
 export function openExportBar(anchorEl, file, getSecondaryColor) {
-  document.querySelectorAll('.context-bar.export-bar').forEach((el) => el.remove());
+  document.querySelectorAll('.slide-out-bar.export-bar').forEach((el) => el.remove());
   const prefs = loadPrefs();
   let altFill = '#FFFFFF';
 
   const bar = document.createElement('div');
-  bar.className = 'context-bar export-bar';
+  bar.className = 'slide-out-bar export-bar';
 
   const formatRow = document.createElement('div');
   formatRow.className = 'export-btn-row';
@@ -93,7 +93,13 @@ export function openExportBar(anchorEl, file, getSecondaryColor) {
   const rect = anchorEl.getBoundingClientRect();
   bar.style.left = rect.right + 4 + 'px';
   bar.style.top = rect.top + 'px';
+  bar.style.transform = 'translateX(-12px)';
+  bar.style.opacity = '0';
   document.body.append(bar);
+  requestAnimationFrame(() => {
+    bar.style.transform = 'translate(0, 0)';
+    bar.style.opacity = '1';
+  });
 
   function cleanup() {
     window.removeEventListener('keydown', onKeydown);

@@ -485,26 +485,21 @@ h1, h2, .header-text {
   padding: 0 var(--unit);
 }
 
-.size-popup, .context-bar {
+/* ---- Slide-Out Context Bar (CONTEXT.md vocabulary) -------------------
+   The one mechanism for every secondary/contextual control surface —
+   file rename/resize, the new-file size picker, export — a stack of
+   chunky buttons sliding out from the element that triggered it, never
+   a floating text dropdown. */
+.slide-out-bar {
   position: fixed;
   z-index: 1000;
   background: var(--bg-elevated);
   border: 2px solid var(--border-strong);
   display: flex;
   flex-direction: column;
+  transition: transform 150ms ease, opacity 150ms ease;
 }
-.size-popup-option, .context-bar button {
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--hairline);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--font-body);
-  text-align: left;
-  padding: var(--unit) calc(var(--unit) * 2);
-  cursor: pointer;
-}
-.size-popup-option:hover, .context-bar button:hover { background: var(--bg-hover); }
+.slide-out-btn { width: 100%; min-width: 160px; }
 
 /* ---- Export context bar (§14) ---------------------------------------- */
 .export-bar {

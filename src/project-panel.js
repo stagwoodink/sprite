@@ -1,4 +1,5 @@
 import { NEW_FILE_SIZES } from './project.js';
+import { openSlideOut } from './slide-out.js';
 
 // Project panel (ui-design-system §7, design-doc §13). `state` is the
 // { project } holder in main.js; callbacks mutate it and call onChange to
@@ -104,50 +105,19 @@ function startInlineEdit(el, initial, onCommit) {
   input.addEventListener('blur', commit, { once: true });
 }
 
-// Non-modal popup — the rest of the UI stays interactive around it (§13.2).
+// Slide-out button stack (§13.2's "non-modal popup" — the rest of the UI
+// stays interactive around it), one button per size preset.
 function openSizePopup(anchor, onPick) {
-  document.querySelectorAll('.size-popup').forEach((el) => el.remove());
-  const popup = document.createElement('div');
-  popup.className = 'size-popup';
-  NEW_FILE_SIZES.forEach(({ label, w, h }) => {
-    const opt = document.createElement('button');
-    opt.className = 'size-popup-option';
-    opt.textContent = label;
-    opt.addEventListener('click', () => { onPick(w, h); popup.remove(); });
-    popup.append(opt);
-  });
-  const rect = anchor.getBoundingClientRect();
-  popup.style.left = rect.left + 'px';
-  popup.style.top = rect.bottom + 'px';
-  document.body.append(popup);
-  setTimeout(() => window.addEventListener('pointerdown', function onOutside(e) {
-    if (!popup.contains(e.target)) { popup.remove(); window.removeEventListener('pointerdown', onOutside); }
-  }), 0);
+  openSlideOut(anchor, NEW_FILE_SIZES.map(({ label, w, h }) => ({
+    label,
+    onClick: () => onPick(w, h),
+  })));
 }
 
-// Merged Rename + Resize Canvas context menu (§1 flagged assumption 4).
+// Merged Rename + Resize Canvas slide-out (§1 flagged assumption 4).
 function openFileContextMenu(anchor, file, callbacks) {
-  document.querySelectorAll('.context-bar').forEach((el) => el.remove());
-  const bar = document.createElement('div');
-  bar.className = 'context-bar';
-  const rename = document.createElement('button');
-  rename.textContent = 'Rename';
-  rename.addEventListener('click', () => {
-    bar.remove();
-    startInlineEdit(anchor, file.name, (v) => { if (v) { file.name = v; callbacks.onChange(); } });
-  });
-  const resize = document.createElement('button');
-  resize.textContent = 'Resize Canvas';
-  resize.addEventListener('click', () => {
-    bar.remove();
-    openSizePopup(anchor, (w, h) => callbacks.onResizeFile(file, w, h));
-  });
-  bar.append(rename, resize);
-  const rect = anchor.getBoundingClientRect();
-  bar.style.left = rect.right + 'px';
-  bar.style.top = rect.top + 'px';
-  document.body.append(bar);
-  setTimeout(() => window.addEventListener('pointerdown', function onOutside(e) {
-    if (!bar.contains(e.target)) { bar.remove(); window.removeEventListener('pointerdown', onOutside); }
-  }), 0);
+  openSlideOut(anchor, [
+    { label: 'Rename', onClick: () => startInlineEdit(anchor, file.name, (v) => { if (v) { file.name = v; callbacks.onChange(); } }) },
+    { label: 'Resize Canvas', onClick: () => openSizePopup(anchor, (w, h) => callbacks.onResizeFile(file, w, h)) },
+  ]);
 }
