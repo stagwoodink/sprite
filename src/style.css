@@ -405,7 +405,13 @@ h1, h2, .header-text {
 .panel-add-btn { width: 100%; }
 .panel-add-btn .btn-face { border-top-width: 2px; }
 
-.file-list { flex: 1 1 auto; overflow-y: auto; }
+.file-list {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.file-stack { margin-top: auto; }
 .file-row {
   padding: var(--unit);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);

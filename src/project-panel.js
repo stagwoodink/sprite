@@ -28,11 +28,16 @@ export function renderProjectPanel(container, project, callbacks) {
   const fileList = document.createElement('div');
   fileList.className = 'file-list';
 
+  // Anchored to the bottom of the list area, same as the layers panel's
+  // stack — a short file list sits at the floor instead of floating at top.
+  const fileStack = document.createElement('div');
+  fileStack.className = 'file-stack';
+
   const addFileBtn = chunkyTextButton('+', () => openSizePopup(addFileBtn, (w, h) => {
     callbacks.onAddFile(w, h);
   }));
   addFileBtn.classList.add('panel-add-btn');
-  fileList.append(addFileBtn);
+  fileStack.append(addFileBtn);
 
   project.files.forEach((file, i) => {
     const row = document.createElement('div');
@@ -46,8 +51,10 @@ export function renderProjectPanel(container, project, callbacks) {
       e.preventDefault();
       openFileContextMenu(row, file, callbacks);
     });
-    fileList.append(row);
+    fileStack.append(row);
   });
+
+  fileList.append(fileStack);
 
   const footer = document.createElement('div');
   footer.className = 'project-footer';
