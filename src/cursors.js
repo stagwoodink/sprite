@@ -45,6 +45,20 @@ const ERASER = svgCursor(
   18, { x: 9, y: 9 },
 );
 
+// Shape tools (Q/W/E, on request).
+const SHAPE_RECT = svgCursor(
+  `<rect x='2' y='2' width='14' height='14' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
+  18, { x: 2, y: 2 },
+);
+const SHAPE_TRIANGLE = svgCursor(
+  `<path d='M9 2 L16 16 L2 16 Z' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
+  18, { x: 2, y: 16 },
+);
+const SHAPE_CIRCLE = svgCursor(
+  `<circle cx='9' cy='9' r='7' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
+  18, { x: 2, y: 2 },
+);
+
 export const CURSORS = {
   paint: `${DOT}, crosshair`,
   antialiasedPaint: `${BRUSH}, crosshair`,
@@ -54,6 +68,9 @@ export const CURSORS = {
   selectWand: `${WAND}, crosshair`,
   selectPolygon: `${LASSO}, crosshair`,
   erase: `${ERASER}, crosshair`,
+  shaperect: `${SHAPE_RECT}, crosshair`,
+  shapetriangle: `${SHAPE_TRIANGLE}, crosshair`,
+  shapecircle: `${SHAPE_CIRCLE}, crosshair`,
   pan: 'grab',
   panning: 'grabbing',
 };

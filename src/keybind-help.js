@@ -24,6 +24,8 @@ const GROUPS = [
     ['Ctrl+click', 'Flood fill, or fill the whole selection if one exists'],
     ['Ctrl+Alt+click', 'Antialiased fill'],
     ['Delete (hold) + click/drag', 'Erase at the current brush size'],
+    ['Q/W/E (hold) + drag', 'Draw rectangle / triangle / circle outline'],
+    ['+ Shift', 'Constrain shape to equal width/height'],
     ['Space+drag', 'Pan'],
     ['Wheel', 'Zoom'],
   ]],

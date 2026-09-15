@@ -3,6 +3,9 @@ import { computeViewport, screenToPixel } from './viewport.js';
 import { cursorForMode } from './cursors.js';
 import { maskFromRect, maskFromWand, maskFromPolygon } from './selection.js';
 import { viewState } from './view-state.js';
+import { SHAPE_OUTLINES, constrainSquare } from './shapes.js';
+
+const SHAPE_KEYS = { q: 'rect', w: 'triangle', e: 'circle' };
 
 const MAX_BRUSH_FRACTION = 0.25; // "[" / "]", capped at 1/4 canvas dimension (§8)
 
@@ -18,7 +21,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   // which would otherwise leave `keys` stuck "held" forever with no way to
   // recover short of pressing the key again. Live event flags can't get
   // stuck: they always reflect the browser's actual current modifier state.
-  const keys = { alt: false, ctrl: false, shift: false, space: false, delete: false };
+  const keys = { alt: false, ctrl: false, shift: false, space: false, delete: false, shape: null };
   // Shared by the plain (hard square) and antialiased (soft circle) brush —
   // "any tool with a brush size" grows/shrinks together. 1 = a single pixel.
   let brushSize = 1;
@@ -31,6 +34,9 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   let strokeSnapshot = null;
   let strokeMods = null; // { ctrl, alt } captured at pointerdown, for one drag stroke
   let contentDragFrom = null;
+  let shapeStart = null; // { x, y } drag origin while a shape tool (Q/W/E) is held
+  let shapeSnapshot = null;
+  let shapeButton = null;
 
   function maxBrush() {
     return Math.max(1, Math.floor(Math.min(model.width, model.height) * MAX_BRUSH_FRACTION));
@@ -41,6 +47,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     if (keys.shift && keys.ctrl) return 'selectPolygon';
     if (keys.shift && keys.alt) return 'selectWand';
     if (keys.shift) return 'selectRect';
+    if (keys.shape) return 'shape' + keys.shape;
     if (keys.delete) return 'erase';
     if (keys.ctrl && keys.alt) return 'antialiasedFill';
     if (keys.ctrl) return 'fill';
@@ -72,6 +79,15 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   function eraseAt(x, y) {
     if (brushSize > 1) stampSquare(model, x, y, brushSize, null);
     else setPixel(model, x, y, null);
+  }
+
+  // Q/W/E shape tools (hold): outline stamped from the drag's bounding box,
+  // Shift constrains it to equal width/height.
+  function stampShapeOutline(shape, x0, y0, x1, y1, button, square) {
+    let ex = x1, ey = y1;
+    if (square) [ex, ey] = constrainSquare(x0, y0, x1, y1);
+    const color = colorForButton(button);
+    for (const [x, y] of SHAPE_OUTLINES[shape](x0, y0, ex, ey)) setPixel(model, x, y, color);
   }
 
   function fillAt(x, y, button, antialiased) {
@@ -108,6 +124,10 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     // Delete alone still needs to work for deleting text in input fields —
     // only claim it as the erase-tool modifier outside of those.
     if (!typing && e.key === 'Delete') { keys.delete = true; changed = true; e.preventDefault(); }
+    if (!typing && SHAPE_KEYS[e.key.toLowerCase()] && !e.repeat) {
+      keys.shape = SHAPE_KEYS[e.key.toLowerCase()];
+      changed = true;
+    }
     if (!typing && (e.key === '[' || e.key === ']')) {
       const growing = e.key === ']';
       if (e.shiftKey) {
@@ -129,6 +149,10 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     if (e.key === 'Shift') { keys.shift = false; changed = true; }
     if (e.code === 'Space') { keys.space = false; panning = false; changed = true; }
     if (e.key === 'Delete') { keys.delete = false; changed = true; }
+    if (SHAPE_KEYS[e.key.toLowerCase()] && keys.shape === SHAPE_KEYS[e.key.toLowerCase()]) {
+      keys.shape = null;
+      changed = true;
+    }
     // Releasing either modifier of the polygon selector closes the shape (§9.1).
     if ((e.key === 'Shift' || e.key === 'Control') && polygonPoints) {
       if (polygonPoints.length >= 3) selectionApi.set(maskFromPolygon(model, polygonPoints));
@@ -164,9 +188,17 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
       onPaint();
       return;
     }
-    if (e.shiftKey) {
+    if (e.shiftKey && !keys.shape) {
       rectStart = { x, y };
       selectionApi.setLiveRect(x, y, x, y);
+      onPaint();
+      return;
+    }
+
+    if (keys.shape) {
+      shapeStart = { x, y };
+      shapeButton = e.button;
+      shapeSnapshot = snapshotPixels(model);
       onPaint();
       return;
     }
@@ -208,6 +240,16 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
       }
       return;
     }
+    if (shapeStart) {
+      const { x, y } = pointerPixel(e);
+      // Re-applies to the pristine snapshot each move (same trick as
+      // rotate) so redrawing a smaller shape actually erases the bigger
+      // preview instead of leaving stray pixels behind.
+      for (let i = 0; i < model.pixels.length; i++) model.pixels[i] = shapeSnapshot[i];
+      stampShapeOutline(keys.shape, shapeStart.x, shapeStart.y, x, y, shapeButton, e.shiftKey);
+      onPaint();
+      return;
+    }
     if (drawingButton === null || e.shiftKey) return;
     const { x, y } = pointerPixel(e);
     if (lastPixel && (lastPixel.x !== x || lastPixel.y !== y)) {
@@ -232,6 +274,13 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
       rectStart = null;
       onPaint();
     }
+    if (shapeStart) {
+      const { before, after } = diffFromSnapshot(model, shapeSnapshot);
+      history.commit({ type: 'pixelEdit', before, after });
+      shapeStart = null;
+      shapeSnapshot = null;
+      shapeButton = null;
+    }
     if (strokeSnapshot) {
       const { before, after } = diffFromSnapshot(model, strokeSnapshot);
       history.commit({ type: strokeMods.ctrl ? 'fill' : 'pixelEdit', before, after, antialiased: strokeMods.alt });
@@ -255,6 +304,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   // stuck "held" with no key left to release.
   window.addEventListener('blur', () => {
     keys.alt = keys.ctrl = keys.shift = keys.space = keys.delete = false;
+    keys.shape = null;
     panning = false;
     updateCursor();
   });
