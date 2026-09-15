@@ -7,7 +7,17 @@
   <link rel="stylesheet" href="src/style.css">
 </head>
 <body>
-  <canvas id="pixi-canvas"></canvas>
+  <div id="app">
+    <div id="palette-bar"></div>
+    <div id="middle-row">
+      <div id="project-panel" class="side-panel" hidden></div>
+      <div id="canvas-area">
+        <canvas id="pixi-canvas"></canvas>
+      </div>
+      <div id="layers-panel" class="side-panel" hidden></div>
+    </div>
+    <div id="timeline-bar"></div>
+  </div>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>
