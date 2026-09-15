@@ -4,7 +4,7 @@ import { createInputController } from './input.js';
 import { computeViewport, screenToPixel, maxZoomScale, fitScale } from './viewport.js';
 import { viewState, resetView } from './view-state.js';
 import { createPalette } from './palette.js';
-import { maskFromRect, fullMask, toRenderSelection } from './selection.js';
+import { maskFromRect, maskFromColor, fullMask, toRenderSelection } from './selection.js';
 import { extract, stamp, flip, rotate, shiftMask, moveContent, maskBounds } from './selection-ops.js';
 import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
 import { createProject, activeFile as getActiveFile, addFile } from './project.js';
@@ -111,7 +111,10 @@ function computeOnionFrames(file) {
 }
 
 
-const palette = createPalette(paletteBar, project.palette, () => autosave());
+const palette = createPalette(paletteBar, project.palette, () => autosave(), (hex) => {
+  selectionApi.set(maskFromColor(model, hex));
+  draw();
+});
 const colors = { primary: () => palette.getPrimary(), secondary: () => palette.getSecondary() };
 
 let contentDragSnapshot = null;

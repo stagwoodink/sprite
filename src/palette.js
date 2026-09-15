@@ -11,7 +11,7 @@ function darken(hex, amount) {
 // Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
 // loaded/created Project's own palette object; the returned `state` is that
 // same live object (mutated in place) so main.js can persist it directly.
-export function createPalette(container, initial, onChange) {
+export function createPalette(container, initial, onChange, onSelectColor) {
   const preset = PRESETS[DEFAULT_PRESET];
   const state = initial && initial.chips && initial.chips.length ? initial : {
     chips: [...preset.chips],
@@ -42,27 +42,34 @@ export function createPalette(container, initial, onChange) {
       chip.addEventListener('mouseup', () => chip.classList.remove('pressed'));
       chip.addEventListener('mouseleave', () => chip.classList.remove('pressed'));
 
-      chip.addEventListener('click', () => {
+      // Left-click = primary. Shift+click = select every pixel of this
+      // color on the active layer. Alt+click = open the color picker.
+      // Right-click = secondary, directly, no picker.
+      chip.addEventListener('click', (e) => {
+        if (e.shiftKey) {
+          onSelectColor(hex);
+          return;
+        }
+        if (e.altKey) {
+          openColorPicker(chip, hex, (newHex) => {
+            if (state.chips[i] === state.primary) state.primary = newHex;
+            if (state.chips[i] === state.secondary) state.secondary = newHex;
+            state.chips[i] = newHex;
+            chip.style.setProperty('--chip-color', newHex);
+            chip.style.setProperty('--chip-shadow', darken(newHex, 0.45));
+            chip.title = newHex;
+            onChange(state);
+          });
+          return;
+        }
         state.primary = hex;
         onChange(state);
       });
 
       chip.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        if (e.altKey) {
-          state.secondary = hex;
-          onChange(state);
-          return;
-        }
-        openColorPicker(chip, hex, (newHex) => {
-          if (state.chips[i] === state.primary) state.primary = newHex;
-          if (state.chips[i] === state.secondary) state.secondary = newHex;
-          state.chips[i] = newHex;
-          chip.style.setProperty('--chip-color', newHex);
-          chip.style.setProperty('--chip-shadow', darken(newHex, 0.45));
-          chip.title = newHex;
-          onChange(state);
-        });
+        state.secondary = hex;
+        onChange(state);
       });
 
       chip.addEventListener('dragstart', (e) => {
