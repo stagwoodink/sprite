@@ -160,19 +160,20 @@ h1, h2, .header-text {
 #palette-bar:not(.panel-hidden) { border-bottom: 1px solid var(--panel-edge-highlight); }
 #palette-bar.panel-hidden { height: 0; }
 
-/* Floats above the palette's right edge; slides left with it when the
-   layers panel is open (main.js keeps --push-right in sync). */
+/* Always as far right/down as it can be: flush with the window's bottom
+   edge when the palette is closed, only pushed up above it when the
+   palette is actually there — same idea for the layers panel and
+   --push-right. main.js keeps both custom properties in sync. */
 #version-tab {
   position: absolute;
   right: var(--push-right, 0);
-  bottom: 39px; /* palette bar height */
+  bottom: var(--push-bottom, 0);
   z-index: 10;
   display: flex;
   align-items: stretch;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-bottom: none;
-  transition: right 180ms ease;
+  transition: right 180ms ease, bottom 180ms ease;
 }
 #version-tab a {
   display: flex;

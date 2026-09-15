@@ -58,6 +58,7 @@ versionTab.append(versionLink, bugBtn, discordBtn);
 // whichever side panel is open, rather than staying full width and
 // pushing anything — side panels just run the full viewport height.
 const SIDE_PANEL_WIDTH = 220;
+const PALETTE_HEIGHT = 39;
 
 let projectReveal, layersReveal, timelineReveal, paletteReveal;
 function updatePushes() {
@@ -65,6 +66,11 @@ function updatePushes() {
   const pushedRight = !!(layersReveal && layersReveal.isFocused());
   const leftPush = pushedLeft ? SIDE_PANEL_WIDTH : 0;
   const rightPush = pushedRight ? SIDE_PANEL_WIDTH : 0;
+  // The version tab always sits as far right/down as it can — right of the
+  // layers panel when closed, flush with the window bottom when the
+  // palette itself is closed, not pinned to the palette's height always.
+  const paletteVisible = !!(paletteReveal && paletteReveal.isFocused());
+  versionTab.style.setProperty('--push-bottom', (paletteVisible ? PALETTE_HEIGHT : 0) + 'px');
   for (const el of [timelineBar, paletteBar]) {
     el.style.setProperty('--push-left', leftPush + 'px');
     el.style.setProperty('--push-right', rightPush + 'px');
