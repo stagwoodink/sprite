@@ -34,10 +34,20 @@ const paletteReveal = createRevealablePanel(paletteBar, document.getElementById(
 
 // Autosave (§10, §18): every committed change writes to whichever backend
 // was resolved (real folder via FSA, or the IndexedDB fallback), debounced
-// so a fast drag-stroke doesn't fire one write per pixel.
-const backend = await chooseBackend();
-const project = (await loadProject(backend)) || createProject('My Project');
-const autosave = debounce(() => saveProject(backend, project));
+// so a fast drag-stroke doesn't fire one write per pixel. IndexedDB is
+// unavailable in some contexts (a file:// origin, private browsing) — fall
+// back to an in-memory no-op backend rather than taking the whole app down,
+// since losing autosave is much better than losing the app.
+let backend, project;
+try {
+  backend = await chooseBackend();
+  project = (await loadProject(backend)) || createProject('My Project');
+} catch (err) {
+  console.error('Storage backend unavailable, autosave disabled:', err);
+  backend = { write: async () => {}, read: async () => null, delete: async () => {}, list: async () => [] };
+  project = createProject('My Project');
+}
+const autosave = debounce(() => saveProject(backend, project).catch((err) => console.error('Autosave failed:', err)));
 autosave();
 
 // `model` is a stable view object; switching files/layers/frames re-points
