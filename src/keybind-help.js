@@ -23,6 +23,7 @@ const GROUPS = [
     ['Shift+[ / Shift+]', 'Halve / double brush size'],
     ['Ctrl+click', 'Flood fill, or fill the whole selection if one exists'],
     ['Ctrl+Alt+click', 'Antialiased fill'],
+    ['Delete (hold) + click/drag', 'Erase at the current brush size'],
     ['Space+drag', 'Pan'],
     ['Wheel', 'Zoom'],
   ]],
@@ -32,7 +33,7 @@ const GROUPS = [
     ['Shift+Ctrl+click', 'Polygon select (release Shift or Ctrl to close)'],
     ['Ctrl+A', 'Select all'],
     ['Esc', 'Clear selection'],
-    ['Backspace/Delete', 'Delete hovered pixel, or full selection'],
+    ['Backspace', 'Delete hovered pixel, or full selection'],
     ['Ctrl+C / X / V', 'Copy / cut / paste'],
     ['F / Shift+F', 'Flip horizontal / vertical'],
     ['R (hold) / Shift+R', 'Free rotate / 15°-snapped rotate'],
@@ -71,7 +72,7 @@ export function createKeybindHelp() {
 
     const title = document.createElement('div');
     title.className = 'keybind-help-title';
-    title.textContent = 'KEYBINDS';
+    title.textContent = 'CONTROLS';
     panel.append(title);
 
     for (const [group, rows] of GROUPS) {

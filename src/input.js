@@ -18,7 +18,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   // which would otherwise leave `keys` stuck "held" forever with no way to
   // recover short of pressing the key again. Live event flags can't get
   // stuck: they always reflect the browser's actual current modifier state.
-  const keys = { alt: false, ctrl: false, shift: false, space: false };
+  const keys = { alt: false, ctrl: false, shift: false, space: false, delete: false };
   // Shared by the plain (hard square) and antialiased (soft circle) brush —
   // "any tool with a brush size" grows/shrinks together. 1 = a single pixel.
   let brushSize = 1;
@@ -41,6 +41,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     if (keys.shift && keys.ctrl) return 'selectPolygon';
     if (keys.shift && keys.alt) return 'selectWand';
     if (keys.shift) return 'selectRect';
+    if (keys.delete) return 'erase';
     if (keys.ctrl && keys.alt) return 'antialiasedFill';
     if (keys.ctrl) return 'fill';
     if (keys.alt) return 'antialiasedPaint';
@@ -64,6 +65,13 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     } else {
       setPixel(model, x, y, color);
     }
+  }
+
+  // Hold Delete + click/drag to erase at the current brush size — a hard
+  // square stamp of transparency, same shape the plain paint tool uses.
+  function eraseAt(x, y) {
+    if (brushSize > 1) stampSquare(model, x, y, brushSize, null);
+    else setPixel(model, x, y, null);
   }
 
   function fillAt(x, y, button, antialiased) {
@@ -97,6 +105,9 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     if (e.code === 'Space' && !e.repeat) { keys.space = true; changed = true; e.preventDefault(); }
     const tag = document.activeElement && document.activeElement.tagName;
     const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+    // Delete alone still needs to work for deleting text in input fields —
+    // only claim it as the erase-tool modifier outside of those.
+    if (!typing && e.key === 'Delete') { keys.delete = true; changed = true; e.preventDefault(); }
     if (!typing && (e.key === '[' || e.key === ']')) {
       const growing = e.key === ']';
       if (e.shiftKey) {
@@ -117,6 +128,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     if (e.key === 'Control') { keys.ctrl = false; changed = true; }
     if (e.key === 'Shift') { keys.shift = false; changed = true; }
     if (e.code === 'Space') { keys.space = false; panning = false; changed = true; }
+    if (e.key === 'Delete') { keys.delete = false; changed = true; }
     // Releasing either modifier of the polygon selector closes the shape (§9.1).
     if ((e.key === 'Shift' || e.key === 'Control') && polygonPoints) {
       if (polygonPoints.length >= 3) selectionApi.set(maskFromPolygon(model, polygonPoints));
@@ -161,8 +173,10 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
 
     drawingButton = e.button;
     strokeSnapshot = snapshotPixels(model);
-    strokeMods = { ctrl: e.ctrlKey, alt: e.altKey };
-    if (e.ctrlKey) {
+    strokeMods = { ctrl: e.ctrlKey, alt: e.altKey, erase: keys.delete };
+    if (keys.delete) {
+      eraseAt(x, y);
+    } else if (e.ctrlKey) {
       fillAt(x, y, e.button, e.altKey);
     } else {
       paintAt(x, y, e.button, e.altKey);
@@ -198,7 +212,8 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     const { x, y } = pointerPixel(e);
     if (lastPixel && (lastPixel.x !== x || lastPixel.y !== y)) {
       for (const [px, py] of linePixels(lastPixel.x, lastPixel.y, x, y)) {
-        paintAt(px, py, drawingButton, strokeMods && strokeMods.alt);
+        if (strokeMods && strokeMods.erase) eraseAt(px, py);
+        else paintAt(px, py, drawingButton, strokeMods && strokeMods.alt);
       }
       lastPixel = { x, y };
       onPaint();
@@ -239,7 +254,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   // the keyup — reset tracked state so Space-hold pan/cursor can't get
   // stuck "held" with no key left to release.
   window.addEventListener('blur', () => {
-    keys.alt = keys.ctrl = keys.shift = keys.space = false;
+    keys.alt = keys.ctrl = keys.shift = keys.space = keys.delete = false;
     panning = false;
     updateCursor();
   });

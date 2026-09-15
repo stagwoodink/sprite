@@ -528,7 +528,9 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     selectionApi.clear();
     draw();
-  } else if (e.key === 'Backspace' || e.key === 'Delete') {
+  } else if (e.key === 'Backspace') {
+    // Delete is no longer an instant-delete synonym — holding it arms the
+    // eraser tool (input.js), requiring an actual click/drag (on request).
     deleteSelectionOrHover();
   } else if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
     e.preventDefault();

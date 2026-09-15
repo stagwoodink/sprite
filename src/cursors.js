@@ -39,6 +39,12 @@ const LASSO = svgCursor(
   18, { x: 3, y: 9 },
 );
 
+// Hold Delete + click/drag to erase (§9.2, extended on request).
+const ERASER = svgCursor(
+  `<rect x='2' y='2' width='14' height='14' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
+  18, { x: 9, y: 9 },
+);
+
 export const CURSORS = {
   paint: `${DOT}, crosshair`,
   antialiasedPaint: `${BRUSH}, crosshair`,
@@ -47,6 +53,7 @@ export const CURSORS = {
   selectRect: `${MARQUEE}, crosshair`,
   selectWand: `${WAND}, crosshair`,
   selectPolygon: `${LASSO}, crosshair`,
+  erase: `${ERASER}, crosshair`,
   pan: 'grab',
   panning: 'grabbing',
 };
