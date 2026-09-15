@@ -12,6 +12,17 @@ export function maxZoomScale(viewW, viewH) {
   return Math.max(1, Math.min(viewW, viewH));
 }
 
+// How far out the user can manually zoom (wheel, End) — further than plain
+// fit-to-window, down to about a 200px on-screen footprint (on request),
+// whichever of the two is smaller. fitScale() itself stays floored at 1:1
+// for the default/reset view; this is only the clamp for active zooming.
+const MIN_ZOOM_TARGET_PX = 200;
+export function minZoomScale(model, viewW, viewH) {
+  const rawFit = Math.min(viewW / model.width, viewH / model.height);
+  const targetScale = MIN_ZOOM_TARGET_PX / Math.max(model.width, model.height);
+  return Math.min(rawFit, targetScale);
+}
+
 export function computeViewport(model, viewW, viewH) {
   const fit = fitScale(model, viewW, viewH);
   const scale = viewState.zoom || fit;

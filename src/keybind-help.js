@@ -28,6 +28,7 @@ const GROUPS = [
     ['+ Shift', 'Constrain shape to equal width/height'],
     ['Space+drag', 'Pan'],
     ['Wheel', 'Zoom'],
+    ['Home / End', 'Zoom to max / min'],
   ]],
   ['Canvas — selection', [
     ['Shift+drag', 'Rectangle select (click alone = one pixel)'],

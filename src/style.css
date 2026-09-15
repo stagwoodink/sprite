@@ -41,6 +41,8 @@
   --panel-edge-shadow: rgba(0, 0, 0, 0.4);
   --accent: #BE1425; /* sampled from spec/stagwood.png, dominant red pixel */
   --accent-shadow: #7A0C18;
+  --accent-light: #CE4F5C; /* accent mixed 25% toward white, for versatility */
+  --accent-dark: #8E0F1C; /* accent mixed 25% toward black, for versatility */
   --text-primary: var(--gray-1);
   --text-secondary: var(--gray-4);
   --text-muted: var(--gray-5);

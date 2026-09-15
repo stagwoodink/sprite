@@ -1,7 +1,7 @@
 import { setPixel, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { render } from './renderer.js';
 import { createInputController } from './input.js';
-import { computeViewport, screenToPixel, maxZoomScale, fitScale } from './viewport.js';
+import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale } from './viewport.js';
 import { viewState, resetView } from './view-state.js';
 import { createPalette } from './palette.js';
 import { maskFromRect, maskFromColor, fullMask, toRenderSelection } from './selection.js';
@@ -370,16 +370,30 @@ canvas.addEventListener('pointerleave', () => { hoverPixel = null; });
 // calls for continuous zoom, but a fractional scale would leave subpixel
 // seams between adjacent pixel rects, breaking "pixels always render
 // perfectly square." Integer-only zoom is the pixel-safe simplification.
+// Below 1:1 (only reachable once `min` allows it — see minZoomScale) steps
+// multiplicatively instead of by whole pixels, since a flat +/-1 step
+// stops meaning anything once scale is fractional.
+function zoomTo(nextScale) {
+  const rect = canvas.getBoundingClientRect();
+  const fit = fitScale(model, rect.width, rect.height);
+  const min = minZoomScale(model, rect.width, rect.height);
+  const max = maxZoomScale(rect.width, rect.height);
+  viewState.zoom = Math.max(min, Math.min(max, nextScale));
+  if (Math.abs(viewState.zoom - fit) < 0.01) { viewState.zoom = fit; viewState.panX = 0; viewState.panY = 0; }
+  draw();
+}
+
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   const fit = fitScale(model, rect.width, rect.height);
-  const max = maxZoomScale(rect.width, rect.height);
+  const min = minZoomScale(model, rect.width, rect.height);
   const current = viewState.zoom || fit;
-  const next = current + (e.deltaY < 0 ? 1 : -1);
-  viewState.zoom = Math.max(fit, Math.min(max, next));
-  if (viewState.zoom === fit) { viewState.panX = 0; viewState.panY = 0; }
-  draw();
+  const zoomingIn = e.deltaY < 0;
+  const next = current >= 1
+    ? current + (zoomingIn ? 1 : -1)
+    : current * (zoomingIn ? 1.1 : 0.9);
+  zoomTo(next < 1 && min >= 1 ? 1 : next);
 }, { passive: false });
 
 function doCopy() {
@@ -493,6 +507,14 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === '?') {
     keybindHelp.toggle();
+  } else if (e.key === 'Home') {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoomTo(maxZoomScale(rect.width, rect.height));
+  } else if (e.key === 'End') {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoomTo(minZoomScale(model, rect.width, rect.height));
   } else if (e.key === 'g' && !e.shiftKey) {
     showGrid = !showGrid;
     draw();
