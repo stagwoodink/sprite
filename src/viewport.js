@@ -20,7 +20,9 @@ const MIN_ZOOM_TARGET_PX = 200;
 export function minZoomScale(model, viewW, viewH) {
   const rawFit = Math.min(viewW / model.width, viewH / model.height);
   const targetScale = MIN_ZOOM_TARGET_PX / Math.max(model.width, model.height);
-  return Math.min(rawFit, targetScale);
+  // Cap at 1 (100%) so a small sprite — whose 200px footprint target would
+  // otherwise sit above 1:1 — never loses the ability to zoom out to 100%.
+  return Math.min(rawFit, targetScale, 1);
 }
 
 export function computeViewport(model, viewW, viewH) {
