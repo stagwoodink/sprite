@@ -82,6 +82,13 @@ h1, h2, .header-text {
   min-height: 0;
 }
 
+/* Invisible edge-hover zones that reveal a panel (§15). */
+.edge-trigger { position: absolute; z-index: 5; }
+.edge-trigger-left { left: 0; top: 0; bottom: 0; width: 10px; }
+.edge-trigger-right { right: 0; top: 0; bottom: 0; width: 10px; }
+.edge-trigger-bottom { position: relative; height: 10px; width: 100%; }
+.edge-trigger-top { position: absolute; top: 0; left: 0; right: 0; height: 10px; }
+
 #canvas-area {
   position: relative;
   flex: 1 1 auto;

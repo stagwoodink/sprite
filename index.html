@@ -8,14 +8,18 @@
 </head>
 <body>
   <div id="app">
+    <div id="palette-trigger" class="edge-trigger edge-trigger-top"></div>
     <div id="palette-bar"></div>
     <div id="middle-row">
+      <div id="project-trigger" class="edge-trigger edge-trigger-left"></div>
       <div id="project-panel" class="side-panel" hidden></div>
       <div id="canvas-area">
         <canvas id="pixi-canvas"></canvas>
       </div>
       <div id="layers-panel" class="side-panel" hidden></div>
+      <div id="layers-trigger" class="edge-trigger edge-trigger-right"></div>
     </div>
+    <div id="timeline-trigger" class="edge-trigger edge-trigger-bottom"></div>
     <div id="timeline-bar" hidden></div>
   </div>
   <script type="module" src="src/main.js"></script>

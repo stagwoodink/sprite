@@ -15,6 +15,7 @@ import { renderProjectPanel } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
 import { chooseBackend, loadProject, saveProject, debounce } from './persistence.js';
+import { createRevealablePanel } from './panel-reveal.js';
 
 const canvas = document.getElementById('pixi-canvas');
 const ctx = canvas.getContext('2d');
@@ -22,6 +23,13 @@ const paletteBar = document.getElementById('palette-bar');
 const projectPanel = document.getElementById('project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
+
+// Shared reveal/hide/pin/focus mechanic (§15), one instance per panel.
+// Palette starts pinned (visible) by default (§7.2 flagged assumption 3).
+const projectReveal = createRevealablePanel(projectPanel, document.getElementById('project-trigger'));
+const layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'));
+const timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'));
+const paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), { initiallyPinned: true });
 
 // Autosave (§10, §18): every committed change writes to whichever backend
 // was resolved (real folder via FSA, or the IndexedDB fallback), debounced
@@ -51,12 +59,6 @@ bindActiveFile();
 let showGrid = true;
 let showRuler = false;
 let hoverPixel = null;
-let palettePinned = true;
-let projectPinned = false;
-let layersPinned = false;
-let timelinePinned = false;
-let layersPanelFocused = false; // hover-only focus stand-in until Phase 13's real model
-let timelinePanelFocused = false;
 let selectionMask = null;
 let selectionRender = null;
 let clipboard = null;
@@ -79,10 +81,6 @@ function computeOnionFrames(file) {
   return ghosts;
 }
 
-layersPanel.addEventListener('mouseenter', () => { layersPanelFocused = true; });
-layersPanel.addEventListener('mouseleave', () => { layersPanelFocused = false; });
-timelineBar.addEventListener('mouseenter', () => { timelinePanelFocused = true; });
-timelineBar.addEventListener('mouseleave', () => { timelinePanelFocused = false; });
 
 const palette = createPalette(paletteBar, project.palette, () => autosave());
 const colors = { primary: () => palette.getPrimary(), secondary: () => palette.getSecondary() };
@@ -341,16 +339,13 @@ window.addEventListener('keydown', (e) => {
     showRuler = !showRuler;
     draw();
   } else if (e.key === 'p' || e.key === 'P') {
-    palettePinned = !palettePinned;
-    paletteBar.hidden = !palettePinned;
+    paletteReveal.togglePin();
   } else if (e.key === 'Tab') {
     e.preventDefault();
-    projectPinned = !projectPinned;
-    projectPanel.hidden = !projectPinned;
+    projectReveal.togglePin();
   } else if (e.key === 'l' || e.key === 'L') {
-    layersPinned = !layersPinned;
-    layersPanel.hidden = !layersPinned;
-  } else if (layersPanelFocused && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    layersReveal.togglePin();
+  } else if (layersReveal.isFocused() && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
     e.preventDefault();
     const file = getActiveFile(project);
     const dir = e.key === 'ArrowUp' ? 1 : -1; // panel lists topmost-first, stack index rises upward
@@ -361,19 +356,18 @@ window.addEventListener('keydown', (e) => {
     redrawLayersPanel();
     draw();
     autosave();
-  } else if (layersPanelFocused && (e.key === 'Backspace' || e.key === 'Delete')) {
+  } else if (layersReveal.isFocused() && (e.key === 'Backspace' || e.key === 'Delete')) {
     const file = getActiveFile(project);
     deleteLayer(file, file.activeLayerIndex);
     bindActiveFile();
     draw();
     autosave();
   } else if (e.key === 't' || e.key === 'T') {
-    timelinePinned = !timelinePinned;
-    timelineBar.hidden = !timelinePinned;
+    timelineReveal.togglePin();
   } else if (e.ctrlKey && e.code === 'Space') {
     e.preventDefault();
     togglePlayback();
-  } else if (timelinePanelFocused && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+  } else if (timelineReveal.isFocused() && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault();
     const file = getActiveFile(project);
     const dir = e.key === 'ArrowRight' ? 1 : -1;
@@ -386,14 +380,14 @@ window.addEventListener('keydown', (e) => {
     }
     draw();
     autosave();
-  } else if (timelinePanelFocused && e.key === '+') {
+  } else if (timelineReveal.isFocused() && e.key === '+') {
     const file = getActiveFile(project);
     if (e.ctrlKey) duplicateFrame(file, file.activeFrameIndex);
     else addFrame(file);
     bindActiveFile();
     draw();
     autosave();
-  } else if (timelinePanelFocused && (e.key === 'Backspace' || e.key === 'Delete')) {
+  } else if (timelineReveal.isFocused() && (e.key === 'Backspace' || e.key === 'Delete')) {
     const file = getActiveFile(project);
     deleteFrame(file, file.activeFrameIndex);
     bindActiveFile();
