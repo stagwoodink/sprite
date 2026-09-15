@@ -837,12 +837,12 @@ h1, h2, .header-text {
 .layer-row:hover { background: #2A2A2E; }
 .layer-row.active { background: var(--accent); }
 
-/* Opacity slider: overlays the thumbnail's left edge (doesn't push it
+/* Opacity slider: overlays the thumbnail's right edge (doesn't push it
    over), revealed on hover, drag the pip up/down to set opacity — no
    right-click/menu needed. */
 .opacity-slider {
   position: absolute;
-  left: 0;
+  right: 0;
   top: 0;
   bottom: 0;
   width: 0;

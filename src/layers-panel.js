@@ -43,7 +43,7 @@ export function renderLayersPanel(container, file, callbacks) {
       callbacks.onToggleVisible(i);
     });
 
-    // Hover-revealed vertical slider, OVERLAID on the thumbnail's left edge
+    // Hover-revealed vertical slider, OVERLAID on the thumbnail's right edge
     // (not pushing it over) — drag the pip up/down to change opacity, no
     // right-click/menu needed. A % readout appears to its left while dragging.
     const opacitySlider = document.createElement('div');
@@ -64,7 +64,7 @@ export function renderLayersPanel(container, file, callbacks) {
       opacityFill.style.height = pct + '%';
       opacityPip.style.bottom = pct + '%';
       opacityReadout.textContent = pct + '%';
-      opacityReadout.style.left = r.left - opacityReadout.offsetWidth - 4 + 'px';
+      opacityReadout.style.left = r.right + 4 + 'px';
       opacityReadout.style.top = e.clientY - opacityReadout.offsetHeight / 2 + 'px';
       callbacks.onOpacityChange(i, value);
     }
