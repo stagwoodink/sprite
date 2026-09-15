@@ -177,6 +177,7 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       add.title = 'Add color';
       add.addEventListener('click', () => {
         state.chips.push('#FFFFFF');
+        scrollPx = Infinity; // clamped to the new max in layoutChips — scrolls the new chip into view
         render();
         onChange(state);
       });
