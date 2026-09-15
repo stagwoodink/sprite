@@ -746,25 +746,52 @@ h1, h2, .header-text {
 .layer-row:hover { background: #2A2A2E; }
 .layer-row.active { background: var(--accent); }
 
-/* Opacity slider: slides in from the left on hover, drag up/down to set
-   the layer's opacity — no right-click/menu needed. */
+/* Opacity slider: overlays the thumbnail's left edge (doesn't push it
+   over), revealed on hover, drag the pip up/down to set opacity — no
+   right-click/menu needed. */
 .opacity-slider {
-  position: relative;
-  flex: 0 0 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 0;
-  overflow: hidden;
-  background: var(--bg-hover);
-  border-right: 1px solid var(--hairline);
+  overflow: visible;
+  background: rgba(0, 0, 0, 0.5);
   cursor: ns-resize;
-  transition: flex-basis 120ms ease, width 120ms ease;
+  transition: width 120ms ease;
+  z-index: 5;
 }
-.layer-row:hover .opacity-slider { flex-basis: 8px; width: 8px; }
+.layer-thumb:hover .opacity-slider { width: 8px; }
 .opacity-slider-fill {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   background: var(--accent);
+}
+.opacity-slider-pip {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: var(--text-primary);
+  border: 1px solid #000000;
+  transform: translate(-50%, 50%);
+}
+/* Fixed (not absolute) — the layers panel clips overflow for its own
+   slide-in/out animation, which would otherwise cut this off since it
+   floats outside the thumbnail/slider's own bounds. */
+.opacity-readout {
+  position: fixed;
+  z-index: 30;
+  padding: 1px 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .layer-thumb {
