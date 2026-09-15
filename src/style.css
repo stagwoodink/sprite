@@ -100,8 +100,9 @@ h1, h2, .header-text {
   flex: 0 0 auto;
   width: 220px;
   background: var(--bg-elevated);
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ---- Timeline (bottom, full width, never shrinks) ------------------ */
@@ -264,3 +265,86 @@ h1, h2, .header-text {
   padding: 2px 4px;
   width: 100%;
 }
+
+/* ---- Project panel (§7) --------------------------------------------- */
+.project-header {
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+  border-bottom: 1px solid var(--hairline);
+}
+.project-name {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--unit);
+  cursor: text;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.panel-header-btn {
+  flex: 0 0 32px;
+  background: var(--bg-elevated);
+  border: none;
+  border-left: 1px solid var(--hairline);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-body);
+  cursor: pointer;
+}
+.panel-header-btn:hover { background: var(--bg-hover); }
+
+.panel-add-btn { width: 100%; }
+.panel-add-btn .btn-face { border-top-width: 2px; }
+
+.file-list { flex: 1 1 auto; overflow-y: auto; }
+.file-row {
+  padding: var(--unit);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-row:hover { background: var(--bg-hover); }
+.file-row.active { background: var(--accent); color: var(--text-primary); }
+
+.project-footer {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 32px;
+}
+.footer-btn { flex: 1 1 0; }
+.footer-btn .btn-face { font-size: 14px; }
+
+.inline-edit {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-body);
+  padding: 0 var(--unit);
+}
+
+.size-popup, .context-bar {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+}
+.size-popup-option, .context-bar button {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-body);
+  text-align: left;
+  padding: var(--unit) calc(var(--unit) * 2);
+  cursor: pointer;
+}
+.size-popup-option:hover, .context-bar button:hover { background: var(--bg-hover); }

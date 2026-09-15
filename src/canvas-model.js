@@ -1,12 +1,5 @@
-// Single layer/frame pixel grid. Project/File/Layer/Frame model arrives in later phases.
-export function createCanvasModel(width, height) {
-  return {
-    width,
-    height,
-    pixels: new Array(width * height).fill(null), // null = transparent
-  };
-}
-
+// Pure pixel-buffer math shared by every {width, height, pixels} view —
+// main.js binds this shape to whichever layer+frame is currently active.
 export function inBounds(model, x, y) {
   return x >= 0 && y >= 0 && x < model.width && y < model.height;
 }

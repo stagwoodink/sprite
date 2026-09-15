@@ -1,35 +1,29 @@
 import { setPixel } from './canvas-model.js';
 
-const CAP = 50; // §10: 50-step undo stack
+const CAP = 50; // §10: 50-step undo stack, persisted as part of the PixiFile itself.
 
-// In-memory only (Phase 5) — persisting undoStack into the .pixi file lands
-// in Phase 8. Commands are plain {type, before, after} objects (§5), so
-// undo/redo here is just replaying the diff, no per-type apply/unapply needed
-// since every current command type reduces to a pixel diff.
-export function createUndoStack() {
-  let undoStack = [];
-  let redoStack = [];
+// Operates directly on file.undoStack/file.redoStack (§5) rather than owning
+// separate closure state, so the arrays are exactly what Phase 8 persists to
+// the .pixi file with no extra translation step.
+export function commitCommand(file, command) {
+  if (!command.before.length) return;
+  file.undoStack.push(command);
+  if (file.undoStack.length > CAP) file.undoStack.shift();
+  file.redoStack = []; // new command invalidates redo history
+}
 
-  return {
-    commit(command) {
-      if (!command.before.length) return;
-      undoStack.push(command);
-      if (undoStack.length > CAP) undoStack.shift();
-      redoStack = []; // new command invalidates redo history
-    },
-    undo(model) {
-      const command = undoStack.pop();
-      if (!command) return false;
-      for (const [x, y, color] of command.before) setPixel(model, x, y, color);
-      redoStack.push(command);
-      return true;
-    },
-    redo(model) {
-      const command = redoStack.pop();
-      if (!command) return false;
-      for (const [x, y, color] of command.after) setPixel(model, x, y, color);
-      undoStack.push(command);
-      return true;
-    },
-  };
+export function undo(file, model) {
+  const command = file.undoStack.pop();
+  if (!command) return false;
+  for (const [x, y, color] of command.before) setPixel(model, x, y, color);
+  file.redoStack.push(command);
+  return true;
+}
+
+export function redo(file, model) {
+  const command = file.redoStack.pop();
+  if (!command) return false;
+  for (const [x, y, color] of command.after) setPixel(model, x, y, color);
+  file.undoStack.push(command);
+  return true;
 }
