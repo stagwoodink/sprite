@@ -6,6 +6,11 @@ const THUMB_H = 40;
 export function renderLayersPanel(container, file, callbacks) {
   container.innerHTML = '';
 
+  // Anchored to the bottom of the panel, not the top — a stack of layers
+  // reads more naturally sitting at the floor than floating at the ceiling.
+  const stack = document.createElement('div');
+  stack.className = 'layer-stack';
+
   const addBtn = document.createElement('button');
   addBtn.className = 'btn panel-add-btn';
   const face = document.createElement('div');
@@ -15,7 +20,7 @@ export function renderLayersPanel(container, file, callbacks) {
   shadow.className = 'btn-shadow';
   addBtn.append(face, shadow);
   addBtn.addEventListener('click', () => callbacks.onAddLayer());
-  container.append(addBtn);
+  stack.append(addBtn);
 
   // Top of the stack is drawn first (§11): last layer in the array renders
   // on top, so the panel lists layers back-to-front, topmost first.
@@ -62,6 +67,8 @@ export function renderLayersPanel(container, file, callbacks) {
       callbacks.onReorder(Number(e.dataTransfer.getData('text/plain')), i);
     });
 
-    container.append(row);
+    stack.append(row);
   }
+
+  container.append(stack);
 }

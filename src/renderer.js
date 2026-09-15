@@ -1,7 +1,7 @@
 import { getPixel, blendColors } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
 
-const CANVAS_BG = '#0A0A0A';
+const CANVAS_BG = '#121214'; // bg-base — same family as the panel bg-elevated, just darker
 const CHECKER_LIGHT = '#DEDEDE';
 const CHECKER_DARK = '#CFCFCF';
 const CHECKER_CELL = 4; // canvas pixels per checker square — an 8x8 sprite reads as a 2x2 checkerboard

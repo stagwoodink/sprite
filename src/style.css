@@ -138,7 +138,7 @@ h1, h2, .header-text {
   border: none;
   border-right: 1px solid var(--hairline);
   color: var(--text-secondary);
-  font-size: 18px;
+  font-size: 22px;
   cursor: pointer;
 }
 .onion-toggle.active { background: var(--accent); color: var(--text-primary); }
@@ -208,7 +208,7 @@ h1, h2, .header-text {
   border: none;
   border-left: 1px solid var(--hairline);
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 22px;
   cursor: pointer;
 }
 .frame-add-btn:hover { background: var(--bg-hover); }
@@ -415,7 +415,7 @@ h1, h2, .header-text {
   flex: 0 0 32px;
 }
 .footer-btn { flex: 1 1 0; }
-.footer-btn .btn-face { font-size: 14px; }
+.footer-btn .btn-face { font-size: 18px; }
 
 .inline-edit {
   width: 100%;
@@ -456,10 +456,16 @@ h1, h2, .header-text {
 }
 .export-btn-row { display: flex; }
 .export-option { flex: 1 1 0; }
-.export-option .btn-face { font-size: 12px; }
+.export-option .btn-face { font-size: 16px; }
 .export-confirm .btn-face { background: var(--accent); }
 
 /* ---- Layers panel (§11, ui-design-system §4) ------------------------- */
+.layer-stack {
+  margin-top: auto;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
 .layer-row {
   position: relative;
   display: flex;
