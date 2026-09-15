@@ -39,6 +39,14 @@
 
 * { box-sizing: border-box; }
 
+/* Hard rule: no visible scrollbars anywhere, ever — scrollable elements
+   stay scrollable (wheel/touch/drag), the bar itself just never renders. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge */
+}
+*::-webkit-scrollbar { display: none; } /* Chromium/WebKit */
+
 html, body {
   margin: 0;
   height: 100%;
@@ -353,12 +361,20 @@ h1, h2, .header-text {
 }
 .palette-hamburger:hover { background: var(--bg-hover); }
 
+/* Fixed clipping window — chips never spill past the bar's edge. Native
+   overflow-x scrolling is deliberately not used: palette.js hand-rolls
+   wheel scrolling via a transform on .chip-row so it can enforce the
+   fixed-slot-width/peek-chip behavior instead of free native scroll. */
+.chip-viewport {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .chip-row {
   display: flex;
   align-items: stretch;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
 }
 
 /* Add-chip button: revealed on hover near the bar's trailing edge (§7.2). */

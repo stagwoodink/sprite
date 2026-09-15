@@ -47,6 +47,12 @@ function openPresetPanel(anchor, onLoadPreset, onNewPalette) {
   }), 0);
 }
 
+// Above this many chips, the row stops stretching chips to fill the bar
+// and switches to a fixed-size scrollable window instead — 16 full chips
+// visible plus room for a half-chip peek on each edge (17 chip-widths
+// total) as a "there's more this way" affordance, scrolled with the wheel.
+const MAX_VISIBLE_CHIPS = 16;
+
 // Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
 // loaded/created Project's own palette object; the returned `state` is that
 // same live object (mutated in place) so main.js can persist it directly.
@@ -57,6 +63,7 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     primary: preset.chips[0],
     secondary: preset.chips[1] || preset.chips[0],
   };
+  let scrollPx = 0; // pixel offset into the chip track, only used above MAX_VISIBLE_CHIPS
 
   function loadPreset(key) {
     const p = PRESETS[key];
@@ -85,8 +92,11 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     hamburger.addEventListener('click', () => openPresetPanel(hamburger, loadPreset, newPalette));
     container.append(hamburger);
 
+    const viewport = document.createElement('div');
+    viewport.className = 'chip-viewport';
     const row = document.createElement('div');
     row.className = 'chip-row';
+    viewport.append(row);
 
     state.chips.forEach((hex, i) => {
       const chip = document.createElement('div');
@@ -152,6 +162,8 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       row.append(chip);
     });
 
+    container.append(viewport);
+
     if (state.chips.length < MAX_CHIPS) {
       const add = document.createElement('button');
       add.className = 'chip-add';
@@ -162,10 +174,41 @@ export function createPalette(container, initial, onChange, onSelectColor) {
         render();
         onChange(state);
       });
-      row.append(add);
+      container.append(add);
     }
 
-    container.append(row);
+    layoutChips(viewport, row);
+  }
+
+  // <=16 chips: stretch evenly to fill the bar (no scrolling needed at all).
+  // >16 chips: fixed-width slots sized for 16 full + 2 half-peeks (17
+  // chip-widths across the viewport), scrolled by wheel — never native
+  // overflow/scrollbars, and chips never spill past the bar's own edge.
+  function layoutChips(viewport, row) {
+    const count = state.chips.length;
+    if (count <= MAX_VISIBLE_CHIPS) {
+      row.style.width = '100%';
+      row.querySelectorAll('.chip').forEach((chip) => { chip.style.flex = '1 1 0'; });
+      row.style.transform = 'none';
+      viewport.onwheel = null;
+      return;
+    }
+
+    const viewportWidth = viewport.clientWidth;
+    const chipWidth = viewportWidth / (MAX_VISIBLE_CHIPS + 1);
+    const trackWidth = chipWidth * count;
+    row.style.width = trackWidth + 'px';
+    row.querySelectorAll('.chip').forEach((chip) => { chip.style.flex = `0 0 ${chipWidth}px`; });
+
+    const maxScroll = Math.max(0, trackWidth - viewportWidth);
+    scrollPx = Math.max(0, Math.min(scrollPx, maxScroll));
+    row.style.transform = `translateX(${-scrollPx}px)`;
+
+    viewport.onwheel = (e) => {
+      e.preventDefault();
+      scrollPx = Math.max(0, Math.min(maxScroll, scrollPx + (e.deltaY || e.deltaX)));
+      row.style.transform = `translateX(${-scrollPx}px)`;
+    };
   }
 
   render();
