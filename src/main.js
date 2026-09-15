@@ -33,6 +33,23 @@ const layersReveal = createRevealablePanel(layersPanel, document.getElementById(
 const timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'));
 const paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), { initiallyPinned: true });
 
+// Shift+Tab: hide every pinned panel at once (not in the spec — added on
+// request), remembering which were pinned so a second press restores them.
+let hiddenPanelsStash = null;
+function toggleHideAllPanels() {
+  const reveals = { project: projectReveal, layers: layersReveal, timeline: timelineReveal, palette: paletteReveal };
+  if (hiddenPanelsStash) {
+    for (const key in reveals) reveals[key].setPinned(hiddenPanelsStash[key]);
+    hiddenPanelsStash = null;
+  } else {
+    hiddenPanelsStash = {};
+    for (const key in reveals) {
+      hiddenPanelsStash[key] = reveals[key].isPinned();
+      reveals[key].setPinned(false);
+    }
+  }
+}
+
 // Autosave (§10, §18): every committed change writes to whichever backend
 // was resolved (real folder via FSA, or the IndexedDB fallback), debounced
 // so a fast drag-stroke doesn't fire one write per pixel. IndexedDB is
@@ -386,6 +403,9 @@ window.addEventListener('keydown', (e) => {
     draw();
   } else if (e.key === 'p' || e.key === 'P') {
     paletteReveal.togglePin();
+  } else if (e.key === 'Tab' && e.shiftKey) {
+    e.preventDefault();
+    toggleHideAllPanels();
   } else if (e.key === 'Tab') {
     e.preventDefault();
     projectReveal.togglePin();
