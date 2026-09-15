@@ -4,7 +4,10 @@
 // secondary control surface slides out from the element that triggered it,
 // not a floating dropdown — this slides up from the chip rather than
 // appearing as a fixed popup.
+import { positionSlideOut } from './slide-out.js';
+
 const SIZE = 120;
+
 
 function hexToHsl(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -40,7 +43,7 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
   let { h, s, l } = hexToHsl(initialHex);
 
   const popup = document.createElement('div');
-  popup.className = 'color-picker-popup';
+  popup.className = 'color-picker-popup slide-out-bar';
 
   const square = document.createElement('canvas');
   square.width = SIZE;
@@ -60,18 +63,15 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
   hexField.value = initialHex;
 
   popup.append(square, hue, hexField);
-  document.body.append(popup);
 
-  // Slides out from the chip: anchored above it (the palette bar docks to
-  // the bottom edge), starting translated down + transparent, then
-  // animating up into place.
-  const rect = anchorEl.getBoundingClientRect();
-  popup.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
-  popup.style.bottom = window.innerHeight - rect.top + 4 + 'px';
-  popup.style.transform = 'translateY(12px)';
+  // Slides out flush above the chip (the palette bar docks to the bottom
+  // edge), chevron pointing down at it.
+  const fromTransform = positionSlideOut(popup, anchorEl, 'up');
+  popup.style.transform = fromTransform;
   popup.style.opacity = '0';
+  document.body.append(popup);
   requestAnimationFrame(() => {
-    popup.style.transform = 'translateY(0)';
+    popup.style.transform = 'translate(0, 0)';
     popup.style.opacity = '1';
   });
 

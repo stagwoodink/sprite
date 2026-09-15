@@ -542,6 +542,19 @@ h1, h2, .header-text {
 }
 .slide-out-btn { width: 100%; min-width: 160px; }
 
+/* Chevron pointing back at whichever tile/anchor opened the bar — flush
+   against it (no gap/floating space), side set by positionSlideOut(). */
+.slide-out-chevron {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+}
+.slide-out-bar[data-side="right"] .slide-out-chevron { left: -8px; transform: translateY(-50%); border-right-color: var(--border-strong); }
+.slide-out-bar[data-side="left"] .slide-out-chevron { right: -8px; transform: translateY(-50%); border-left-color: var(--border-strong); }
+.slide-out-bar[data-side="up"] .slide-out-chevron { bottom: -8px; transform: translateX(-50%); border-top-color: var(--border-strong); }
+.slide-out-bar[data-side="down"] .slide-out-chevron { top: -8px; transform: translateX(-50%); border-bottom-color: var(--border-strong); }
+
 /* ---- Export context bar (§14) ---------------------------------------- */
 .export-bar {
   flex-direction: column;

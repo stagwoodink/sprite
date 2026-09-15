@@ -1,4 +1,5 @@
 import { exportPng, exportJpg, exportSvg, exportPdf, exportJson, exportPixi } from './export.js';
+import { positionSlideOut } from './slide-out.js';
 
 const FORMATS = ['PNG', 'JPG', 'SVG', 'PDF', 'JSON', 'PIXI'];
 const SCALES = [1, 2, 4, 8];
@@ -90,10 +91,8 @@ export function openExportBar(anchorEl, file, getSecondaryColor) {
   }
 
   bar.append(formatRow, scaleRow, confirm);
-  const rect = anchorEl.getBoundingClientRect();
-  bar.style.left = rect.right + 4 + 'px';
-  bar.style.top = rect.top + 'px';
-  bar.style.transform = 'translateX(-12px)';
+  const fromTransform = positionSlideOut(bar, anchorEl, 'right');
+  bar.style.transform = fromTransform;
   bar.style.opacity = '0';
   document.body.append(bar);
   requestAnimationFrame(() => {

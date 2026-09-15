@@ -1,5 +1,6 @@
 import { PRESETS, DEFAULT_PRESET, MAX_CHIPS } from './palettes-presets.js';
 import { openColorPicker } from './color-picker.js';
+import { positionSlideOut } from './slide-out.js';
 
 function darken(hex, amount) {
   const n = parseInt(hex.slice(1), 16);
@@ -13,7 +14,7 @@ function darken(hex, amount) {
 function openPresetPanel(anchor, onLoadPreset, onNewPalette) {
   document.querySelectorAll('.palette-preset-panel').forEach((el) => el.remove());
   const panel = document.createElement('div');
-  panel.className = 'palette-preset-panel';
+  panel.className = 'palette-preset-panel slide-out-bar';
 
   Object.entries(PRESETS).forEach(([key, preset]) => {
     const btn = document.createElement('button');
@@ -28,14 +29,12 @@ function openPresetPanel(anchor, onLoadPreset, onNewPalette) {
   newBtn.addEventListener('click', () => { onNewPalette(); panel.remove(); });
   panel.append(newBtn);
 
-  const rect = anchor.getBoundingClientRect();
-  panel.style.left = rect.left + 'px';
-  panel.style.bottom = window.innerHeight - rect.top + 4 + 'px';
-  panel.style.transform = 'translateY(12px)';
+  const fromTransform = positionSlideOut(panel, anchor, 'up');
+  panel.style.transform = fromTransform;
   panel.style.opacity = '0';
   document.body.append(panel);
   requestAnimationFrame(() => {
-    panel.style.transform = 'translateY(0)';
+    panel.style.transform = 'translate(0, 0)';
     panel.style.opacity = '1';
   });
 
