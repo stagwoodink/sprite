@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face {
+  font-family: 'm3x6';
+  src: url('m3x6.ttf') format('truetype');
+}
+body { background: #121214; padding: 40px; font-family: sans-serif; }
+.specimen { font-family: 'm3x6'; color: #F2F2F0; image-rendering: pixelated; margin-bottom: 6px; }
+.label { color: #9A9A96; font-size: 12px; margin-bottom: 24px; }
+.statusbar { background: #1A1A1D; border: 2px solid #2C2C2A; padding: 10px 14px; display: flex; justify-content: space-between; margin-top: 20px; max-width: 300px; }
+</style>
+</head>
+<body>
+<div class="specimen" style="font-size:48px;">ABCDEFGHIJ 0123456789</div>
+<div class="label">at 48px</div>
+<div class="specimen" style="font-size:32px;">ABCDEFGHIJ 0123456789</div>
+<div class="label">at 32px</div>
+<div class="specimen" style="font-size:16px;">ABCDEFGHIJ 0123456789</div>
+<div class="label">at 16px</div>
+<div class="statusbar">
+  <span class="specimen" style="font-size:16px;">32 X 32</span>
+  <span class="specimen" style="font-size:16px;">( 12 , 7 )</span>
+</div>
+</body>
+</html>

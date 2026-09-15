@@ -1,0 +1,5 @@
+# Web storage uses graceful degradation, not IndexedDB-only
+
+The two source spec documents disagreed on the web storage backend: `pixi-design-doc.md` specced IndexedDB-only, while `pixi-ui-design-system.md` later finalized a hybrid approach. Confirmed with the user: ship the hybrid. On load, feature-detect `window.showDirectoryPicker` (File System Access API); if available, offer an optional one-time "connect a folder" grant giving real filesystem access identical to native. If unsupported or declined, fall back silently to an IndexedDB-backed virtual filesystem mirroring the same Project/File model. Pixi is web-only as of `0002-web-stack.md`; there is no native desktop backend.
+
+This is worth recording because the two source docs actively contradicted each other on a decision that's expensive to redo once Phase 6 (persistence) is built against one backend — a future reader hitting `io/web_fsa.rs` alongside an IndexedDB backend needs to know this dual-backend shape was deliberate, not leftover scaffolding from an abandoned approach.
