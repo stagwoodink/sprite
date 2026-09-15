@@ -635,12 +635,14 @@ h1, h2, .header-text {
 .keybind-help-title {
   font-size: var(--font-header);
   margin-bottom: calc(var(--unit) * 2);
+  text-align: center;
 }
 .keybind-help-group {
   color: var(--accent);
   text-transform: uppercase;
   margin-top: calc(var(--unit) * 3);
   margin-bottom: var(--unit);
+  text-align: center;
 }
 .keybind-help-group:first-of-type { margin-top: 0; }
 .keybind-help-row {

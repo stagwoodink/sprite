@@ -20,7 +20,7 @@ const CROSSHAIR_COLOR = '#FFFFFF';
 const ONION_BEFORE_TINT = '#BE1425';
 const ONION_AFTER_TINT = '#3366FF';
 
-export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPixel, selection, onionFrames, brushCursor, cursorPos }) {
+export function render(ctx, model, viewW, viewH, { showGrid, showRuler, selection, onionFrames, brushCursor, cursorPos }) {
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, viewW, viewH);
 
@@ -67,9 +67,13 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
   }
 
   if (showRuler) {
+    // Follows the same eased trail as the brush cursor (main.js's
+    // animateCursor), not the raw hover position — a tiny, deliberate
+    // lag/follow on the highlight for character, not just an instant snap.
     const anchor = rulerAnchor(scale, ox, oy, viewW, viewH);
-    if (hoverPixel) drawCrosshair(ctx, hoverPixel, anchor, scale, ox, oy, w, h);
-    drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, anchor, hoverPixel);
+    const trailPixel = cursorPos && { x: Math.round(cursorPos.x), y: Math.round(cursorPos.y) };
+    if (cursorPos) drawCrosshair(ctx, cursorPos, anchor, scale, ox, oy, w, h);
+    drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, anchor, trailPixel);
   }
 
   if (selection) {
