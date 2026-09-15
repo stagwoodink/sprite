@@ -2,6 +2,28 @@ import { PRESETS, DEFAULT_PRESET, MAX_CHIPS } from './palettes-presets.js';
 import { openColorPicker } from './color-picker.js';
 import { positionSlideOut } from './slide-out.js';
 
+// Live drag-reorder preview: chips between the dragged one and the hover
+// target slide aside by one chip-width to open a gap, without touching the
+// real array/DOM order until drop actually happens.
+function previewShift(row, from, target) {
+  const chips = Array.from(row.querySelectorAll('.chip'));
+  chips.forEach((chip, idx) => {
+    if (idx === from) { chip.style.opacity = '0.3'; return; }
+    let shift = 0;
+    if (from < target && idx > from && idx <= target) shift = -1;
+    else if (from > target && idx < from && idx >= target) shift = 1;
+    chip.style.transition = 'transform 120ms ease';
+    chip.style.transform = shift ? `translateX(${shift * 100}%)` : '';
+  });
+}
+
+function clearPreviewShift(row) {
+  row.querySelectorAll('.chip').forEach((chip) => {
+    chip.style.transform = '';
+    chip.style.opacity = '';
+  });
+}
+
 function darken(hex, amount) {
   const n = parseInt(hex.slice(1), 16);
   const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
@@ -65,6 +87,7 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     secondary: preset.chips[1] || preset.chips[0],
   };
   let scrollPx = 0; // pixel offset into the chip track, only used above MAX_VISIBLE_CHIPS
+  let draggingIndex = null; // chip index currently being dragged, for the live reorder preview
 
   function loadPreset(key) {
     const p = PRESETS[key];
@@ -153,9 +176,20 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       });
 
       chip.addEventListener('dragstart', (e) => {
+        draggingIndex = i;
+        chip.classList.add('dragging');
         e.dataTransfer.setData('text/plain', String(i));
       });
-      chip.addEventListener('dragover', (e) => e.preventDefault());
+      chip.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (draggingIndex === null || draggingIndex === i) return;
+        previewShift(row, draggingIndex, i);
+      });
+      chip.addEventListener('dragend', () => {
+        draggingIndex = null;
+        clearPreviewShift(row);
+        chip.classList.remove('dragging');
+      });
       chip.addEventListener('drop', (e) => {
         e.preventDefault();
         const from = Number(e.dataTransfer.getData('text/plain'));
