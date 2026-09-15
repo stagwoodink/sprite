@@ -83,7 +83,7 @@ primarySwatch.title = 'Primary color';
 const secondarySwatch = document.createElement('div');
 secondarySwatch.className = 'tool-tag-swatch';
 secondarySwatch.title = 'Secondary color';
-toolTag.append(toolLabel, zoomIcon, zoomLabel, primarySwatch, secondarySwatch);
+toolTag.append(zoomIcon, zoomLabel, toolLabel, primarySwatch, secondarySwatch);
 
 const MODE_LABELS = {
   paint: 'Draw', antialiasedPaint: 'Draw (AA)',
