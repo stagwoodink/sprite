@@ -1,9 +1,10 @@
-import { createCanvasModel, setPixel } from './canvas-model.js';
+import { createCanvasModel, setPixel, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { render } from './renderer.js';
 import { createInputController } from './input.js';
 import { computeViewport, screenToPixel } from './viewport.js';
 import { createPalette } from './palette.js';
 import { maskFromRect, fullMask, toRenderSelection } from './selection.js';
+import { createUndoStack } from './undo.js';
 
 const canvas = document.getElementById('pixi-canvas');
 const ctx = canvas.getContext('2d');
@@ -47,7 +48,8 @@ function draw() {
   render(ctx, model, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender });
 }
 
-createInputController(canvas, model, colors, draw, selectionApi);
+const history = createUndoStack();
+createInputController(canvas, model, colors, draw, selectionApi, history);
 
 canvas.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
@@ -57,6 +59,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 
 function deleteSelectionOrHover() {
+  const snapshot = snapshotPixels(model);
   if (selectionMask) {
     for (let y = 0; y < model.height; y++) {
       for (let x = 0; x < model.width; x++) {
@@ -66,6 +69,8 @@ function deleteSelectionOrHover() {
   } else if (hoverPixel) {
     setPixel(model, hoverPixel.x, hoverPixel.y, null);
   }
+  const { before, after } = diffFromSnapshot(model, snapshot);
+  history.commit({ type: 'pixelEdit', before, after });
   draw();
 }
 
@@ -94,6 +99,12 @@ window.addEventListener('keydown', (e) => {
     draw();
   } else if (e.key === 'Backspace' || e.key === 'Delete') {
     deleteSelectionOrHover();
+  } else if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
+    e.preventDefault();
+    if (history.undo(model)) draw();
+  } else if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+    e.preventDefault();
+    if (history.redo(model)) draw();
   }
 });
 

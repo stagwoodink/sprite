@@ -1,4 +1,4 @@
-import { setPixel, stampBrush, floodFill, linePixels } from './canvas-model.js';
+import { setPixel, stampBrush, floodFill, linePixels, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { computeViewport, screenToPixel } from './viewport.js';
 import { cursorForMode } from './cursors.js';
 import { maskFromRect, maskFromWand, maskFromPolygon } from './selection.js';
@@ -8,7 +8,7 @@ const MAX_BRUSH_FRACTION = 0.25; // "[" / "]" while Alt held, capped at 1/4 canv
 // Modifier-driven single-tool interaction (§8). No selection creation here
 // yet (Shift-family lands in Phase 4) — cursor modes for it are wired now so
 // the mode table stays in one place.
-export function createInputController(canvas, model, colors, onPaint, selectionApi) {
+export function createInputController(canvas, model, colors, onPaint, selectionApi, history) {
   const keys = { alt: false, ctrl: false, shift: false, space: false };
   let brushRadius = 1;
   let panning = false;
@@ -17,6 +17,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   let drawingButton = null; // 0 = left/primary, 2 = right/secondary
   let rectStart = null;
   let polygonPoints = null;
+  let strokeSnapshot = null;
 
   function maxBrush() {
     return Math.max(1, Math.floor(Math.min(model.width, model.height) * MAX_BRUSH_FRACTION));
@@ -118,6 +119,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     }
 
     drawingButton = e.button;
+    strokeSnapshot = snapshotPixels(model);
     if (keys.ctrl) {
       fillAt(x, y, e.button);
     } else {
@@ -159,6 +161,11 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
       selectionApi.set(maskFromRect(model, rectStart.x, rectStart.y, x, y));
       rectStart = null;
       onPaint();
+    }
+    if (strokeSnapshot) {
+      const { before, after } = diffFromSnapshot(model, strokeSnapshot);
+      history.commit({ type: keys.ctrl ? 'fill' : 'pixelEdit', before, after, antialiased: keys.alt });
+      strokeSnapshot = null;
     }
     drawingButton = null;
     lastPixel = null;

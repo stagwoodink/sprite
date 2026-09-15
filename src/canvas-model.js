@@ -21,6 +21,26 @@ export function setPixel(model, x, y, colorHex) {
   model.pixels[y * model.width + x] = colorHex;
 }
 
+// Whole-array snapshot/diff, used to build one undo EditCommand per committed
+// action (a drag-stroke, a fill, a delete) rather than per pixel. Canvas
+// sizes here (max 256x256, per the design doc's size presets) make a full
+// array diff cheap — no need for fine-grained touched-cell tracking.
+export function snapshotPixels(model) {
+  return model.pixels.slice();
+}
+
+export function diffFromSnapshot(model, snapshot) {
+  const before = [], after = [];
+  for (let i = 0; i < model.pixels.length; i++) {
+    if (model.pixels[i] !== snapshot[i]) {
+      const x = i % model.width, y = Math.floor(i / model.width);
+      before.push([x, y, snapshot[i]]);
+      after.push([x, y, model.pixels[i]]);
+    }
+  }
+  return { before, after };
+}
+
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
