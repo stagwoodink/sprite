@@ -53,7 +53,20 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   }
 
   function fillAt(x, y, button) {
-    floodFill(model, x, y, colorForButton(button), keys.alt);
+    const color = colorForButton(button);
+    const mask = selectionApi.getMask && selectionApi.getMask();
+    // With an active selection, Ctrl+click fills the whole selection with
+    // the color — the selection acts as a stencil, not a color-match seed.
+    // No selection: falls back to the plain flood fill (§8).
+    if (mask) {
+      for (let my = 0; my < model.height; my++) {
+        for (let mx = 0; mx < model.width; mx++) {
+          if (mask[my * model.width + mx]) setPixel(model, mx, my, color);
+        }
+      }
+    } else {
+      floodFill(model, x, y, color, keys.alt);
+    }
   }
 
   function pointerPixel(e) {
