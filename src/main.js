@@ -1,7 +1,8 @@
 import { setPixel, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { render } from './renderer.js';
 import { createInputController } from './input.js';
-import { computeViewport, screenToPixel } from './viewport.js';
+import { computeViewport, screenToPixel, maxZoomScale, fitScale } from './viewport.js';
+import { viewState, resetView } from './view-state.js';
 import { createPalette } from './palette.js';
 import { maskFromRect, fullMask, toRenderSelection } from './selection.js';
 import { extract, stamp, flip, rotate, shiftMask, moveContent, maskBounds } from './selection-ops.js';
@@ -156,11 +157,11 @@ function draw() {
 
 function redrawProjectPanel() {
   renderProjectPanel(projectPanel, project, {
-    onChange: () => { bindActiveFile(); selectionApi.clear(); redrawProjectPanel(); draw(); },
-    onAddFile: (w, h) => { addFile(project, `sprite${project.files.length + 1}`, w, h); bindActiveFile(); redrawProjectPanel(); draw(); autosave(); },
+    onChange: () => { bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw(); },
+    onAddFile: (w, h) => { addFile(project, `sprite${project.files.length + 1}`, w, h); bindActiveFile(); resetView(); redrawProjectPanel(); draw(); autosave(); },
     onResizeFile: (file, w, h) => {
       resizeCanvas(file, w, h);
-      if (file === getActiveFile(project)) bindActiveFile();
+      if (file === getActiveFile(project)) { bindActiveFile(); resetView(); }
       redrawProjectPanel();
       draw();
       autosave();
@@ -253,6 +254,22 @@ canvas.addEventListener('pointermove', (e) => {
   if (rotating) updateRotate(hoverPixel.x, hoverPixel.y, e.shiftKey);
   else if (showRuler) draw();
 });
+
+// Scroll wheel zooms (§6). Scale is snapped to whole numbers — the spec
+// calls for continuous zoom, but a fractional scale would leave subpixel
+// seams between adjacent pixel rects, breaking "pixels always render
+// perfectly square." Integer-only zoom is the pixel-safe simplification.
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const fit = fitScale(model, rect.width, rect.height);
+  const max = maxZoomScale(rect.width, rect.height);
+  const current = viewState.zoom || fit;
+  const next = current + (e.deltaY < 0 ? 1 : -1);
+  viewState.zoom = Math.max(fit, Math.min(max, next));
+  if (viewState.zoom === fit) { viewState.panX = 0; viewState.panY = 0; }
+  draw();
+}, { passive: false });
 
 function doCopy() {
   const mask = selectionMask || (hoverPixel && (() => {

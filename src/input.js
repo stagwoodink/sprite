@@ -2,6 +2,7 @@ import { setPixel, stampBrush, floodFill, linePixels, snapshotPixels, diffFromSn
 import { computeViewport, screenToPixel } from './viewport.js';
 import { cursorForMode } from './cursors.js';
 import { maskFromRect, maskFromWand, maskFromPolygon } from './selection.js';
+import { viewState } from './view-state.js';
 
 const MAX_BRUSH_FRACTION = 0.25; // "[" / "]" while Alt held, capped at 1/4 canvas dimension (§8)
 
@@ -152,10 +153,10 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
 
   function onPointerMove(e) {
     if (panning && lastPan) {
-      // Pan target (a scrollable/zoomable viewport transform) lands with
-      // the zoom feature — not yet in the model, so this is a no-op stub
-      // that still tracks delta for when that lands.
+      viewState.panX += e.clientX - lastPan.x;
+      viewState.panY += e.clientY - lastPan.y;
       lastPan = { x: e.clientX, y: e.clientY };
+      onPaint();
       return;
     }
     if (rectStart) {
