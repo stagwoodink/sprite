@@ -18,6 +18,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   let rectStart = null;
   let polygonPoints = null;
   let strokeSnapshot = null;
+  let contentDragFrom = null;
 
   function maxBrush() {
     return Math.max(1, Math.floor(Math.min(model.width, model.height) * MAX_BRUSH_FRACTION));
@@ -102,7 +103,12 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     const { x, y } = pointerPixel(e);
 
     if (keys.shift && keys.ctrl) {
-      (polygonPoints ||= []).push([x, y]);
+      const mask = selectionApi.getMask && selectionApi.getMask();
+      if (mask && mask[y * model.width + x]) {
+        contentDragFrom = { x, y };
+      } else {
+        (polygonPoints ||= []).push([x, y]);
+      }
       onPaint();
       return;
     }
@@ -143,6 +149,15 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
       onPaint();
       return;
     }
+    if (contentDragFrom) {
+      const { x, y } = pointerPixel(e);
+      const dx = x - contentDragFrom.x, dy = y - contentDragFrom.y;
+      if (dx || dy) {
+        selectionApi.moveContentBy(dx, dy);
+        contentDragFrom = { x, y };
+      }
+      return;
+    }
     if (drawingButton === null || keys.shift) return;
     const { x, y } = pointerPixel(e);
     if (lastPixel && (lastPixel.x !== x || lastPixel.y !== y)) {
@@ -156,6 +171,10 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
 
   function onPointerUp(e) {
     canvas.releasePointerCapture(e.pointerId);
+    if (contentDragFrom) {
+      contentDragFrom = null;
+      selectionApi.commitContentMove();
+    }
     if (rectStart) {
       const { x, y } = pointerPixel(e);
       selectionApi.set(maskFromRect(model, rectStart.x, rectStart.y, x, y));

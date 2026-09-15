@@ -4,6 +4,7 @@ import { createInputController } from './input.js';
 import { computeViewport, screenToPixel } from './viewport.js';
 import { createPalette } from './palette.js';
 import { maskFromRect, fullMask, toRenderSelection } from './selection.js';
+import { extract, stamp, flip, rotate, shiftMask, moveContent, maskBounds } from './selection-ops.js';
 import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
 import { createProject, activeFile as getActiveFile, addFile } from './project.js';
 import {
@@ -58,6 +59,8 @@ let layersPanelFocused = false; // hover-only focus stand-in until Phase 13's re
 let timelinePanelFocused = false;
 let selectionMask = null;
 let selectionRender = null;
+let clipboard = null;
+let rotating = null; // { snapshot, center } while R is held
 const playback = { fps: 8, onionSkin: false, onionLayerOnly: false, playing: false, timer: null };
 
 // Fixed range: 2 frames each direction, not user-configurable (§12.3).
@@ -84,6 +87,7 @@ timelineBar.addEventListener('mouseleave', () => { timelinePanelFocused = false;
 const palette = createPalette(paletteBar, project.palette, () => autosave());
 const colors = { primary: () => palette.getPrimary(), secondary: () => palette.getSecondary() };
 
+let contentDragSnapshot = null;
 const selectionApi = {
   setLiveRect(x0, y0, x1, y1) {
     selectionMask = maskFromRect(model, x0, y0, x1, y1);
@@ -96,6 +100,19 @@ const selectionApi = {
   clear() {
     selectionMask = null;
     selectionRender = null;
+  },
+  getMask: () => selectionMask,
+  moveContentBy(dx, dy) {
+    if (!contentDragSnapshot) contentDragSnapshot = snapshotPixels(model);
+    selectionMask = moveContent(model, selectionMask, dx, dy);
+    selectionRender = toRenderSelection(model, selectionMask);
+    draw();
+  },
+  commitContentMove() {
+    if (!contentDragSnapshot) return;
+    const { before, after } = diffFromSnapshot(model, contentDragSnapshot);
+    history.commit({ type: 'moveSelectionContent', before, after });
+    contentDragSnapshot = null;
   },
 };
 
@@ -210,8 +227,92 @@ canvas.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
   const viewport = computeViewport(model, rect.width, rect.height);
   hoverPixel = screenToPixel(viewport, e.clientX - rect.left, e.clientY - rect.top);
-  if (showRuler) draw();
+  if (rotating) updateRotate(hoverPixel.x, hoverPixel.y, e.shiftKey);
+  else if (showRuler) draw();
 });
+
+function doCopy() {
+  const mask = selectionMask || (hoverPixel && (() => {
+    const m = new Uint8Array(model.width * model.height);
+    if (inBoundsPixel(hoverPixel)) m[hoverPixel.y * model.width + hoverPixel.x] = 1;
+    return m;
+  })());
+  if (mask) clipboard = extract(model, mask);
+}
+
+function inBoundsPixel(p) {
+  return p.x >= 0 && p.y >= 0 && p.x < model.width && p.y < model.height;
+}
+
+function doCut() {
+  doCopy();
+  deleteSelectionOrHover();
+}
+
+function doPaste() {
+  if (!clipboard) return;
+  const at = hoverPixel || { x: 0, y: 0 };
+  const snapshot = snapshotPixels(model);
+  stamp(model, clipboard, at.x, at.y, false);
+  const { before, after } = diffFromSnapshot(model, snapshot);
+  history.commit({ type: 'pixelEdit', before, after });
+  draw();
+}
+
+function doFlip(axis) {
+  if (!selectionMask) return; // requires an active selection (§9.2)
+  const snapshot = snapshotPixels(model);
+  flip(model, selectionMask, axis);
+  const { before, after } = diffFromSnapshot(model, snapshot);
+  history.commit({ type: 'flip', layer: getActiveFile(project).activeLayerIndex, axis, before, after });
+  draw();
+}
+
+function moveSelection(dx, dy, moveContentToo) {
+  if (!selectionMask) return;
+  if (moveContentToo) {
+    const snapshot = snapshotPixels(model);
+    selectionMask = moveContent(model, selectionMask, dx, dy);
+    const { before, after } = diffFromSnapshot(model, snapshot);
+    history.commit({ type: 'moveSelectionContent', dx, dy, before, after });
+  } else {
+    selectionMask = shiftMask(model, selectionMask, dx, dy);
+  }
+  selectionRender = toRenderSelection(model, selectionMask);
+  draw();
+}
+
+function beginRotate() {
+  if (!selectionMask || rotating) return;
+  const b = maskBounds(model, selectionMask);
+  if (!b) return;
+  rotating = {
+    snapshot: snapshotPixels(model),
+    center: { x: b.minX + b.w / 2, y: b.minY + b.h / 2 },
+    angle: 0,
+  };
+}
+
+// Re-applies the rotation to the *original* content on every move (rather
+// than compounding a small rotation onto an already-rotated, lossy result)
+// by restoring the pristine snapshot in place before each rotate() call.
+function updateRotate(px, py, snap) {
+  if (!rotating) return;
+  let angle = (Math.atan2(py - rotating.center.y, px - rotating.center.x) * 180) / Math.PI;
+  if (snap) angle = Math.round(angle / 15) * 15;
+  rotating.angle = angle;
+  for (let i = 0; i < model.pixels.length; i++) model.pixels[i] = rotating.snapshot[i];
+  rotate(model, selectionMask, angle);
+  draw();
+}
+
+function endRotate() {
+  if (!rotating) return;
+  const { before, after } = diffFromSnapshot(model, rotating.snapshot);
+  history.commit({ type: 'rotate', degrees: rotating.angle, before, after });
+  rotating = null;
+  draw();
+}
 
 function deleteSelectionOrHover() {
   const snapshot = snapshotPixels(model);
@@ -316,7 +417,36 @@ window.addEventListener('keydown', (e) => {
   } else if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
     e.preventDefault();
     if (redoCmd(getActiveFile(project), model)) { draw(); autosave(); }
+  } else if (e.ctrlKey && e.key === 'c') {
+    doCopy();
+  } else if (e.ctrlKey && e.key === 'x') {
+    e.preventDefault();
+    doCut();
+  } else if (e.ctrlKey && e.key === 'v') {
+    doPaste();
+  } else if (e.key === 'f' && !e.shiftKey) {
+    doFlip('horizontal');
+  } else if (e.key === 'F' && e.shiftKey) {
+    doFlip('vertical');
+  } else if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
+    beginRotate();
+  } else if (e.shiftKey && e.ctrlKey && e.key.startsWith('Arrow')) {
+    e.preventDefault();
+    const [dx, dy] = arrowDelta(e.key);
+    moveSelection(dx, dy, true);
+  } else if (e.shiftKey && e.key.startsWith('Arrow')) {
+    e.preventDefault();
+    const [dx, dy] = arrowDelta(e.key);
+    moveSelection(dx, dy, false);
   }
+});
+
+function arrowDelta(key) {
+  return { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[key] || [0, 0];
+}
+
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'r' || e.key === 'R') endRotate();
 });
 
 resize();
