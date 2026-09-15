@@ -5,12 +5,33 @@
 }
 
 :root {
-  /* pixi-ui-design-system.md §1 */
-  --bg-base: #121214;
-  --bg-elevated: #1A1A1D;
-  --bg-hover: #232326;
-  --border: #2C2C2A;
-  --border-strong: #444441;
+  /* spec/ui-colors.png — the official Pixi UI palette, a 14-step neutral
+     ramp from white to near-black, lightest first. Exposed in full (not
+     just the steps used below) so any future UI work pulls from these
+     exact values instead of inventing new grays. */
+  --gray-0: #FFFFFF;
+  --gray-1: #F3F2F1;
+  --gray-2: #E1DFDD;
+  --gray-3: #C8C6C4;
+  --gray-4: #A19F9D;
+  --gray-5: #979693;
+  --gray-6: #797775;
+  --gray-7: #484644;
+  --gray-8: #3B3A39;
+  --gray-9: #323130;
+  --gray-10: #292827;
+  --gray-11: #252423;
+  --gray-12: #201F1E;
+  --gray-13: #1B1A19;
+
+  /* Semantic tokens, each pinned to one of the ramp steps above (kept as
+     separate variables since callers reference them by role, not by
+     ramp position). */
+  --bg-base: var(--gray-13);
+  --bg-elevated: var(--gray-12);
+  --bg-hover: var(--gray-11);
+  --border: var(--gray-10);
+  --border-strong: var(--gray-7);
   --hairline: rgba(255, 255, 255, 0.05);
   /* Panel-edge treatment: a lightened tint of the panels' own bg-elevated
      fill (same "highlight = lighter shade of own color" rule §1.2 uses for
@@ -20,9 +41,9 @@
   --panel-edge-shadow: rgba(0, 0, 0, 0.4);
   --accent: #BE1425; /* sampled from spec/stagwood.png, dominant red pixel */
   --accent-shadow: #7A0C18;
-  --text-primary: #F2F2F0;
-  --text-secondary: #B4B2A9;
-  --text-muted: #9A9A96;
+  --text-primary: var(--gray-1);
+  --text-secondary: var(--gray-4);
+  --text-muted: var(--gray-5);
 
   --checker-light: #DEDEDE;
   --checker-dark: #CFCFCF;
