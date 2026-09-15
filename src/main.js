@@ -208,6 +208,13 @@ let inputController = null;
 let showGrid = true;
 let showRuler = false;
 let hoverPixel = null;
+// Declared this early because updateToolTag() (called from renderCanvas(),
+// which the animateCursor loop invokes synchronously right away) reads it —
+// a `let` declared further down is in the temporal dead zone until its own
+// line runs, so referencing it before then throws and silently aborts the
+// entire module, which is what broke rendering/the tool tag altogether.
+let eyedropperActive = false;
+let eyedropperPreview = null;
 let selectionMask = null;
 let selectionRender = null;
 let clipboard = null;
@@ -697,9 +704,6 @@ window.addEventListener('keyup', (e) => {
 // viewport — canvas pixels, the transparent backdrop, palette chips, any
 // UI surface — not just the canvas. Adds the sampled color as a new chip
 // if the palette doesn't already have it.
-let eyedropperActive = false;
-let eyedropperPreview = null;
-
 function setEyedropperActive(active) {
   if (eyedropperActive === active) return;
   eyedropperActive = active;
