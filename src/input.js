@@ -10,6 +10,14 @@ const MAX_BRUSH_FRACTION = 0.25; // "[" / "]" while Alt held, capped at 1/4 canv
 // yet (Shift-family lands in Phase 4) — cursor modes for it are wired now so
 // the mode table stays in one place.
 export function createInputController(canvas, model, colors, onPaint, selectionApi, history) {
+  // `keys` only drives the cursor icon and Space-hold pan (Space has no
+  // live equivalent on pointer events, unlike shift/ctrl/alt). Actual
+  // interaction dispatch below reads e.shiftKey/e.ctrlKey/e.altKey straight
+  // off each pointer event instead of this tracked state — a keyup can be
+  // lost (losing window focus mid-press, e.g. a native browser action)
+  // which would otherwise leave `keys` stuck "held" forever with no way to
+  // recover short of pressing the key again. Live event flags can't get
+  // stuck: they always reflect the browser's actual current modifier state.
   const keys = { alt: false, ctrl: false, shift: false, space: false };
   let brushRadius = 1;
   let panning = false;
@@ -19,6 +27,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   let rectStart = null;
   let polygonPoints = null;
   let strokeSnapshot = null;
+  let strokeMods = null; // { ctrl, alt } captured at pointerdown, for one drag stroke
   let contentDragFrom = null;
 
   function maxBrush() {
@@ -44,16 +53,16 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     return button === 2 ? colors.secondary() : colors.primary();
   }
 
-  function paintAt(x, y, button) {
+  function paintAt(x, y, button, antialiased) {
     const color = colorForButton(button);
-    if (keys.alt) {
+    if (antialiased) {
       stampBrush(model, x, y, brushRadius, color);
     } else {
       setPixel(model, x, y, color);
     }
   }
 
-  function fillAt(x, y, button) {
+  function fillAt(x, y, button, antialiased) {
     const color = colorForButton(button);
     const mask = selectionApi.getMask && selectionApi.getMask();
     // With an active selection, Ctrl+click fills the whole selection with
@@ -66,7 +75,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
         }
       }
     } else {
-      floodFill(model, x, y, color, keys.alt);
+      floodFill(model, x, y, color, antialiased);
     }
   }
 
@@ -118,7 +127,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     e.preventDefault();
     const { x, y } = pointerPixel(e);
 
-    if (keys.shift && keys.ctrl) {
+    if (e.shiftKey && e.ctrlKey) {
       const mask = selectionApi.getMask && selectionApi.getMask();
       if (mask && mask[y * model.width + x]) {
         contentDragFrom = { x, y };
@@ -128,12 +137,12 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
       onPaint();
       return;
     }
-    if (keys.shift && keys.alt) {
+    if (e.shiftKey && e.altKey) {
       selectionApi.set(maskFromWand(model, x, y));
       onPaint();
       return;
     }
-    if (keys.shift) {
+    if (e.shiftKey) {
       rectStart = { x, y };
       selectionApi.setLiveRect(x, y, x, y);
       onPaint();
@@ -142,10 +151,11 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
 
     drawingButton = e.button;
     strokeSnapshot = snapshotPixels(model);
-    if (keys.ctrl) {
-      fillAt(x, y, e.button);
+    strokeMods = { ctrl: e.ctrlKey, alt: e.altKey };
+    if (e.ctrlKey) {
+      fillAt(x, y, e.button, e.altKey);
     } else {
-      paintAt(x, y, e.button);
+      paintAt(x, y, e.button, e.altKey);
     }
     lastPixel = { x, y };
     onPaint();
@@ -174,11 +184,11 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
       }
       return;
     }
-    if (drawingButton === null || keys.shift) return;
+    if (drawingButton === null || e.shiftKey) return;
     const { x, y } = pointerPixel(e);
     if (lastPixel && (lastPixel.x !== x || lastPixel.y !== y)) {
       for (const [px, py] of linePixels(lastPixel.x, lastPixel.y, x, y)) {
-        paintAt(px, py, drawingButton);
+        paintAt(px, py, drawingButton, strokeMods && strokeMods.alt);
       }
       lastPixel = { x, y };
       onPaint();
@@ -199,8 +209,9 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     }
     if (strokeSnapshot) {
       const { before, after } = diffFromSnapshot(model, strokeSnapshot);
-      history.commit({ type: keys.ctrl ? 'fill' : 'pixelEdit', before, after, antialiased: keys.alt });
+      history.commit({ type: strokeMods.ctrl ? 'fill' : 'pixelEdit', before, after, antialiased: strokeMods.alt });
       strokeSnapshot = null;
+      strokeMods = null;
     }
     drawingButton = null;
     lastPixel = null;
@@ -214,6 +225,14 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
+  // Losing window focus mid-press (alt-tab, a native browser action) drops
+  // the keyup — reset tracked state so Space-hold pan/cursor can't get
+  // stuck "held" with no key left to release.
+  window.addEventListener('blur', () => {
+    keys.alt = keys.ctrl = keys.shift = keys.space = false;
+    panning = false;
+    updateCursor();
+  });
 
   updateCursor();
   return { getBrushRadius: () => brushRadius };
