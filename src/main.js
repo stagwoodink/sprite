@@ -34,12 +34,18 @@ const SIDE_PANEL_WIDTH = 220;
 
 let projectReveal, layersReveal, timelineReveal, paletteReveal;
 function updatePushes() {
-  const leftPush = projectReveal && projectReveal.isFocused() ? SIDE_PANEL_WIDTH : 0;
-  const rightPush = layersReveal && layersReveal.isFocused() ? SIDE_PANEL_WIDTH : 0;
-  timelineBar.style.setProperty('--push-left', leftPush + 'px');
-  timelineBar.style.setProperty('--push-right', rightPush + 'px');
-  paletteBar.style.setProperty('--push-left', leftPush + 'px');
-  paletteBar.style.setProperty('--push-right', rightPush + 'px');
+  const pushedLeft = !!(projectReveal && projectReveal.isFocused());
+  const pushedRight = !!(layersReveal && layersReveal.isFocused());
+  const leftPush = pushedLeft ? SIDE_PANEL_WIDTH : 0;
+  const rightPush = pushedRight ? SIDE_PANEL_WIDTH : 0;
+  for (const el of [timelineBar, paletteBar]) {
+    el.style.setProperty('--push-left', leftPush + 'px');
+    el.style.setProperty('--push-right', rightPush + 'px');
+    // Dark shadow line where an open side panel butts against this edge —
+    // shows the side panel stacking in front of it (§ panel-edge treatment).
+    el.classList.toggle('pushed-left', pushedLeft);
+    el.classList.toggle('pushed-right', pushedRight);
+  }
 }
 
 // Shared reveal/hide/pin/focus mechanic (§15), one instance per panel.

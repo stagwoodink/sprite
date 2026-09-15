@@ -12,6 +12,12 @@
   --border: #2C2C2A;
   --border-strong: #444441;
   --hairline: rgba(255, 255, 255, 0.05);
+  /* Panel-edge treatment: a lightened tint of the panels' own bg-elevated
+     fill (same "highlight = lighter shade of own color" rule §1.2 uses for
+     buttons) on each panel's outer edge, vs. a plain dark shadow where a
+     side panel visually stacks in front of a top/bottom one. */
+  --panel-edge-highlight: #2E2E33;
+  --panel-edge-shadow: rgba(0, 0, 0, 0.4);
   --accent: #BE1425; /* sampled from spec/stagwood.png, dominant red pixel */
   --accent-shadow: #7A0C18;
   --text-primary: #F2F2F0;
@@ -110,16 +116,27 @@ h1, h2, .header-text {
   transition: width 180ms ease;
 }
 .side-panel.panel-hidden { width: 0; }
+/* Outer-edge highlight — a lightened tint of the panel's own fill,
+   separating it from the canvas/viewport behind it. Only while visible:
+   border-left/right renders full-height regardless of width, so a
+   collapsed (width:0) panel would otherwise still show as a hairline. */
+.panel-overlay-left.side-panel:not(.panel-hidden) { border-left: 1px solid var(--panel-edge-highlight); }
+.panel-overlay-right.side-panel:not(.panel-hidden) { border-right: 1px solid var(--panel-edge-highlight); }
 
 /* ---- Timeline (top edge, shrinks around open side panels) ------------ */
 #timeline-bar {
   height: 56px;
   left: var(--push-left, 0);
   right: var(--push-right, 0);
+  transition: height 180ms ease, left 180ms ease, right 180ms ease,
+    border-left 180ms ease, border-right 180ms ease;
   display: flex;
   align-items: stretch;
-  transition: height 180ms ease, left 180ms ease, right 180ms ease;
 }
+/* Border only while actually visible — border-top has height 0 has no
+   height dependency, so a collapsed (height:0) panel would otherwise
+   still render as a persistent hairline instead of fully disappearing. */
+#timeline-bar:not(.panel-hidden) { border-top: 1px solid var(--panel-edge-highlight); }
 #timeline-bar.panel-hidden { height: 0; }
 
 /* ---- Palette bar (bottom edge, shrinks around open side panels) ------ */
@@ -127,11 +144,19 @@ h1, h2, .header-text {
   height: 39px; /* matches the chip row (§7.2) — needed so height can transition */
   left: var(--push-left, 0);
   right: var(--push-right, 0);
+  transition: height 180ms ease, left 180ms ease, right 180ms ease,
+    border-left 180ms ease, border-right 180ms ease;
   display: flex;
   align-items: stretch;
-  transition: height 180ms ease, left 180ms ease, right 180ms ease;
 }
+#palette-bar:not(.panel-hidden) { border-bottom: 1px solid var(--panel-edge-highlight); }
 #palette-bar.panel-hidden { height: 0; }
+
+/* Where an open side panel visually stacks in front of the Timeline/
+   Palette (their shrunk edge butts against it), a plain dark shadow line
+   on that edge reads as "the side panel is on top of this one." */
+#timeline-bar.pushed-left, #palette-bar.pushed-left { border-left: 1px solid var(--panel-edge-shadow); }
+#timeline-bar.pushed-right, #palette-bar.pushed-right { border-right: 1px solid var(--panel-edge-shadow); }
 
 .fps-field {
   flex: 0 0 56px;
