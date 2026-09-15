@@ -5,7 +5,8 @@ const CANVAS_BG = '#121214'; // bg-base — same family as the panel bg-elevated
 const CHECKER_LIGHT = '#DEDEDE';
 const CHECKER_DARK = '#CFCFCF';
 const CHECKER_CELL = 4; // canvas pixels per checker square — an 8x8 sprite reads as a 2x2 checkerboard
-const GRID_COLOR = 'rgba(255, 255, 255, 0.06)';
+const GRID_COLOR = '#808080'; // mid-gray, drawn with a difference blend (see below)
+const GRID_ALPHA = 0.25;
 const GRID_MIN_SPACING_PX = 6; // never draw grid lines closer together than this on screen
 const SELECTION_COLOR = '#BE1425';
 const RULER_THICKNESS = 16;
@@ -40,6 +41,13 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
     // individually, and coarser as the canvas shrinks.
     const step = gridStep(scale);
 
+    // Difference blend (same guaranteed-visible trick as the brush cursor
+    // and ruler crosshair) at partial alpha for subtlety — a fixed
+    // translucent white line all but disappears over a light/white part
+    // of the art; this always shifts the color underneath it instead.
+    ctx.save();
+    ctx.globalCompositeOperation = 'difference';
+    ctx.globalAlpha = GRID_ALPHA;
     ctx.strokeStyle = GRID_COLOR;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -52,6 +60,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
       ctx.lineTo(ox + w, oy + y * scale + 0.5);
     }
     ctx.stroke();
+    ctx.restore();
   }
 
   if (showRuler) {
