@@ -47,6 +47,20 @@ export function renderProjectPanel(container, project, callbacks) {
       callbacks.onChange();
     });
 
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle';
+    handle.title = 'Drag to reorder';
+    row.draggable = true;
+    row.addEventListener('dragstart', (e) => {
+      if (!e.target.closest('.drag-handle')) { e.preventDefault(); return; }
+      e.dataTransfer.setData('text/plain', String(i));
+    });
+    row.addEventListener('dragover', (e) => e.preventDefault());
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      callbacks.onReorderFile(Number(e.dataTransfer.getData('text/plain')), i);
+    });
+
     const nameEl = document.createElement('div');
     nameEl.className = 'file-row-name';
     nameEl.textContent = file.name;
@@ -65,7 +79,7 @@ export function renderProjectPanel(container, project, callbacks) {
       openSizePopup(resizeBtn, (w, h) => callbacks.onResizeFile(file, w, h));
     });
 
-    row.append(nameEl, resizeBtn);
+    row.append(handle, nameEl, resizeBtn);
     fileStack.append(row);
   });
 

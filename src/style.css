@@ -196,9 +196,9 @@ h1, h2, .header-text {
   align-items: stretch;
   background: var(--bg-elevated);
   border-top: 1px solid var(--panel-edge-highlight);
-  border-right: 1px solid var(--panel-edge-highlight);
+  border-left: 1px solid var(--panel-edge-highlight);
   border-bottom: 1px solid var(--panel-edge-shadow);
-  border-left: 1px solid var(--panel-edge-shadow);
+  border-right: 1px solid var(--panel-edge-shadow);
   transition: right 180ms ease, bottom 180ms ease;
 }
 #version-tab.hidden-tag { display: none; }
@@ -256,9 +256,9 @@ h1, h2, .header-text {
   align-items: stretch;
   background: var(--bg-elevated);
   border-top: 1px solid var(--panel-edge-highlight);
-  border-left: 1px solid var(--panel-edge-highlight);
+  border-right: 1px solid var(--panel-edge-highlight);
   border-bottom: 1px solid var(--panel-edge-shadow);
-  border-right: 1px solid var(--panel-edge-shadow);
+  border-left: 1px solid var(--panel-edge-shadow);
   transition: left 180ms ease, bottom 180ms ease;
 }
 #tool-tag.hidden-tag { display: none; }
@@ -859,10 +859,35 @@ h1, h2, .header-text {
   border: 1px solid var(--border-strong);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 24px;
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* Grab handle: the one drag point for reordering a layer/file row — a
+   2x3 dot grid, the standard "drag me" affordance, drawn with box-shadow
+   off a single 2px dot rather than an image. */
+.drag-handle {
+  flex: 0 0 16px;
+  height: 100%;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drag-handle::before {
+  content: '';
+  width: 2px;
+  height: 2px;
+  background: var(--text-secondary);
+  box-shadow:
+    5px 0 0 var(--text-secondary),
+    0 5px 0 var(--text-secondary),
+    5px 5px 0 var(--text-secondary),
+    0 10px 0 var(--text-secondary),
+    5px 10px 0 var(--text-secondary);
+}
+.drag-handle:hover::before { background: var(--text-primary); }
 
 .layer-thumb {
   position: relative;

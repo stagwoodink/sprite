@@ -21,6 +21,13 @@ export function addFile(project, name, width, height) {
   project.activeFileIndex = project.files.length - 1;
 }
 
+export function reorderFile(project, from, to) {
+  if (to < 0 || to >= project.files.length) return;
+  const [file] = project.files.splice(from, 1);
+  project.files.splice(to, 0, file);
+  if (project.activeFileIndex === from) project.activeFileIndex = to;
+}
+
 // 8x8, 16x16, 32x32, 64x64, 128x128, 256x256, Game Boy DMG (§13.2) — no
 // custom size, deliberately dropped.
 export const NEW_FILE_SIZES = [

@@ -87,6 +87,10 @@ export function renderLayersPanel(container, file, callbacks) {
     });
     thumbWrap.append(opacitySlider);
 
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle';
+    handle.title = 'Drag to reorder';
+
     const label = document.createElement('div');
     label.className = 'layer-label';
     label.textContent = layer.name;
@@ -99,13 +103,13 @@ export function renderLayersPanel(container, file, callbacks) {
       callbacks.onDelete(i);
     });
 
-    row.append(thumbWrap, label, del);
+    row.append(thumbWrap, handle, label, del);
     row.addEventListener('click', () => callbacks.onSelect(i));
-    // Only the row's own "tile" area (not the thumbnail, opacity slider, or
-    // delete button) starts a reorder drag — those have their own
-    // click/pointer interactions that a native drag would otherwise steal.
+    // Only the grab handle starts a reorder drag — the thumbnail and
+    // opacity slider have their own click/pointer interactions that a
+    // native drag would otherwise steal.
     row.addEventListener('dragstart', (e) => {
-      if (e.target.closest('.layer-thumb, .opacity-slider, .layer-delete')) {
+      if (!e.target.closest('.drag-handle')) {
         e.preventDefault();
         return;
       }

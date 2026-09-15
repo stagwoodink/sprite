@@ -7,7 +7,7 @@ import { createPalette } from './palette.js';
 import { maskFromRect, maskFromColor, fullMask, toRenderSelection } from './selection.js';
 import { extract, stamp, flip, rotate, shiftMask, moveContent, maskBounds } from './selection-ops.js';
 import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
-import { createProject, activeFile as getActiveFile, addFile } from './project.js';
+import { createProject, activeFile as getActiveFile, addFile, reorderFile } from './project.js';
 import {
   activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer, reorderLayer,
   addFrame, deleteFrame, duplicateFrame, reorderFrame, ghostSource,
@@ -358,6 +358,7 @@ function redrawProjectPanel() {
       autosave();
     },
     onExport: () => openExport(),
+    onReorderFile: (from, to) => { reorderFile(project, from, to); redrawProjectPanel(); autosave(); },
   });
 }
 redrawProjectPanel();
