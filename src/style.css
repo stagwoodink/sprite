@@ -67,11 +67,14 @@ h1, h2, .header-text {
 /* ---- Palette bar (top, anchored) --------------------------------- */
 #palette-bar {
   flex: 0 0 auto;
+  height: 39px; /* matches the chip row (§7.2) — needed so height can transition */
   display: flex;
   align-items: stretch;
+  overflow: hidden;
   background: var(--bg-elevated);
-  transition: margin 120ms ease;
+  transition: height 180ms ease;
 }
+#palette-bar.panel-hidden { height: 0; }
 
 /* ---- Middle row: project | canvas | layers ------------------------ */
 #middle-row {
@@ -109,7 +112,9 @@ h1, h2, .header-text {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 180ms ease;
 }
+.side-panel.panel-hidden { width: 0; }
 
 /* ---- Timeline (bottom, full width, never shrinks) ------------------ */
 #timeline-bar {
@@ -119,7 +124,10 @@ h1, h2, .header-text {
   background: var(--bg-elevated);
   display: flex;
   align-items: stretch;
+  overflow: hidden;
+  transition: height 180ms ease;
 }
+#timeline-bar.panel-hidden { height: 0; }
 
 .fps-field {
   flex: 0 0 56px;

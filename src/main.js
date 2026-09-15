@@ -45,7 +45,7 @@ function toggleHideAllPanels() {
     hiddenPanelsStash = {};
     for (const key in reveals) {
       hiddenPanelsStash[key] = reveals[key].isPinned();
-      reveals[key].setPinned(false);
+      reveals[key].forceHide();
     }
   }
 }

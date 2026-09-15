@@ -15,7 +15,10 @@ export function createRevealablePanel(panelEl, triggerEl, { initiallyPinned = fa
 
   function apply() {
     const visible = pinned || hovering;
-    panelEl.hidden = !visible;
+    // A CSS class (collapsing width/height to 0), not the `hidden`
+    // attribute — `hidden` sets display:none, which can't transition/slide.
+    // The element stays in the layout at all times so it can animate.
+    panelEl.classList.toggle('panel-hidden', !visible);
     panelEl.classList.toggle('focused', visible);
   }
 
@@ -42,6 +45,9 @@ export function createRevealablePanel(panelEl, triggerEl, { initiallyPinned = fa
   return {
     togglePin() { pinned = !pinned; apply(); },
     setPinned(value) { pinned = value; apply(); },
+    // Forces the panel closed regardless of live hover state — setPinned(false)
+    // alone would leave it open if the cursor is still resting on it.
+    forceHide() { pinned = false; hovering = false; clearTimeout(hideTimer); apply(); },
     isFocused: () => pinned || hovering,
     isPinned: () => pinned,
   };
