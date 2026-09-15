@@ -160,6 +160,31 @@ h1, h2, .header-text {
 #palette-bar:not(.panel-hidden) { border-bottom: 1px solid var(--panel-edge-highlight); }
 #palette-bar.panel-hidden { height: 0; }
 
+/* Floats above the palette's right edge; slides left with it when the
+   layers panel is open (main.js keeps --push-right in sync). */
+#version-tab {
+  position: absolute;
+  right: var(--push-right, 0);
+  bottom: 39px; /* palette bar height */
+  z-index: 10;
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-bottom: none;
+  transition: right 180ms ease;
+}
+#version-tab a {
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+#version-tab a:hover { color: var(--text-primary); background: var(--bg-hover); }
+.version-tab-bug { border-left: 1px solid var(--hairline); font-size: 13px; }
+
 /* Where an open side panel visually stacks in front of the Timeline/
    Palette (their shrunk edge butts against it), a plain dark shadow line
    on that edge reads as "the side panel is on top of this one." */

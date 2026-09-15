@@ -19,6 +19,7 @@ import { chooseBackend, loadProject, saveProject, debounce } from './persistence
 import { createRevealablePanel } from './panel-reveal.js';
 import { createKeybindHelp } from './keybind-help.js';
 import { openExportBar } from './export-bar.js';
+import { VERSION, GITHUB_ISSUES_URL, ITCH_IO_URL } from './version.js';
 
 const canvas = document.getElementById('pixi-canvas');
 const ctx = canvas.getContext('2d');
@@ -26,6 +27,23 @@ const paletteBar = document.getElementById('palette-bar');
 const projectPanel = document.getElementById('project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
+const versionTab = document.getElementById('version-tab');
+
+// Floats above the palette's right edge; slides left with it when the
+// layers panel pushes the palette over.
+const versionLink = document.createElement('a');
+versionLink.href = ITCH_IO_URL;
+versionLink.target = '_blank';
+versionLink.rel = 'noopener';
+versionLink.textContent = `Pixi v${VERSION}`;
+const bugBtn = document.createElement('a');
+bugBtn.href = GITHUB_ISSUES_URL;
+bugBtn.target = '_blank';
+bugBtn.rel = 'noopener';
+bugBtn.className = 'version-tab-bug';
+bugBtn.title = 'Report a bug';
+bugBtn.textContent = '\u{1F41B}'; // bug emoji — a plain generic icon, no new asset needed
+versionTab.append(versionLink, bugBtn);
 
 // Timeline (top) and Palette (bottom) both shrink horizontally to clear
 // whichever side panel is open, rather than staying full width and
@@ -46,6 +64,7 @@ function updatePushes() {
     el.classList.toggle('pushed-left', pushedLeft);
     el.classList.toggle('pushed-right', pushedRight);
   }
+  versionTab.style.setProperty('--push-right', rightPush + 'px');
 }
 
 // Shared reveal/hide/pin/focus mechanic (§15), one instance per panel.
