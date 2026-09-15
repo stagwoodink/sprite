@@ -1,17 +1,21 @@
-// Pure pixel-buffer math shared by every {width, height, pixels} view —
-// main.js binds this shape to whichever layer+frame is currently active.
+// Pure pixel-buffer math shared by every {width, height, pixels, stride}
+// view — main.js binds this shape to whichever layer+frame is currently
+// active. `stride` (row length in the backing array) defaults to `width`;
+// it differs after a canvas shrink, where the visible window (width/height)
+// is a top-left crop of a wider logical buffer (§13.4) rather than a
+// same-size copy — this lets that crop stay a view, not a copy.
 export function inBounds(model, x, y) {
   return x >= 0 && y >= 0 && x < model.width && y < model.height;
 }
 
 export function getPixel(model, x, y) {
   if (!inBounds(model, x, y)) return null;
-  return model.pixels[y * model.width + x];
+  return model.pixels[y * (model.stride || model.width) + x];
 }
 
 export function setPixel(model, x, y, colorHex) {
   if (!inBounds(model, x, y)) return;
-  model.pixels[y * model.width + x] = colorHex;
+  model.pixels[y * (model.stride || model.width) + x] = colorHex;
 }
 
 // Whole-array snapshot/diff, used to build one undo EditCommand per committed
@@ -23,10 +27,11 @@ export function snapshotPixels(model) {
 }
 
 export function diffFromSnapshot(model, snapshot) {
+  const stride = model.stride || model.width;
   const before = [], after = [];
   for (let i = 0; i < model.pixels.length; i++) {
     if (model.pixels[i] !== snapshot[i]) {
-      const x = i % model.width, y = Math.floor(i / model.width);
+      const x = i % stride, y = Math.floor(i / stride);
       before.push([x, y, snapshot[i]]);
       after.push([x, y, model.pixels[i]]);
     }
@@ -34,39 +39,35 @@ export function diffFromSnapshot(model, snapshot) {
   return { before, after };
 }
 
-function hexToRgb(hex) {
+export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
-function rgbToHex(r, g, b) {
+export function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
 }
 
-// Source-over composite of `colorHex` at `alpha` onto whatever is already at
-// (x, y). Baking the blend into a resolved color (rather than storing alpha
-// per pixel) keeps the model a flat grid of solid-or-transparent colors, so
+// Source-over composite of `top` at `alpha` onto `base` (either may be null
+// = transparent). Pure — used both to bake a blended pixel into a model
+// in-place (blendPixel) and to composite layers for display (pixi-file.js).
+export function blendColors(base, top, alpha) {
+  if (alpha >= 1 || !base) return top;
+  if (alpha <= 0) return base;
+  const b = hexToRgb(base), t = hexToRgb(top);
+  return rgbToHex(
+    b.r + (t.r - b.r) * alpha,
+    b.g + (t.g - b.g) * alpha,
+    b.b + (t.b - b.b) * alpha,
+  );
+}
+
+// Baking the blend into a resolved color (rather than storing alpha per
+// pixel) keeps the model a flat grid of solid-or-transparent colors, so
 // repeated re-renders never re-blend against the same pixel twice.
 export function blendPixel(model, x, y, colorHex, alpha) {
   if (!inBounds(model, x, y)) return;
-  if (alpha >= 1) return setPixel(model, x, y, colorHex);
-  if (alpha <= 0) return;
-  const existing = getPixel(model, x, y);
-  const top = hexToRgb(colorHex);
-  if (!existing) {
-    // Blending onto transparent: only the top color's own alpha matters,
-    // which we approximate by lightening toward the canvas background so
-    // low-alpha stamps still read as "faint" rather than full-strength.
-    setPixel(model, x, y, colorHex);
-    return;
-  }
-  const base = hexToRgb(existing);
-  const mixed = rgbToHex(
-    base.r + (top.r - base.r) * alpha,
-    base.g + (top.g - base.g) * alpha,
-    base.b + (top.b - base.b) * alpha,
-  );
-  setPixel(model, x, y, mixed);
+  setPixel(model, x, y, blendColors(getPixel(model, x, y), colorHex, alpha));
 }
 
 // Antialiased stamp: soft circular brush, alpha falling off from center.

@@ -348,3 +348,60 @@ h1, h2, .header-text {
   cursor: pointer;
 }
 .size-popup-option:hover, .context-bar button:hover { background: var(--bg-hover); }
+
+/* ---- Layers panel (§11, ui-design-system §4) ------------------------- */
+.layer-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 40px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+}
+.layer-row:hover { background: #2A2A2E; }
+.layer-row.active { background: var(--accent); }
+
+.layer-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+  line-height: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.3); /* §4.3: 30% black, thumbnail column only */
+}
+.layer-thumb canvas { display: block; height: 100%; width: auto; image-rendering: pixelated; }
+
+.eye-pip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  background: var(--text-primary);
+  opacity: 0;
+}
+.layer-thumb:hover .eye-pip { opacity: 0.8; }
+.eye-pip.hidden-indicator { opacity: 1; background: var(--accent); }
+
+.layer-label {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--unit);
+  color: var(--text-primary);
+  border-top: 1px solid rgba(0, 0, 0, 0.1); /* §4.3: 10% black, label column only */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.layer-row.active .layer-label { color: var(--text-primary); }
+
+.layer-delete {
+  flex: 0 0 40px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border-left: 1px solid var(--hairline);
+}
+.layer-row:hover .layer-delete { display: flex; }
+.delete-pip { width: 6px; height: 6px; background: var(--accent); }

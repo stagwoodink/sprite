@@ -6,14 +6,16 @@ import { createPalette } from './palette.js';
 import { maskFromRect, fullMask, toRenderSelection } from './selection.js';
 import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
 import { createProject, activeFile as getActiveFile, addFile } from './project.js';
-import { activePixels, resizeCanvas } from './pixi-file.js';
+import { activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer, reorderLayer } from './pixi-file.js';
 import { renderProjectPanel } from './project-panel.js';
+import { renderLayersPanel } from './layers-panel.js';
 import { chooseBackend, loadProject, saveProject, debounce } from './persistence.js';
 
 const canvas = document.getElementById('pixi-canvas');
 const ctx = canvas.getContext('2d');
 const paletteBar = document.getElementById('palette-bar');
 const projectPanel = document.getElementById('project-panel');
+const layersPanel = document.getElementById('layers-panel');
 
 // Autosave (§10, §18): every committed change writes to whichever backend
 // was resolved (real folder via FSA, or the IndexedDB fallback), debounced
@@ -26,12 +28,16 @@ autosave();
 // `model` is a stable view object; switching files/layers/frames re-points
 // model.pixels at that combination's array in place (same reference the
 // PixiFile stores) rather than rebuilding every module that holds `model`.
-const model = { width: 0, height: 0, pixels: null };
+// stride = the logical canvas width, which can exceed the visible width
+// after a shrink (§13.4) — width/height stay the visible (edit/display)
+// window, cropped from the top-left of that wider backing array.
+const model = { width: 0, height: 0, stride: 0, pixels: null };
 
 function bindActiveFile() {
   const file = getActiveFile(project);
   model.width = file.visibleWidth;
   model.height = file.visibleHeight;
+  model.stride = file.canvasWidth;
   model.pixels = activePixels(file);
 }
 bindActiveFile();
@@ -41,8 +47,13 @@ let showRuler = false;
 let hoverPixel = null;
 let palettePinned = true;
 let projectPinned = false;
+let layersPinned = false;
+let layersPanelFocused = false; // hover-only focus stand-in until Phase 13's real model
 let selectionMask = null;
 let selectionRender = null;
+
+layersPanel.addEventListener('mouseenter', () => { layersPanelFocused = true; });
+layersPanel.addEventListener('mouseleave', () => { layersPanelFocused = false; });
 
 const palette = createPalette(paletteBar, project.palette, () => autosave());
 const colors = { primary: () => palette.getPrimary(), secondary: () => palette.getSecondary() };
@@ -75,7 +86,12 @@ function resize() {
 }
 
 function draw() {
-  render(ctx, model, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender });
+  // The canvas always shows the composited result of every visible layer
+  // (§11), while `model` (the active layer's own raw buffer) is what
+  // painting/selection/undo actually mutate.
+  const display = { width: model.width, height: model.height, pixels: compositeFrame(getActiveFile(project)) };
+  render(ctx, display, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender });
+  redrawLayersPanel();
 }
 
 function redrawProjectPanel() {
@@ -92,6 +108,38 @@ function redrawProjectPanel() {
   });
 }
 redrawProjectPanel();
+
+function redrawLayersPanel() {
+  const file = getActiveFile(project);
+  renderLayersPanel(layersPanel, file, {
+    onAddLayer: () => { addLayer(file); bindActiveFile(); draw(); autosave(); },
+    onSelect: (i) => { file.activeLayerIndex = i; bindActiveFile(); redrawLayersPanel(); },
+    onToggleVisible: (i) => { file.layers[i].visible = !file.layers[i].visible; draw(); autosave(); },
+    onDelete: (i) => { deleteLayer(file, i); bindActiveFile(); draw(); autosave(); },
+    onReorder: (from, to) => { reorderLayer(file, from, to); draw(); autosave(); },
+    onOpenOpacity: (i, anchor) => openOpacitySlider(anchor, file.layers[i], () => { draw(); autosave(); }),
+  });
+}
+
+function openOpacitySlider(anchor, layer, onChange) {
+  document.querySelectorAll('.opacity-popup').forEach((el) => el.remove());
+  const popup = document.createElement('div');
+  popup.className = 'color-picker-popup opacity-popup';
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = 0;
+  slider.max = 100;
+  slider.value = Math.round(layer.opacity * 100);
+  slider.addEventListener('input', () => { layer.opacity = Number(slider.value) / 100; onChange(); });
+  popup.append(slider);
+  const rect = anchor.getBoundingClientRect();
+  popup.style.left = rect.right + 4 + 'px';
+  popup.style.top = rect.top + 'px';
+  document.body.append(popup);
+  setTimeout(() => window.addEventListener('pointerdown', function onOutside(e) {
+    if (!popup.contains(e.target)) { popup.remove(); window.removeEventListener('pointerdown', onOutside); }
+  }), 0);
+}
 
 createInputController(canvas, model, colors, draw, selectionApi, history);
 
@@ -135,6 +183,26 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     projectPinned = !projectPinned;
     projectPanel.hidden = !projectPinned;
+  } else if (e.key === 'l' || e.key === 'L') {
+    layersPinned = !layersPinned;
+    layersPanel.hidden = !layersPinned;
+  } else if (layersPanelFocused && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault();
+    const file = getActiveFile(project);
+    const dir = e.key === 'ArrowUp' ? 1 : -1; // panel lists topmost-first, stack index rises upward
+    const next = file.activeLayerIndex + dir;
+    if (e.shiftKey) reorderLayer(file, file.activeLayerIndex, next);
+    else if (next >= 0 && next < file.layers.length) file.activeLayerIndex = next;
+    bindActiveFile();
+    redrawLayersPanel();
+    draw();
+    autosave();
+  } else if (layersPanelFocused && (e.key === 'Backspace' || e.key === 'Delete')) {
+    const file = getActiveFile(project);
+    deleteLayer(file, file.activeLayerIndex);
+    bindActiveFile();
+    draw();
+    autosave();
   } else if (e.key in DIGIT_INDEX) {
     if (e.altKey) palette.setSecondaryByIndex(DIGIT_INDEX[e.key]);
     else palette.setPrimaryByIndex(DIGIT_INDEX[e.key]);
