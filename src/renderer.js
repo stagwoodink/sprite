@@ -5,8 +5,11 @@ const CANVAS_BG = '#121214'; // bg-base — same family as the panel bg-elevated
 const CHECKER_LIGHT = '#DEDEDE';
 const CHECKER_DARK = '#CFCFCF';
 const CHECKER_CELL = 4; // canvas pixels per checker square — an 8x8 sprite reads as a 2x2 checkerboard
-const GRID_COLOR = '#808080'; // mid-gray, drawn with a difference blend (see below)
-const GRID_ALPHA = 0.25;
+const GRID_ALPHA = 0.2;
+// Whole-canvas average luminance (0-255) below this uses white grid lines,
+// at/above it uses black. Higher = white lines cover a wider range of
+// (brighter) backgrounds before switching to black — "brighten earlier."
+const GRID_LUMA_THRESHOLD = 160;
 const GRID_MIN_SPACING_PX = 6; // never draw grid lines closer together than this on screen
 const SELECTION_COLOR = '#BE1425';
 const RULER_THICKNESS = 16;
@@ -31,7 +34,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
     for (const ghost of onionFrames) drawGhost(ctx, model, ghost, scale, ox, oy);
   }
 
-  drawPixels(ctx, model, scale, ox, oy, w, h);
+  const avgLuma = drawPixels(ctx, model, scale, ox, oy, w, h);
 
   if (showGrid) {
     // A reference, not a measurement: at 1 screen-pixel-per-canvas-pixel
@@ -41,14 +44,14 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
     // individually, and coarser as the canvas shrinks.
     const step = gridStep(scale);
 
-    // Difference blend (same guaranteed-visible trick as the brush cursor
-    // and ruler crosshair) at partial alpha for subtlety — a fixed
-    // translucent white line all but disappears over a light/white part
-    // of the art; this always shifts the color underneath it instead.
+    // White or black line, chosen from the art's average brightness, so it
+    // reads clearly against both light and dark palettes — a difference
+    // blend was tried first but has its own blind spot (a mid-gray blend
+    // color vanishes on mid-gray art) and produced murky results on
+    // several mid-tone colors.
     ctx.save();
-    ctx.globalCompositeOperation = 'difference';
     ctx.globalAlpha = GRID_ALPHA;
-    ctx.strokeStyle = GRID_COLOR;
+    ctx.strokeStyle = avgLuma < GRID_LUMA_THRESHOLD ? '#FFFFFF' : '#000000';
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let x = 0; x <= model.width; x += step) {
@@ -249,6 +252,9 @@ function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX 
 let pixelBuffer = null;
 let pixelBufferCtx = null;
 
+// Also returns the average perceptual luminance (0-255, transparent pixels
+// treated as the dark canvas backdrop) of what got drawn, so callers like
+// the grid can pick a line color that stays legible against it.
 function drawPixels(ctx, model, scale, ox, oy, w, h) {
   if (!pixelBuffer || pixelBuffer.width !== model.width || pixelBuffer.height !== model.height) {
     pixelBuffer = document.createElement('canvas');
@@ -258,18 +264,22 @@ function drawPixels(ctx, model, scale, ox, oy, w, h) {
   }
   const imageData = pixelBufferCtx.createImageData(model.width, model.height);
   const data = imageData.data;
+  let lumaSum = 0;
+  const count = model.width * model.height;
   for (let y = 0; y < model.height; y++) {
     for (let x = 0; x < model.width; x++) {
       const color = getPixel(model, x, y);
       const i = (y * model.width + x) * 4;
-      if (!color) continue; // leaves alpha 0 — transparent
+      if (!color) continue; // leaves alpha 0 — transparent, counts as dark backdrop below
       const { r, g, b } = hexToRgb(color);
       data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
+      lumaSum += 0.299 * r + 0.587 * g + 0.114 * b;
     }
   }
   pixelBufferCtx.putImageData(imageData, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(pixelBuffer, 0, 0, model.width, model.height, ox, oy, w, h);
+  return count ? lumaSum / count : 0;
 }
 
 function line(ctx, x1, y1, x2, y2) {
