@@ -27,22 +27,17 @@ const projectPanel = document.getElementById('project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
 
-// Timeline always spans the full width and pushes the side panels' top
-// down to clear it. Side panels reach all the way to the bottom of the
-// viewport (behind the Palette bar, not stopping above it) — the Palette
-// is the one that shrinks horizontally to clear whichever side panel is
-// open, so there's no actual overlap despite the side panel running the
-// full height. Must match the actual CSS sizes (timeline/side-panel rules).
-const TIMELINE_HEIGHT = 56;
+// Timeline (top) and Palette (bottom) both shrink horizontally to clear
+// whichever side panel is open, rather than staying full width and
+// pushing anything — side panels just run the full viewport height.
 const SIDE_PANEL_WIDTH = 220;
 
 let projectReveal, layersReveal, timelineReveal, paletteReveal;
 function updatePushes() {
-  const topPush = timelineReveal && timelineReveal.isFocused() ? TIMELINE_HEIGHT : 0;
   const leftPush = projectReveal && projectReveal.isFocused() ? SIDE_PANEL_WIDTH : 0;
   const rightPush = layersReveal && layersReveal.isFocused() ? SIDE_PANEL_WIDTH : 0;
-  projectPanel.style.setProperty('--push-top', topPush + 'px');
-  layersPanel.style.setProperty('--push-top', topPush + 'px');
+  timelineBar.style.setProperty('--push-left', leftPush + 'px');
+  timelineBar.style.setProperty('--push-right', rightPush + 'px');
   paletteBar.style.setProperty('--push-left', leftPush + 'px');
   paletteBar.style.setProperty('--push-right', rightPush + 'px');
 }

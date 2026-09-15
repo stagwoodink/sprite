@@ -98,29 +98,27 @@ h1, h2, .header-text {
 .panel-overlay-top { top: 0; left: 0; right: 0; }
 .panel-overlay-bottom { bottom: 0; left: 0; right: 0; }
 
-/* Project/Layers never overlap the Timeline (always full-width, top edge)
-   — main.js keeps --push-top in sync with its visibility, so a side
-   panel's top edge starts right where the timeline ends. They run the
-   full height at the bottom (behind the Palette, not stopping above it);
-   the Palette is the one that shrinks horizontally instead, so the two
-   never actually collide. */
+/* Side panels run the full viewport height — Timeline and Palette are the
+   ones that shrink horizontally (below) to clear whichever is open, so
+   nothing actually overlaps despite that. */
 .side-panel {
   width: 220px;
-  top: var(--push-top, 0);
+  top: 0;
   bottom: 0;
   display: flex;
   flex-direction: column;
-  transition: width 180ms ease, top 180ms ease, bottom 180ms ease;
+  transition: width 180ms ease;
 }
 .side-panel.panel-hidden { width: 0; }
 
-/* ---- Timeline (top edge, always full width) -------------------------- */
+/* ---- Timeline (top edge, shrinks around open side panels) ------------ */
 #timeline-bar {
   height: 56px;
-  z-index: 15; /* above the side panels, which push down to clear it */
+  left: var(--push-left, 0);
+  right: var(--push-right, 0);
   display: flex;
   align-items: stretch;
-  transition: height 180ms ease;
+  transition: height 180ms ease, left 180ms ease, right 180ms ease;
 }
 #timeline-bar.panel-hidden { height: 0; }
 
