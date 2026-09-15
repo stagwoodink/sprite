@@ -99,13 +99,15 @@ h1, h2, .header-text {
 .panel-overlay-bottom { bottom: 0; left: 0; right: 0; }
 
 /* Project/Layers never overlap the Timeline (always full-width, top edge)
-   or the Palette (bottom edge) — main.js keeps --push-top/--push-bottom in
-   sync with whichever of those is currently visible, so a side panel's
-   own top/bottom edge always starts right where the other one ends. */
+   — main.js keeps --push-top in sync with its visibility, so a side
+   panel's top edge starts right where the timeline ends. They run the
+   full height at the bottom (behind the Palette, not stopping above it);
+   the Palette is the one that shrinks horizontally instead, so the two
+   never actually collide. */
 .side-panel {
   width: 220px;
   top: var(--push-top, 0);
-  bottom: var(--push-bottom, 0);
+  bottom: 0;
   display: flex;
   flex-direction: column;
   transition: width 180ms ease, top 180ms ease, bottom 180ms ease;
