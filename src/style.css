@@ -600,6 +600,17 @@ h1, h2, .header-text {
   text-overflow: ellipsis;
 }
 
+/* Eyedropper ("I" hold) color preview — offset from the actual cursor/
+   sample point so it never covers what's being picked. */
+.eyedropper-preview {
+  position: fixed;
+  z-index: 3000;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #000000;
+  pointer-events: none;
+}
+
 /* Resize button: slides in from the right on hover, no context menu needed. */
 .file-resize-btn {
   flex: 0 0 0;

@@ -609,6 +609,96 @@ function arrowDelta(key) {
 
 window.addEventListener('keyup', (e) => {
   if (e.key === 'r' || e.key === 'R') endRotate();
+  if (e.key === 'i' || e.key === 'I') setEyedropperActive(false);
 });
+
+// Eyedropper ("I" hold, §8): samples a color from anywhere in the
+// viewport — canvas pixels, the transparent backdrop, palette chips, any
+// UI surface — not just the canvas. Adds the sampled color as a new chip
+// if the palette doesn't already have it.
+let eyedropperActive = false;
+let eyedropperPreview = null;
+
+function setEyedropperActive(active) {
+  if (eyedropperActive === active) return;
+  eyedropperActive = active;
+  document.body.style.cursor = active ? 'crosshair' : '';
+  if (!active && eyedropperPreview) { eyedropperPreview.remove(); eyedropperPreview = null; }
+}
+
+window.addEventListener('keydown', (e) => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if ((e.key === 'i' || e.key === 'I') && !e.repeat) setEyedropperActive(true);
+});
+window.addEventListener('blur', () => setEyedropperActive(false));
+
+function rgbStringToHex(rgbStr) {
+  const m = rgbStr && rgbStr.match(/[\d.]+/g);
+  if (!m || m.length < 3) return null;
+  return '#' + m.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+// Walks up from whatever's under the cursor: canvas pixel/backdrop first,
+// then a palette chip's own color, then the nearest actual background
+// color in the DOM (so sampling empty panel space still gets something).
+function sampleColorAt(clientX, clientY) {
+  const el = document.elementFromPoint(clientX, clientY);
+  if (!el) return null;
+
+  if (el === canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const viewport = computeViewport(model, rect.width, rect.height);
+    const px = screenToPixel(viewport, clientX - rect.left, clientY - rect.top);
+    const file = getActiveFile(project);
+    if (px.x >= 0 && px.y >= 0 && px.x < model.width && px.y < model.height) {
+      const composite = compositeFrame(file);
+      const color = composite[px.y * model.width + px.x];
+      if (color) return color;
+    }
+    return '#CFCFCF'; // sampled the transparent backdrop/checkerboard
+  }
+
+  const chipEl = el.closest && el.closest('.chip');
+  if (chipEl) {
+    const chipColor = getComputedStyle(chipEl).getPropertyValue('--chip-color').trim();
+    if (chipColor) return chipColor.startsWith('#') ? chipColor.toUpperCase() : rgbStringToHex(chipColor);
+  }
+
+  let node = el;
+  while (node && node !== document.documentElement) {
+    const bg = getComputedStyle(node).backgroundColor;
+    if (bg && bg !== 'transparent' && !/rgba?\([^)]*,\s*0\s*\)/.test(bg)) return rgbStringToHex(bg);
+    node = node.parentElement;
+  }
+  return '#121214';
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (!eyedropperActive) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const hex = sampleColorAt(e.clientX, e.clientY);
+  if (hex) palette.pickColor(hex, e.button === 2);
+}, true);
+
+document.addEventListener('pointermove', (e) => {
+  if (!eyedropperActive) return;
+  const hex = sampleColorAt(e.clientX, e.clientY);
+  if (!eyedropperPreview) {
+    eyedropperPreview = document.createElement('div');
+    eyedropperPreview.className = 'eyedropper-preview';
+    document.body.append(eyedropperPreview);
+  }
+  eyedropperPreview.style.background = hex || 'transparent';
+  // Offset up-right of the actual cursor/sample point so the preview
+  // itself never covers what's being sampled.
+  eyedropperPreview.style.left = e.clientX + 14 + 'px';
+  eyedropperPreview.style.top = e.clientY - 14 - 16 + 'px';
+}, true);
+
+document.addEventListener('contextmenu', (e) => {
+  if (eyedropperActive) e.preventDefault();
+}, true);
 
 resize();

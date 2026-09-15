@@ -267,5 +267,16 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       if (state.chips[i]) { state.secondary = state.chips[i]; onChange(state); }
     },
     loadPreset,
+    // Eyedropper (§8, "I" hold): sets primary/secondary from a sampled
+    // color, adding it as a new chip first if the palette doesn't have it.
+    pickColor(hex, isSecondary) {
+      const upper = hex.toUpperCase();
+      if (!state.chips.some((c) => c.toUpperCase() === upper) && state.chips.length < MAX_CHIPS) {
+        state.chips.push(upper);
+        render();
+      }
+      if (isSecondary) state.secondary = upper; else state.primary = upper;
+      onChange(state);
+    },
   };
 }
