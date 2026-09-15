@@ -177,13 +177,28 @@ h1, h2, .header-text {
 #version-tab a {
   display: flex;
   align-items: center;
-  padding: 2px 6px;
-  font-size: 12px;
+  padding: 2px 8px;
+  font-size: 24px;
   color: var(--text-secondary);
   text-decoration: none;
 }
 #version-tab a:hover { color: var(--text-primary); background: var(--bg-hover); }
-.version-tab-bug { border-left: 1px solid var(--hairline); font-size: 13px; }
+
+/* Square placeholder — real icons come later (a custom icon set). */
+.version-tab-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border-left: 1px solid var(--hairline);
+}
+.version-tab-icon::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  background: var(--text-secondary);
+}
+.version-tab-icon:hover::after { background: var(--text-primary); }
 
 /* Where an open side panel visually stacks in front of the Timeline/
    Palette (their shrunk edge butts against it), a plain dark shadow line

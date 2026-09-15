@@ -6,3 +6,4 @@ export const VERSION = '0.1.0';
 
 export const GITHUB_ISSUES_URL = 'https://github.com/stagwoodink/pixi/issues';
 export const ITCH_IO_URL = 'https://xanderstagwood.itch.io/pixi';
+export const DISCORD_URL = 'https://discord.gg/ytPJyq7kdw';
