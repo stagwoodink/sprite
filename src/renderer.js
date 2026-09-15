@@ -275,9 +275,16 @@ function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX 
 let pixelBuffer = null;
 let pixelBufferCtx = null;
 
-// Also returns the average perceptual luminance (0-255, transparent pixels
-// treated as the dark canvas backdrop) of what got drawn, so callers like
-// the grid can pick a line color that stays legible against it.
+// Also returns the average perceptual luminance (0-255) of what's actually
+// visible — transparent pixels count as the light checkerboard they show
+// (not black), so a blank/mostly-transparent canvas correctly reads as
+// bright and gets dark grid lines, not white ones invisible against it.
+const CHECKER_AVG_LUMA = (() => {
+  const l = hexToRgb(CHECKER_LIGHT), d = hexToRgb(CHECKER_DARK);
+  const luma = (c) => 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+  return (luma(l) + luma(d)) / 2;
+})();
+
 function drawPixels(ctx, model, scale, ox, oy, w, h) {
   if (!pixelBuffer || pixelBuffer.width !== model.width || pixelBuffer.height !== model.height) {
     pixelBuffer = document.createElement('canvas');
@@ -293,7 +300,7 @@ function drawPixels(ctx, model, scale, ox, oy, w, h) {
     for (let x = 0; x < model.width; x++) {
       const color = getPixel(model, x, y);
       const i = (y * model.width + x) * 4;
-      if (!color) continue; // leaves alpha 0 — transparent, counts as dark backdrop below
+      if (!color) { lumaSum += CHECKER_AVG_LUMA; continue; } // leaves alpha 0 — transparent
       const { r, g, b } = hexToRgb(color);
       data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
       lumaSum += 0.299 * r + 0.587 * g + 0.114 * b;
