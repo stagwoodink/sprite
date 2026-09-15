@@ -68,7 +68,9 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     if (e.key === 'Control') { keys.ctrl = true; changed = true; }
     if (e.key === 'Shift') { keys.shift = true; changed = true; }
     if (e.code === 'Space' && !e.repeat) { keys.space = true; changed = true; e.preventDefault(); }
-    if (keys.alt && (e.key === '[' || e.key === ']')) {
+    const tag = document.activeElement && document.activeElement.tagName;
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+    if (!typing && keys.alt && (e.key === '[' || e.key === ']')) {
       brushRadius = Math.max(1, Math.min(maxBrush(), brushRadius + (e.key === ']' ? 1 : -1)));
       changed = true;
       e.preventDefault();

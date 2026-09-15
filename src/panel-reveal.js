@@ -41,6 +41,7 @@ export function createRevealablePanel(panelEl, triggerEl, { initiallyPinned = fa
 
   return {
     togglePin() { pinned = !pinned; apply(); },
+    setPinned(value) { pinned = value; apply(); },
     isFocused: () => pinned || hovering,
     isPinned: () => pinned,
   };

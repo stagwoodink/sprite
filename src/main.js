@@ -16,6 +16,7 @@ import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
 import { chooseBackend, loadProject, saveProject, debounce } from './persistence.js';
 import { createRevealablePanel } from './panel-reveal.js';
+import { openExportBar } from './export-bar.js';
 
 const canvas = document.getElementById('pixi-canvas');
 const ctx = canvas.getContext('2d');
@@ -149,9 +150,18 @@ function redrawProjectPanel() {
       draw();
       autosave();
     },
+    onExport: () => openExport(),
   });
 }
 redrawProjectPanel();
+
+// E (§14): reveals the Project panel if hidden, then opens the export
+// context bar beside the currently selected file's row.
+function openExport() {
+  projectReveal.setPinned(true);
+  const anchor = projectPanel.querySelector('.file-row.active') || projectPanel;
+  openExportBar(anchor, getActiveFile(project), colors.secondary);
+}
 
 function redrawLayersPanel() {
   const file = getActiveFile(project);
@@ -332,6 +342,10 @@ const DIGIT_INDEX = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, '7': 6, '8
 
 window.addEventListener('resize', resize);
 window.addEventListener('keydown', (e) => {
+  // Text fields (rename, hex, FPS) handle their own keys — don't let global
+  // single-letter/arrow shortcuts fight typing in them.
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
   if (e.key === 'g' && !e.shiftKey) {
     showGrid = !showGrid;
     draw();
@@ -362,6 +376,8 @@ window.addEventListener('keydown', (e) => {
     bindActiveFile();
     draw();
     autosave();
+  } else if (e.key === 'e' || e.key === 'E') {
+    openExport();
   } else if (e.key === 't' || e.key === 'T') {
     timelineReveal.togglePin();
   } else if (e.ctrlKey && e.code === 'Space') {

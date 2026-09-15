@@ -449,6 +449,17 @@ h1, h2, .header-text {
 }
 .size-popup-option:hover, .context-bar button:hover { background: var(--bg-hover); }
 
+/* ---- Export context bar (§14) ---------------------------------------- */
+.export-bar {
+  flex-direction: column;
+  padding: var(--unit);
+  gap: var(--unit);
+}
+.export-btn-row { display: flex; }
+.export-option { flex: 1 1 0; }
+.export-option .btn-face { font-size: 12px; }
+.export-confirm .btn-face { background: var(--accent); }
+
 /* ---- Layers panel (§11, ui-design-system §4) ------------------------- */
 .layer-row {
   position: relative;
