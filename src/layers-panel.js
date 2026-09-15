@@ -90,6 +90,7 @@ export function renderLayersPanel(container, file, callbacks) {
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
+    handle.textContent = '⠿';
     handle.title = 'Drag to reorder';
 
     const label = document.createElement('div');
@@ -98,7 +99,7 @@ export function renderLayersPanel(container, file, callbacks) {
 
     const del = document.createElement('div');
     del.className = 'layer-delete';
-    del.innerHTML = '<span class="delete-pip"></span>';
+    del.textContent = '✕';
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       callbacks.onDelete(i);

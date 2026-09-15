@@ -38,13 +38,14 @@ versionLink.href = ITCH_IO_URL;
 versionLink.target = '_blank';
 versionLink.rel = 'noopener';
 versionLink.textContent = `Pixi v${VERSION}`;
-// Square placeholders — real icons come later (a custom icon set), these
-// are deliberately blank boxes rather than emoji standing in for them.
+// Plain text/Unicode stand-ins — real icons come later (a custom icon
+// font), swapped in by just changing this character, no markup change.
 const bugBtn = document.createElement('a');
 bugBtn.href = GITHUB_ISSUES_URL;
 bugBtn.target = '_blank';
 bugBtn.rel = 'noopener';
 bugBtn.className = 'version-tab-icon';
+bugBtn.textContent = '!';
 bugBtn.title = 'Report a bug';
 
 const discordBtn = document.createElement('a');
@@ -52,6 +53,7 @@ discordBtn.href = DISCORD_URL;
 discordBtn.target = '_blank';
 discordBtn.rel = 'noopener';
 discordBtn.className = 'version-tab-icon';
+discordBtn.textContent = '@';
 discordBtn.title = 'Join the Discord';
 
 // Text for now, a real icon later — toggles the same Controls modal as "?".
@@ -71,6 +73,7 @@ const toolLabel = document.createElement('div');
 toolLabel.className = 'tool-tag-label';
 const zoomIcon = document.createElement('div');
 zoomIcon.className = 'version-tab-icon';
+zoomIcon.textContent = '⌕';
 zoomIcon.title = 'Zoom';
 const zoomLabel = document.createElement('div');
 zoomLabel.className = 'tool-tag-label';

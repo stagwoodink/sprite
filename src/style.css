@@ -219,36 +219,32 @@ h1, h2, .header-text {
 }
 #version-tab a:hover { color: var(--text-primary); background: var(--bg-hover); }
 
-/* Square placeholder — real icons come later (a custom icon set). */
+/* A plain text/Unicode character, not a fixed-size drawn shape — its size
+   is just font-size, so it sits on the same grid as every other button
+   and drops straight into a real icon font later with no markup change. */
 .version-tab-icon {
   width: var(--block);
   height: var(--block);
   padding: 0;
+  display: flex;
+  align-items: center;
   justify-content: center;
   border-left: 1px solid var(--hairline);
+  font-size: var(--font-body);
+  color: var(--text-secondary);
+  cursor: pointer;
 }
-.version-tab-icon::after {
-  content: '';
-  width: 14px;
-  height: 14px;
-  background: var(--text-secondary);
-}
-.version-tab-icon:hover::after { background: var(--text-primary); }
+.version-tab-icon:hover { color: var(--text-primary); background: var(--bg-hover); }
 
-/* Text-for-now help button ("[?]") — an actual icon replaces this later,
-   like the bug/Discord squares, but text needs to stay legible until then. */
 .version-tab-help {
   width: auto;
   padding: 2px 8px;
   background: none;
   border: none;
   border-left: 1px solid var(--hairline);
-  color: var(--text-secondary);
   font-family: inherit;
-  font-size: 24px;
   cursor: pointer;
 }
-.version-tab-help::after { content: none; }
 .version-tab-help:hover { color: var(--text-primary); background: var(--bg-hover); }
 
 /* Tool reference tag — same idea as #version-tab, mirrored to the bottom
@@ -350,6 +346,8 @@ h1, h2, .header-text {
   align-items: center;
   justify-content: center;
   background: var(--bg-hover);
+  color: var(--accent);
+  font-size: 12px;
 }
 .frame-tile:hover .frame-delete { display: flex; }
 
@@ -888,8 +886,8 @@ h1, h2, .header-text {
 }
 
 /* Grab handle: the one drag point for reordering a layer/file row — a
-   2x3 dot grid, the standard "drag me" affordance, drawn with box-shadow
-   off a single 2px dot rather than an image. */
+   plain character (Braille all-dots, reads as a grip texture), sized by
+   font-size like every other icon so it drops onto the same grid. */
 .drag-handle {
   flex: 0 0 16px;
   height: 100%;
@@ -897,24 +895,10 @@ h1, h2, .header-text {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 16px;
+  color: var(--text-secondary);
 }
-.drag-handle::before {
-  content: '';
-  /* Explicit box matching the dot cluster's full footprint (not just the
-     first dot) — box-shadow paints outside the element's own layout box,
-     so without this the flex centering above centers the wrong (2x2)
-     box and the visible cluster sits off-center. */
-  width: 7px;
-  height: 12px;
-  background: var(--text-secondary);
-  box-shadow:
-    5px 0 0 var(--text-secondary),
-    0 5px 0 var(--text-secondary),
-    5px 5px 0 var(--text-secondary),
-    0 10px 0 var(--text-secondary),
-    5px 10px 0 var(--text-secondary);
-}
-.drag-handle:hover::before { background: var(--text-primary); }
+.drag-handle:hover { color: var(--text-primary); }
 
 .layer-thumb {
   position: relative;
@@ -957,6 +941,7 @@ h1, h2, .header-text {
   justify-content: center;
   background: var(--bg-hover);
   border-left: 1px solid var(--hairline);
+  color: var(--accent);
+  font-size: var(--font-body);
 }
 .layer-row:hover .layer-delete { display: flex; }
-.delete-pip { width: 6px; height: 6px; background: var(--accent); }

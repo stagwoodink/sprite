@@ -49,6 +49,7 @@ export function renderProjectPanel(container, project, callbacks) {
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
+    handle.textContent = '⠿';
     handle.title = 'Drag to reorder';
     row.draggable = true;
     row.addEventListener('dragstart', (e) => {

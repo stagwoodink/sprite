@@ -44,7 +44,7 @@ export function renderTimelinePanel(container, file, playback, callbacks) {
 
     const del = document.createElement('div');
     del.className = 'frame-delete';
-    del.innerHTML = '<span class="delete-pip"></span>';
+    del.textContent = '✕';
     del.addEventListener('click', (e) => { e.stopPropagation(); callbacks.onDelete(i); });
 
     tile.append(canvasEl, del);
