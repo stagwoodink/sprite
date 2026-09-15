@@ -20,6 +20,7 @@ import { createRevealablePanel } from './panel-reveal.js';
 import { createKeybindHelp } from './keybind-help.js';
 import { openExportBar } from './export-bar.js';
 import { VERSION, GITHUB_ISSUES_URL, ITCH_IO_URL, DISCORD_URL } from './version.js';
+import { BLOCK } from './grid.js';
 
 const canvas = document.getElementById('pixi-canvas');
 const ctx = canvas.getContext('2d');
@@ -117,7 +118,7 @@ window.addEventListener('keydown', (e) => {
 // whichever side panel is open, rather than staying full width and
 // pushing anything — side panels just run the full viewport height.
 const SIDE_PANEL_WIDTH = 220;
-const PALETTE_HEIGHT = 37;
+const PALETTE_HEIGHT = BLOCK;
 
 let projectReveal, layersReveal, timelineReveal, paletteReveal;
 function updatePushes() {

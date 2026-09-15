@@ -1,7 +1,8 @@
 import { paintThumbnail } from './thumbnail.js';
 import { compositeFrameAt } from './pixi-file.js';
+import { BLOCK } from './grid.js';
 
-const THUMB_H = 40;
+const THUMB_H = BLOCK;
 
 export function renderTimelinePanel(container, file, playback, callbacks) {
   container.innerHTML = '';

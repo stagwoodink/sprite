@@ -58,6 +58,12 @@
   --font-header: 48px;
 
   --unit: 4px;
+
+  /* The grid every chunky UI element sits in: chips, bar buttons, file
+     rows, thumbnails — one block tall/wide minimum. A layer tile is 2
+     blocks tall (thumbnail needs the extra vertical room); everything
+     else is 1. */
+  --block: 37px;
 }
 
 * { box-sizing: border-box; }
@@ -156,7 +162,7 @@ h1, h2, .header-text {
 
 /* ---- Timeline (top edge, shrinks around open side panels) ------------ */
 #timeline-bar {
-  height: 56px;
+  height: calc(var(--block) + 16px); /* room for the frame tile plus its selection indicator strip */
   left: var(--push-left, 0);
   right: var(--push-right, 0);
   transition: height 180ms ease, left 180ms ease, right 180ms ease,
@@ -172,7 +178,7 @@ h1, h2, .header-text {
 
 /* ---- Palette bar (bottom edge, shrinks around open side panels) ------ */
 #palette-bar {
-  height: 37px; /* matches the chip row (§7.2) — needed so height can transition */
+  height: var(--block); /* matches the chip row (§7.2) — needed so height can transition */
   left: var(--push-left, 0);
   right: var(--push-right, 0);
   transition: height 180ms ease, left 180ms ease, right 180ms ease,
@@ -192,6 +198,7 @@ h1, h2, .header-text {
   right: var(--push-right, 0);
   bottom: var(--push-bottom, 0);
   z-index: 10;
+  height: var(--block);
   display: flex;
   align-items: stretch;
   background: var(--bg-elevated);
@@ -214,8 +221,8 @@ h1, h2, .header-text {
 
 /* Square placeholder — real icons come later (a custom icon set). */
 .version-tab-icon {
-  width: 32px;
-  height: 32px;
+  width: var(--block);
+  height: var(--block);
   padding: 0;
   justify-content: center;
   border-left: 1px solid var(--hairline);
@@ -252,6 +259,7 @@ h1, h2, .header-text {
   left: var(--push-left, 0);
   bottom: var(--push-bottom, 0);
   z-index: 10;
+  height: var(--block);
   display: flex;
   align-items: stretch;
   background: var(--bg-elevated);
@@ -271,8 +279,8 @@ h1, h2, .header-text {
   white-space: nowrap;
 }
 .tool-tag-swatch {
-  width: 32px;
-  height: 32px;
+  width: var(--block);
+  height: var(--block);
   border-left: 1px solid var(--hairline);
 }
 
@@ -294,7 +302,7 @@ h1, h2, .header-text {
 }
 
 .onion-toggle {
-  flex: 0 0 40px;
+  flex: 0 0 var(--block);
   background: var(--bg-elevated);
   border: none;
   border-right: 1px solid var(--hairline);
@@ -315,7 +323,7 @@ h1, h2, .header-text {
 .frame-tile {
   position: relative;
   flex: 0 0 auto;
-  height: 40px;
+  height: var(--block);
   align-self: center;
   border-top: 1px solid rgba(0, 0, 0, 0.3); /* shares the layer-thumbnail hairline (§6) */
   cursor: pointer;
@@ -330,7 +338,7 @@ h1, h2, .header-text {
   background: var(--border-strong);
 }
 .frame-tile.active::after { background: var(--accent); }
-.frame-tile canvas { display: block; height: 40px; width: auto; image-rendering: pixelated; }
+.frame-tile canvas { display: block; height: var(--block); width: auto; image-rendering: pixelated; }
 
 .frame-delete {
   position: absolute;
@@ -364,7 +372,7 @@ h1, h2, .header-text {
 .frame-insert-gap:hover .frame-insert-btn { opacity: 1; }
 
 .frame-add-btn {
-  flex: 0 0 40px;
+  flex: 0 0 var(--block);
   background: var(--bg-elevated);
   border: none;
   border-left: 1px solid var(--hairline);
@@ -380,7 +388,7 @@ h1, h2, .header-text {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px; /* 28px face + 4px shadow, bottom-anchored */
+  height: var(--block); /* 1 block: 32px face + 5px shadow, bottom-anchored */
   background: transparent;
   border: none;
   padding: 0;
@@ -395,7 +403,7 @@ h1, h2, .header-text {
   left: 0;
   right: 0;
   top: 0;
-  height: 28px;
+  height: 32px;
   background: var(--border);
   border-top: 2px solid var(--border-strong);
   display: flex;
@@ -408,7 +416,7 @@ h1, h2, .header-text {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 4px;
+  height: 5px;
   background: #1c1c1a; /* darker shade of border, clamped off pure black */
 }
 
@@ -416,21 +424,21 @@ h1, h2, .header-text {
 
 .btn.selected .btn-face {
   top: 0;
-  height: 29px;
+  height: 33px;
   background: var(--accent);
   border-top-color: #e0565f;
 }
-.btn.selected .btn-shadow { height: 3px; background: var(--accent-shadow); }
+.btn.selected .btn-shadow { height: 4px; background: var(--accent-shadow); }
 
-.btn:active .btn-face { top: 4px; height: 27px; }
-.btn:active .btn-shadow { top: 31px; height: 1px; bottom: auto; }
+.btn:active .btn-face { top: 4px; height: 31px; }
+.btn:active .btn-shadow { top: 35px; height: 2px; bottom: auto; }
 
 /* ---- Palette chip (§1.3, §7.2) -------------------------------------- */
 .chip {
   position: relative;
   flex: 1 1 0;
   min-width: 32px;
-  height: 37px; /* 32px face + 5px resting shadow, flush against each other */
+  height: var(--block); /* 32px face + 5px resting shadow, flush against each other */
   cursor: pointer;
   border-right: 1px solid var(--hairline);
 }
@@ -467,8 +475,8 @@ h1, h2, .header-text {
 
 /* Hamburger: opens the palette-preset slide-out (left of the chip row). */
 .palette-hamburger {
-  flex: 0 0 37px;
-  height: 37px;
+  flex: 0 0 var(--block);
+  height: var(--block);
   background: var(--bg-elevated);
   border: none;
   border-right: 1px solid var(--hairline);
@@ -524,7 +532,7 @@ h1, h2, .header-text {
    of the row, not hidden). */
 .chip-add {
   flex: 0 0 32px;
-  height: 37px;
+  height: var(--block);
   background: var(--bg-elevated);
   border: none;
   border-left: 1px solid var(--hairline);
@@ -604,7 +612,7 @@ h1, h2, .header-text {
 .project-header {
   display: flex;
   align-items: stretch;
-  height: 32px;
+  height: var(--block);
   border-top: 1px solid var(--hairline); /* divider from the file list above it */
 }
 .project-name {
@@ -618,7 +626,7 @@ h1, h2, .header-text {
   text-overflow: ellipsis;
 }
 .panel-header-btn {
-  flex: 0 0 32px;
+  flex: 0 0 var(--block);
   background: var(--bg-elevated);
   border: none;
   border-left: 1px solid var(--hairline);
@@ -642,6 +650,7 @@ h1, h2, .header-text {
 .file-row {
   display: flex;
   align-items: stretch;
+  height: var(--block);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   cursor: pointer;
   overflow: hidden;
@@ -682,12 +691,12 @@ h1, h2, .header-text {
   border-left: 1px solid var(--hairline);
   transition: flex-basis 120ms ease, width 120ms ease;
 }
-.file-row:hover .file-resize-btn { flex-basis: 32px; width: 32px; }
+.file-row:hover .file-resize-btn { flex-basis: var(--block); width: var(--block); }
 
 .project-footer {
   display: flex;
   align-items: stretch;
-  flex: 0 0 32px;
+  flex: 0 0 var(--block);
 }
 .footer-btn { flex: 1 1 0; }
 .footer-btn .btn-face { font-size: 18px; }
@@ -809,7 +818,7 @@ h1, h2, .header-text {
   position: relative;
   display: flex;
   align-items: stretch;
-  height: 40px;
+  height: calc(var(--block) * 2); /* layer tiles are 2 blocks tall */
   background: var(--bg-elevated);
   cursor: pointer;
 }

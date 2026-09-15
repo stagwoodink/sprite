@@ -1,7 +1,8 @@
 // Layers panel (design-doc §11, ui-design-system §4).
 import { paintThumbnail } from './thumbnail.js';
+import { BLOCK } from './grid.js';
 
-const THUMB_H = 40;
+const THUMB_H = BLOCK * 2; // layer tiles are 2 blocks tall
 
 export function renderLayersPanel(container, file, callbacks) {
   container.innerHTML = '';
