@@ -41,12 +41,11 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
 
   if (showGrid) {
     // A reference, not a measurement: at 1 screen-pixel-per-canvas-pixel
-    // zoom, one line per pixel is already unreadable clutter. The grid
-    // step (in canvas pixels per line) doubles until on-screen line
-    // spacing clears a minimum, so it's always 1x1 when pixels are big
-    // enough to see individually, and coarser as the canvas shrinks.
-    let step = 1;
-    while (step * scale < GRID_MIN_SPACING_PX) step *= 2;
+    // zoom, one line per pixel is already unreadable clutter. Step goes
+    // 1px -> 4px -> 16px -> ... (gridStep) until on-screen line spacing
+    // clears a minimum, so it's 1x1 when pixels are big enough to see
+    // individually, and coarser as the canvas shrinks.
+    const step = gridStep(scale);
 
     ctx.strokeStyle = GRID_COLOR;
     ctx.lineWidth = 1;
@@ -63,8 +62,9 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
   }
 
   if (showRuler) {
-    if (hoverPixel) drawCrosshair(ctx, hoverPixel, viewW, viewH, scale, ox, oy);
-    drawRuler(ctx, model, scale, ox, oy, viewW, viewH, hoverPixel);
+    const anchor = rulerAnchor(scale, ox, oy, viewW, viewH);
+    if (hoverPixel) drawCrosshair(ctx, hoverPixel, anchor, scale, ox, oy, w, h);
+    drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, anchor, hoverPixel);
   }
 
   if (selection) {
@@ -155,16 +155,38 @@ function drawSelection(ctx, selection, scale, ox, oy) {
   ctx.setLineDash([]);
 }
 
-// Full-width/height highlight bar through the hovered pixel's row and
-// column (§6, on request) — a difference blend so it stays visible no
-// matter what color sits underneath it, same trick as the brush cursor.
-function drawCrosshair(ctx, hoverPixel, viewW, viewH, scale, ox, oy) {
+// Same step progression the grid uses (§6): 1 -> 4 -> 16 -> ... — ticks/
+// gridlines agree on where lines fall, and ruler number labels use a
+// second, coarser threshold so the text itself never overlaps.
+function gridStep(scale, minSpacing = GRID_MIN_SPACING_PX) {
+  let step = 1;
+  while (step * scale < minSpacing) step *= 4;
+  return step;
+}
+
+// Where the ruler bars sit: attached to the sprite's own edge normally,
+// clamped to the viewport edge once zoom has scrolled that edge off-screen.
+function rulerAnchor(scale, ox, oy, viewW, viewH) {
+  return {
+    topY: Math.max(0, Math.min(oy - RULER_THICKNESS, viewH - RULER_THICKNESS)),
+    leftX: Math.max(0, Math.min(ox - RULER_THICKNESS, viewW - RULER_THICKNESS)),
+  };
+}
+
+// Highlight bar through the hovered pixel's row and column — a difference
+// blend so it stays visible no matter what color sits underneath (same
+// trick as the brush cursor), and clipped to only the ruler bars + the
+// canvas itself rather than running the full width/height of the viewport.
+function drawCrosshair(ctx, hoverPixel, { topY, leftX }, scale, ox, oy, w, h) {
   ctx.save();
   ctx.globalCompositeOperation = 'difference';
   ctx.fillStyle = CROSSHAIR_COLOR;
-  ctx.globalAlpha = 0.5;
-  ctx.fillRect(ox + hoverPixel.x * scale, 0, scale, viewH);
-  ctx.fillRect(0, oy + hoverPixel.y * scale, viewW, scale);
+  const vx = ox + hoverPixel.x * scale;
+  const hy = oy + hoverPixel.y * scale;
+  ctx.fillRect(vx, topY, scale, RULER_THICKNESS); // through the top ruler
+  ctx.fillRect(vx, oy, scale, h); // through the canvas
+  ctx.fillRect(leftX, hy, RULER_THICKNESS, scale); // through the left ruler
+  ctx.fillRect(ox, hy, w, scale); // through the canvas
   ctx.restore();
 }
 
@@ -173,34 +195,42 @@ function drawCrosshair(ctx, hoverPixel, viewW, viewH, scale, ox, oy) {
 // edge (tracks pan/zoom with it); once the canvas is zoomed in far enough
 // that its edge has scrolled past the viewport edge, the ruler clamps to
 // the viewport edge instead so it's always reachable rather than
-// scrolling off-screen with the canvas.
-function drawRuler(ctx, model, scale, ox, oy, viewW, viewH, hoverPixel) {
+// scrolling off-screen with the canvas. Tick/label spacing scales with
+// zoom the same way the grid does, so it never becomes an unreadable
+// smear of numbers at low zoom.
+function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX }, hoverPixel) {
   ctx.font = '12px m3x6, monospace';
   ctx.textBaseline = 'top';
 
-  const topY = Math.max(0, Math.min(oy - RULER_THICKNESS, viewH - RULER_THICKNESS));
-  const leftX = Math.max(0, Math.min(ox - RULER_THICKNESS, viewW - RULER_THICKNESS));
-
+  // Bar length matches the visible portion of the sprite — which is just
+  // its own width/height when the sprite fits in the viewport ("attached
+  // to the canvas"), and clamps to the full viewport span once the sprite
+  // is bigger than the viewport in that direction ("floats independently").
+  const barLeft = Math.max(0, ox), barRight = Math.min(viewW, ox + w);
+  const barTop = Math.max(0, oy), barBottom = Math.min(viewH, oy + h);
   ctx.fillStyle = RULER_BG;
-  ctx.fillRect(0, topY, viewW, RULER_THICKNESS);
-  ctx.fillRect(leftX, 0, RULER_THICKNESS, viewH);
+  ctx.fillRect(barLeft, topY, barRight - barLeft, RULER_THICKNESS);
+  ctx.fillRect(leftX, barTop, RULER_THICKNESS, barBottom - barTop);
 
-  const colStart = Math.max(0, Math.floor(-ox / scale));
+  const tickStep = gridStep(scale);
+  const labelStep = gridStep(scale, 28);
+
+  const colStart = Math.max(0, Math.floor(-ox / scale / tickStep) * tickStep);
   const colEnd = Math.min(model.width - 1, Math.ceil((viewW - ox) / scale));
-  for (let x = colStart; x <= colEnd; x++) {
-    const isHover = hoverPixel && hoverPixel.x === x;
+  for (let x = colStart; x <= colEnd; x += tickStep) {
+    const isHover = hoverPixel && Math.floor(hoverPixel.x / tickStep) === Math.floor(x / tickStep);
     ctx.fillStyle = isHover ? RULER_HIGHLIGHT : RULER_TICK;
     ctx.fillRect(ox + x * scale, topY, 1, RULER_THICKNESS);
-    if (x % 10 === 0) ctx.fillText(String(x), ox + x * scale + 2, topY + 2);
+    if (x % labelStep === 0) ctx.fillText(String(x), ox + x * scale + 2, topY + 2);
   }
 
-  const rowStart = Math.max(0, Math.floor(-oy / scale));
+  const rowStart = Math.max(0, Math.floor(-oy / scale / tickStep) * tickStep);
   const rowEnd = Math.min(model.height - 1, Math.ceil((viewH - oy) / scale));
-  for (let y = rowStart; y <= rowEnd; y++) {
-    const isHover = hoverPixel && hoverPixel.y === y;
+  for (let y = rowStart; y <= rowEnd; y += tickStep) {
+    const isHover = hoverPixel && Math.floor(hoverPixel.y / tickStep) === Math.floor(y / tickStep);
     ctx.fillStyle = isHover ? RULER_HIGHLIGHT : RULER_TICK;
     ctx.fillRect(leftX, oy + y * scale, RULER_THICKNESS, 1);
-    if (y % 10 === 0) ctx.fillText(String(y), leftX + 2, oy + y * scale + 2);
+    if (y % labelStep === 0) ctx.fillText(String(y), leftX + 2, oy + y * scale + 2);
   }
 
   // The corner where the two bars meet.
