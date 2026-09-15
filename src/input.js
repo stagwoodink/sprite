@@ -1,19 +1,22 @@
 import { setPixel, stampBrush, floodFill, linePixels } from './canvas-model.js';
 import { computeViewport, screenToPixel } from './viewport.js';
 import { cursorForMode } from './cursors.js';
+import { maskFromRect, maskFromWand, maskFromPolygon } from './selection.js';
 
 const MAX_BRUSH_FRACTION = 0.25; // "[" / "]" while Alt held, capped at 1/4 canvas dimension (§8)
 
 // Modifier-driven single-tool interaction (§8). No selection creation here
 // yet (Shift-family lands in Phase 4) — cursor modes for it are wired now so
 // the mode table stays in one place.
-export function createInputController(canvas, model, colors, onPaint) {
+export function createInputController(canvas, model, colors, onPaint, selectionApi) {
   const keys = { alt: false, ctrl: false, shift: false, space: false };
   let brushRadius = 1;
   let panning = false;
   let lastPan = null;
   let lastPixel = null;
   let drawingButton = null; // 0 = left/primary, 2 = right/secondary
+  let rectStart = null;
+  let polygonPoints = null;
 
   function maxBrush() {
     return Math.max(1, Math.floor(Math.min(model.width, model.height) * MAX_BRUSH_FRACTION));
@@ -77,6 +80,12 @@ export function createInputController(canvas, model, colors, onPaint) {
     if (e.key === 'Control') { keys.ctrl = false; changed = true; }
     if (e.key === 'Shift') { keys.shift = false; changed = true; }
     if (e.code === 'Space') { keys.space = false; panning = false; changed = true; }
+    // Releasing either modifier of the polygon selector closes the shape (§9.1).
+    if ((e.key === 'Shift' || e.key === 'Control') && polygonPoints) {
+      if (polygonPoints.length >= 3) selectionApi.set(maskFromPolygon(model, polygonPoints));
+      polygonPoints = null;
+      onPaint();
+    }
     if (changed) updateCursor();
   }
 
@@ -90,7 +99,24 @@ export function createInputController(canvas, model, colors, onPaint) {
     }
     e.preventDefault();
     const { x, y } = pointerPixel(e);
-    if (keys.shift) return; // selection creation: Phase 4
+
+    if (keys.shift && keys.ctrl) {
+      (polygonPoints ||= []).push([x, y]);
+      onPaint();
+      return;
+    }
+    if (keys.shift && keys.alt) {
+      selectionApi.set(maskFromWand(model, x, y));
+      onPaint();
+      return;
+    }
+    if (keys.shift) {
+      rectStart = { x, y };
+      selectionApi.setLiveRect(x, y, x, y);
+      onPaint();
+      return;
+    }
+
     drawingButton = e.button;
     if (keys.ctrl) {
       fillAt(x, y, e.button);
@@ -109,6 +135,12 @@ export function createInputController(canvas, model, colors, onPaint) {
       lastPan = { x: e.clientX, y: e.clientY };
       return;
     }
+    if (rectStart) {
+      const { x, y } = pointerPixel(e);
+      selectionApi.setLiveRect(rectStart.x, rectStart.y, x, y);
+      onPaint();
+      return;
+    }
     if (drawingButton === null || keys.shift) return;
     const { x, y } = pointerPixel(e);
     if (lastPixel && (lastPixel.x !== x || lastPixel.y !== y)) {
@@ -122,6 +154,12 @@ export function createInputController(canvas, model, colors, onPaint) {
 
   function onPointerUp(e) {
     canvas.releasePointerCapture(e.pointerId);
+    if (rectStart) {
+      const { x, y } = pointerPixel(e);
+      selectionApi.set(maskFromRect(model, rectStart.x, rectStart.y, x, y));
+      rectStart = null;
+      onPaint();
+    }
     drawingButton = null;
     lastPixel = null;
     if (keys.space) panning = false;
