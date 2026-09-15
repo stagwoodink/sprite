@@ -195,7 +195,10 @@ h1, h2, .header-text {
   display: flex;
   align-items: stretch;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  border-top: 1px solid var(--panel-edge-highlight);
+  border-right: 1px solid var(--panel-edge-highlight);
+  border-bottom: 1px solid var(--panel-edge-shadow);
+  border-left: 1px solid var(--panel-edge-shadow);
   transition: right 180ms ease, bottom 180ms ease;
 }
 #version-tab.hidden-tag { display: none; }
@@ -252,7 +255,10 @@ h1, h2, .header-text {
   display: flex;
   align-items: stretch;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  border-top: 1px solid var(--panel-edge-highlight);
+  border-left: 1px solid var(--panel-edge-highlight);
+  border-bottom: 1px solid var(--panel-edge-shadow);
+  border-right: 1px solid var(--panel-edge-shadow);
   transition: left 180ms ease, bottom 180ms ease;
 }
 #tool-tag.hidden-tag { display: none; }
