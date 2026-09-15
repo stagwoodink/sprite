@@ -65,11 +65,17 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
   popup.append(square, hue, hexField);
 
   // Slides out flush above the chip (the palette bar docks to the bottom
-  // edge), chevron pointing down at it.
+  // edge), centered horizontally on it with the chevron pointing down at it.
   const fromTransform = positionSlideOut(popup, anchorEl, 'up');
-  popup.style.transform = fromTransform;
   popup.style.opacity = '0';
   document.body.append(popup);
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const popupWidth = popup.offsetWidth;
+  const left = anchorRect.left + anchorRect.width / 2 - popupWidth / 2;
+  popup.style.left = left + 'px';
+  const chevron = popup.querySelector('.slide-out-chevron');
+  if (chevron) chevron.style.left = popupWidth / 2 + 'px';
+  popup.style.transform = fromTransform;
   requestAnimationFrame(() => {
     popup.style.transform = 'translate(0, 0)';
     popup.style.opacity = '1';

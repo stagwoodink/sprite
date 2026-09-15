@@ -361,15 +361,18 @@ h1, h2, .header-text {
 }
 .palette-hamburger:hover { background: var(--bg-hover); }
 
-/* Fixed clipping window — chips never spill past the bar's edge. Native
-   overflow-x scrolling is deliberately not used: palette.js hand-rolls
-   wheel scrolling via a transform on .chip-row so it can enforce the
-   fixed-slot-width/peek-chip behavior instead of free native scroll. */
+/* Fixed clipping window — chips never spill past the bar's edge
+   horizontally. Native overflow-x scrolling is deliberately not used:
+   palette.js hand-rolls wheel scrolling via a transform on .chip-row so it
+   can enforce the fixed-slot-width/peek-chip behavior instead of free
+   native scroll. Vertical overflow stays visible so the hex label can pop
+   up above a chip without being clipped by this box. */
 .chip-viewport {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .chip-row {
@@ -377,7 +380,31 @@ h1, h2, .header-text {
   align-items: stretch;
 }
 
-/* Add-chip button: revealed on hover near the bar's trailing edge (§7.2). */
+/* Hex code, revealed above the chip on hover — click opens the color
+   picker. A button (not inert text) so it's directly clickable. */
+.chip-hex-label {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 2px 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 20;
+}
+.chip:hover .chip-hex-label { opacity: 1; pointer-events: auto; }
+
+/* Add-chip button: always visible at the bar's trailing edge (§7.2's
+   hover-reveal was a needless extra step — the "+" belongs with the rest
+   of the row, not hidden). */
 .chip-add {
   flex: 0 0 32px;
   height: 39px;
@@ -388,21 +415,19 @@ h1, h2, .header-text {
   font-family: inherit;
   font-size: var(--font-body);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 120ms ease;
 }
-#palette-bar:hover .chip-add { opacity: 1; }
+.chip-add:hover { background: var(--bg-hover); }
 
 /* ---- Color picker popup (§7.2) --------------------------------------- */
 .color-picker-popup {
   position: fixed;
   z-index: 1000;
   background: var(--bg-elevated);
-  border: 2px solid var(--border-strong);
-  padding: var(--unit);
+  border: 1px solid #000000;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--unit);
+  gap: 0;
   transition: transform 150ms ease, opacity 150ms ease;
 }
 

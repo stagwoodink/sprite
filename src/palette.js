@@ -48,9 +48,10 @@ function openPresetPanel(anchor, onLoadPreset, onNewPalette) {
 
 // Above this many chips, the row stops stretching chips to fill the bar
 // and switches to a fixed-size scrollable window instead — 16 full chips
-// visible plus room for a half-chip peek on each edge (17 chip-widths
-// total) as a "there's more this way" affordance, scrolled with the wheel.
+// visible plus at least a quarter-chip peek on each edge, as a "there's
+// more this way" affordance, scrolled with the wheel.
 const MAX_VISIBLE_CHIPS = 16;
+const PEEK_FRACTION = 0.25; // per side
 const CHIP_MAX_WIDTH = 56; // px — chips fill available space but never grow past this
 
 // Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
@@ -103,7 +104,6 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       chip.className = 'chip';
       chip.style.setProperty('--chip-color', hex);
       chip.style.setProperty('--chip-shadow', darken(hex, 0.45));
-      chip.title = hex;
       chip.draggable = true;
 
       const face = document.createElement('div');
@@ -112,28 +112,34 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       shadow.className = 'chip-shadow';
       chip.append(face, shadow);
 
+      // Hex code reveals above the chip on hover — click it to open the
+      // color picker (one seamless interaction, not a right-click menu).
+      const hexLabel = document.createElement('button');
+      hexLabel.className = 'chip-hex-label';
+      hexLabel.textContent = hex;
+      hexLabel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openColorPicker(chip, state.chips[i], (newHex) => {
+          if (state.chips[i] === state.primary) state.primary = newHex;
+          if (state.chips[i] === state.secondary) state.secondary = newHex;
+          state.chips[i] = newHex;
+          chip.style.setProperty('--chip-color', newHex);
+          chip.style.setProperty('--chip-shadow', darken(newHex, 0.45));
+          hexLabel.textContent = newHex;
+          onChange(state);
+        });
+      });
+      chip.append(hexLabel);
+
       chip.addEventListener('mousedown', () => chip.classList.add('pressed'));
       chip.addEventListener('mouseup', () => chip.classList.remove('pressed'));
       chip.addEventListener('mouseleave', () => chip.classList.remove('pressed'));
 
       // Left-click = primary. Shift+click = select every pixel of this
-      // color on the active layer. Alt+click = open the color picker.
-      // Right-click = secondary, directly, no picker.
+      // color on the active layer. Right-click = secondary, directly.
       chip.addEventListener('click', (e) => {
         if (e.shiftKey) {
           onSelectColor(hex);
-          return;
-        }
-        if (e.altKey) {
-          openColorPicker(chip, hex, (newHex) => {
-            if (state.chips[i] === state.primary) state.primary = newHex;
-            if (state.chips[i] === state.secondary) state.secondary = newHex;
-            state.chips[i] = newHex;
-            chip.style.setProperty('--chip-color', newHex);
-            chip.style.setProperty('--chip-shadow', darken(newHex, 0.45));
-            chip.title = newHex;
-            onChange(state);
-          });
           return;
         }
         state.primary = hex;
@@ -198,7 +204,7 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     }
 
     const viewportWidth = viewport.clientWidth;
-    const chipWidth = viewportWidth / (MAX_VISIBLE_CHIPS + 1);
+    const chipWidth = viewportWidth / (MAX_VISIBLE_CHIPS + 2 * PEEK_FRACTION);
     const trackWidth = chipWidth * count;
     row.style.width = trackWidth + 'px';
     row.querySelectorAll('.chip').forEach((chip) => { chip.style.flex = `0 0 ${chipWidth}px`; });
