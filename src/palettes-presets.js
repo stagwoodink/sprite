@@ -16,16 +16,15 @@ export const PRESETS = {
     name: 'Game Boy DMG',
     chips: ['#01121C', '#20594A', '#6DA56E', '#D8F7D8'],
   },
-  default: {
-    name: 'Default',
-    chips: [
-      '#000000', '#FFFFFF', '#7F7F7F', '#C3C3C3',
-      '#FF0000', '#FF7F00', '#FFFF00', '#00FF00',
-      '#0000FF', '#7F00FF', '#FF00FF', '#00FFFF',
-      '#7F3300', '#FFC0CB', '#808000', '#003366',
-    ],
+  stagwood: {
+    // Dark red, red, almost-white, almost-black — the brand's 4 colors
+    // (CONTEXT.md's Palette Preset definition). Red is the exact accent
+    // sampled from spec/stagwood.png; the other three reuse the app's own
+    // existing tokens for the same roles rather than inventing new hexes.
+    name: 'Stagwood',
+    chips: ['#7A0C18', '#BE1425', '#F2F2F0', '#121214'],
   },
 };
 
-export const DEFAULT_PRESET = 'default';
+export const DEFAULT_PRESET = 'pico8';
 export const MAX_CHIPS = 32;

@@ -232,7 +232,17 @@ function draw() {
 function redrawProjectPanel() {
   renderProjectPanel(projectPanel, project, {
     onChange: () => { bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw(); },
-    onAddFile: (w, h) => { addFile(project, `sprite${project.files.length + 1}`, w, h); bindActiveFile(); resetView(); redrawProjectPanel(); draw(); autosave(); },
+    onAddFile: (w, h) => {
+      addFile(project, `sprite${project.files.length + 1}`, w, h);
+      // New file defaults to PICO-8, unless it's the Game Boy DMG screen
+      // size specifically, which defaults to the Game Boy palette instead.
+      palette.loadPreset(w === 160 && h === 144 ? 'dmg' : 'pico8');
+      bindActiveFile();
+      resetView();
+      redrawProjectPanel();
+      draw();
+      autosave();
+    },
     onResizeFile: (file, w, h) => {
       resizeCanvas(file, w, h);
       if (file === getActiveFile(project)) { bindActiveFile(); resetView(); }
@@ -291,7 +301,7 @@ function redrawTimelinePanel() {
     onSetFps: (fps) => { playback.fps = fps; if (playback.playing) startPlayback(); },
     onToggleOnion: () => { playback.onionSkin = !playback.onionSkin; draw(); },
     onToggleOnionSource: () => { playback.onionLayerOnly = !playback.onionLayerOnly; draw(); },
-    onSelect: (i) => { file.activeFrameIndex = i; bindActiveFile(); selectionApi.clear(); draw(); },
+    onSelect: (i) => { file.activeFrameIndex = i; bindActiveFile(); draw(); }, // selection persists across frame switches (§9.3)
     onAddFrame: () => { addFrame(file); bindActiveFile(); draw(); autosave(); },
     onInsertFrame: (i) => { addFrame(file, i); bindActiveFile(); draw(); autosave(); },
     onDelete: (i) => { deleteFrame(file, i); bindActiveFile(); draw(); autosave(); },
@@ -303,8 +313,7 @@ function stepFrame(dir) {
   const file = getActiveFile(project);
   const next = (file.activeFrameIndex + dir + file.frames.length) % file.frames.length;
   file.activeFrameIndex = next;
-  bindActiveFile();
-  selectionApi.clear();
+  bindActiveFile(); // selection persists across frame switches (§9.3)
   draw();
 }
 

@@ -51,6 +51,7 @@ function openPresetPanel(anchor, onLoadPreset, onNewPalette) {
 // visible plus room for a half-chip peek on each edge (17 chip-widths
 // total) as a "there's more this way" affordance, scrolled with the wheel.
 const MAX_VISIBLE_CHIPS = 16;
+const CHIP_MAX_WIDTH = 56; // px — chips fill available space but never grow past this
 
 // Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
 // loaded/created Project's own palette object; the returned `state` is that
@@ -187,7 +188,10 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     const count = state.chips.length;
     if (count <= MAX_VISIBLE_CHIPS) {
       row.style.width = '100%';
-      row.querySelectorAll('.chip').forEach((chip) => { chip.style.flex = '1 1 0'; });
+      row.querySelectorAll('.chip').forEach((chip) => {
+        chip.style.flex = `1 1 0`;
+        chip.style.maxWidth = CHIP_MAX_WIDTH + 'px';
+      });
       row.style.transform = 'none';
       viewport.onwheel = null;
       return;
@@ -221,5 +225,6 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     setSecondaryByIndex(i) {
       if (state.chips[i]) { state.secondary = state.chips[i]; onChange(state); }
     },
+    loadPreset,
   };
 }
