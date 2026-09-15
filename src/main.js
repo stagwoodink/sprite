@@ -65,7 +65,7 @@ versionTab.append(versionLink, bugBtn, discordBtn, helpBtn);
 // whichever side panel is open, rather than staying full width and
 // pushing anything — side panels just run the full viewport height.
 const SIDE_PANEL_WIDTH = 220;
-const PALETTE_HEIGHT = 39;
+const PALETTE_HEIGHT = 37;
 
 let projectReveal, layersReveal, timelineReveal, paletteReveal;
 function updatePushes() {
