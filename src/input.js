@@ -59,6 +59,20 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     canvas.style.cursor = cursorForMode(currentMode());
   }
 
+  // keydown/keyup can miss a release entirely (focus stolen by a native
+  // dialog, an OS shortcut swallowing the keyup, etc.), leaving `keys`
+  // stuck "held" and the cursor icon wrong until the next full keypress.
+  // Every pointer event carries the browser's actual current modifier
+  // state, so resync from it continuously — self-heals without needing
+  // to catch the specific event that dropped the keyup.
+  function syncModifiers(e) {
+    const changed = keys.alt !== e.altKey || keys.ctrl !== e.ctrlKey || keys.shift !== e.shiftKey;
+    keys.alt = e.altKey;
+    keys.ctrl = e.ctrlKey;
+    keys.shift = e.shiftKey;
+    if (changed) updateCursor();
+  }
+
   function colorForButton(button) {
     return button === 2 ? colors.secondary() : colors.primary();
   }
@@ -164,6 +178,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
 
   function onPointerDown(e) {
     canvas.setPointerCapture(e.pointerId);
+    syncModifiers(e);
     if (keys.space) {
       panning = true;
       lastPan = { x: e.clientX, y: e.clientY };
@@ -218,6 +233,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   }
 
   function onPointerMove(e) {
+    syncModifiers(e);
     if (panning && lastPan) {
       viewState.panX += e.clientX - lastPan.x;
       viewState.panY += e.clientY - lastPan.y;
@@ -296,6 +312,7 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointerenter', syncModifiers);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
