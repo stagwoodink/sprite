@@ -131,6 +131,11 @@ function draw() {
   // The canvas always shows the composited result of every visible layer
   // (§11), while `model` (the active layer's own raw buffer) is what
   // painting/selection/undo actually mutate.
+  // ponytail: redrawing the layers/timeline thumbnails on every draw() call
+  // means every pointermove during a drag stroke repaints them too, not
+  // just canvas commits. Fine at the documented canvas sizes (up to
+  // 256x256) with a handful of layers/frames; if it ever visibly lags,
+  // move those two calls to fire once per committed stroke instead.
   const file = getActiveFile(project);
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
