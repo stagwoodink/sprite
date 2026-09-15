@@ -93,34 +93,43 @@ h1, h2, .header-text {
   background: var(--bg-elevated);
   overflow: hidden;
 }
-.panel-overlay-left { left: 0; top: 0; bottom: 0; }
-.panel-overlay-right { right: 0; top: 0; bottom: 0; }
+.panel-overlay-left { left: 0; }
+.panel-overlay-right { right: 0; }
 .panel-overlay-top { top: 0; left: 0; right: 0; }
 .panel-overlay-bottom { bottom: 0; left: 0; right: 0; }
 
+/* Project/Layers never overlap the Timeline (always full-width, top edge)
+   or the Palette (bottom edge) — main.js keeps --push-top/--push-bottom in
+   sync with whichever of those is currently visible, so a side panel's
+   own top/bottom edge always starts right where the other one ends. */
 .side-panel {
   width: 220px;
+  top: var(--push-top, 0);
+  bottom: var(--push-bottom, 0);
   display: flex;
   flex-direction: column;
-  transition: width 180ms ease;
+  transition: width 180ms ease, top 180ms ease, bottom 180ms ease;
 }
 .side-panel.panel-hidden { width: 0; }
 
-/* ---- Timeline (top edge) --------------------------------------------- */
+/* ---- Timeline (top edge, always full width) -------------------------- */
 #timeline-bar {
   height: 56px;
+  z-index: 15; /* above the side panels, which push down to clear it */
   display: flex;
   align-items: stretch;
   transition: height 180ms ease;
 }
 #timeline-bar.panel-hidden { height: 0; }
 
-/* ---- Palette bar (bottom edge) ---------------------------------------- */
+/* ---- Palette bar (bottom edge, shrinks around open side panels) ------ */
 #palette-bar {
   height: 39px; /* matches the chip row (§7.2) — needed so height can transition */
+  left: var(--push-left, 0);
+  right: var(--push-right, 0);
   display: flex;
   align-items: stretch;
-  transition: height 180ms ease;
+  transition: height 180ms ease, left 180ms ease, right 180ms ease;
 }
 #palette-bar.panel-hidden { height: 0; }
 

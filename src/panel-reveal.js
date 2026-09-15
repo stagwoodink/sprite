@@ -8,7 +8,7 @@
 // shared mechanic — one simple rule everywhere beats four bespoke ones.
 const HIDE_GRACE_MS = 220;
 
-export function createRevealablePanel(panelEl, triggerEl, { initiallyPinned = false } = {}) {
+export function createRevealablePanel(panelEl, triggerEl, { initiallyPinned = false, onVisibility } = {}) {
   let pinned = initiallyPinned;
   let hovering = false;
   let hideTimer = null;
@@ -20,6 +20,7 @@ export function createRevealablePanel(panelEl, triggerEl, { initiallyPinned = fa
     // The element stays in the layout at all times so it can animate.
     panelEl.classList.toggle('panel-hidden', !visible);
     panelEl.classList.toggle('focused', visible);
+    if (onVisibility) onVisibility(visible);
   }
 
   function onEnter() {

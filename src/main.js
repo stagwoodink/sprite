@@ -27,12 +27,36 @@ const projectPanel = document.getElementById('project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
 
+// Panels must never overlay each other (only the canvas): Timeline always
+// spans the full width and pushes the side panels' top down to clear it;
+// the Palette bar shrinks horizontally to leave room for whichever side
+// panel is open, and side panels also stop short of it vertically. These
+// must match the actual CSS sizes (§ timeline/palette/side-panel rules).
+const TIMELINE_HEIGHT = 56;
+const PALETTE_HEIGHT = 39;
+const SIDE_PANEL_WIDTH = 220;
+
+let projectReveal, layersReveal, timelineReveal, paletteReveal;
+function updatePushes() {
+  const topPush = timelineReveal && timelineReveal.isFocused() ? TIMELINE_HEIGHT : 0;
+  const bottomPush = paletteReveal && paletteReveal.isFocused() ? PALETTE_HEIGHT : 0;
+  const leftPush = projectReveal && projectReveal.isFocused() ? SIDE_PANEL_WIDTH : 0;
+  const rightPush = layersReveal && layersReveal.isFocused() ? SIDE_PANEL_WIDTH : 0;
+  projectPanel.style.setProperty('--push-top', topPush + 'px');
+  projectPanel.style.setProperty('--push-bottom', bottomPush + 'px');
+  layersPanel.style.setProperty('--push-top', topPush + 'px');
+  layersPanel.style.setProperty('--push-bottom', bottomPush + 'px');
+  paletteBar.style.setProperty('--push-left', leftPush + 'px');
+  paletteBar.style.setProperty('--push-right', rightPush + 'px');
+}
+
 // Shared reveal/hide/pin/focus mechanic (§15), one instance per panel.
 // Palette starts pinned (visible) by default (§7.2 flagged assumption 3).
-const projectReveal = createRevealablePanel(projectPanel, document.getElementById('project-trigger'));
-const layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'));
-const timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'));
-const paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), { initiallyPinned: true });
+projectReveal = createRevealablePanel(projectPanel, document.getElementById('project-trigger'), { onVisibility: updatePushes });
+layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'), { onVisibility: updatePushes });
+timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'), { onVisibility: updatePushes });
+paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), { initiallyPinned: true, onVisibility: updatePushes });
+updatePushes(); // final pass — the four constructions above ran with partial info
 const keybindHelp = createKeybindHelp();
 
 // Shift+Tab: hide every pinned panel at once (not in the spec — added on
@@ -139,7 +163,7 @@ const selectionApi = {
     if (!contentDragSnapshot) contentDragSnapshot = snapshotPixels(model);
     selectionMask = moveContent(model, selectionMask, dx, dy);
     selectionRender = toRenderSelection(model, selectionMask);
-    draw();
+    renderCanvas(); // live drag feedback only; commitContentMove does the full refresh
   },
   commitContentMove() {
     if (!contentDragSnapshot) return;
@@ -151,7 +175,10 @@ const selectionApi = {
 
 // Undo/redo lives on the active PixiFile (§5, §10) — this just resolves it.
 const history = {
-  commit: (cmd) => { commitCommand(getActiveFile(project), cmd); autosave(); },
+  // Full refresh (thumbnails included) once per committed edit — not per
+  // animation frame or per pointermove, which is what made this laggy
+  // before (see the animateCursor comment further down).
+  commit: (cmd) => { commitCommand(getActiveFile(project), cmd); autosave(); draw(); },
 };
 
 function resize() {
@@ -161,23 +188,52 @@ function resize() {
   draw();
 }
 
-function draw() {
+// Retro trailing brush cursor: the on-canvas cursor indicator eases toward
+// the real pointer position instead of snapping to it instantly. This was
+// originally an accidental side effect of an expensive per-move redraw
+// (rebuilding the layers/timeline panels on every pointermove) — that was a
+// real perf bug, fixed by splitting the cheap per-frame canvas render
+// (renderCanvas) from the expensive full refresh (draw, panels included,
+// now only called once per committed action via history.commit). This is
+// that same trailing look recreated on purpose, driven by a steady
+// animation loop rather than dropped frames, so it looks the same at any
+// frame rate and the amount of lag is one number to tune.
+const CURSOR_TRAIL_EASE = 0.35; // 1 = no lag (snaps instantly), lower = laggier/more retro
+let displayCursorPos = null;
+
+function renderCanvas() {
   // The canvas always shows the composited result of every visible layer
   // (§11), while `model` (the active layer's own raw buffer) is what
   // painting/selection/undo actually mutate.
-  // ponytail: redrawing the layers/timeline thumbnails on every draw() call
-  // means every pointermove during a drag stroke repaints them too, not
-  // just canvas commits. Fine at the documented canvas sizes (up to
-  // 256x256) with a handful of layers/frames; if it ever visibly lags,
-  // move those two calls to fire once per committed stroke instead.
   const file = getActiveFile(project);
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
   const brushCursor = inputController && { mode: inputController.getMode(), size: inputController.getBrushSize() };
-  render(ctx, display, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames, brushCursor });
+  render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
+    showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos,
+  });
+}
+
+function draw() {
+  // Full refresh: cheap canvas render plus the layers/timeline panel
+  // rebuilds (thumbnails etc.) — only called once per committed action
+  // (see history.commit below), not per animation frame or per pointermove.
+  renderCanvas();
   redrawLayersPanel();
   redrawTimelinePanel();
 }
+
+(function animateCursor() {
+  if (hoverPixel) {
+    if (!displayCursorPos) displayCursorPos = { x: hoverPixel.x, y: hoverPixel.y };
+    displayCursorPos.x += (hoverPixel.x - displayCursorPos.x) * CURSOR_TRAIL_EASE;
+    displayCursorPos.y += (hoverPixel.y - displayCursorPos.y) * CURSOR_TRAIL_EASE;
+  } else {
+    displayCursorPos = null;
+  }
+  renderCanvas();
+  requestAnimationFrame(animateCursor);
+})();
 
 function redrawProjectPanel() {
   renderProjectPanel(projectPanel, project, {
@@ -269,16 +325,19 @@ function togglePlayback() {
   else clearInterval(playback.timer);
 }
 
-inputController = createInputController(canvas, model, colors, draw, selectionApi, history);
+inputController = createInputController(canvas, model, colors, renderCanvas, selectionApi, history);
 
 canvas.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
   const viewport = computeViewport(model, rect.width, rect.height);
   hoverPixel = screenToPixel(viewport, e.clientX - rect.left, e.clientY - rect.top);
   if (rotating) updateRotate(hoverPixel.x, hoverPixel.y, e.shiftKey);
-  else draw(); // needed every move so the brush-size cursor tracks the pointer
+  // No render call here — the animateCursor loop already redraws every
+  // frame and picks up the new hoverPixel on its own; forcing a full
+  // draw() per pointermove was the original (expensive) cause of the
+  // cursor lag this replaced.
 });
-canvas.addEventListener('pointerleave', () => { hoverPixel = null; draw(); });
+canvas.addEventListener('pointerleave', () => { hoverPixel = null; });
 
 // Scroll wheel zooms (§6). Scale is snapped to whole numbers — the spec
 // calls for continuous zoom, but a fractional scale would leave subpixel
@@ -320,8 +379,7 @@ function doPaste() {
   const snapshot = snapshotPixels(model);
   stamp(model, clipboard, at.x, at.y, false);
   const { before, after } = diffFromSnapshot(model, snapshot);
-  history.commit({ type: 'pixelEdit', before, after });
-  draw();
+  history.commit({ type: 'pixelEdit', before, after }); // triggers the full refresh
 }
 
 function doFlip(axis) {
@@ -330,7 +388,6 @@ function doFlip(axis) {
   flip(model, selectionMask, axis);
   const { before, after } = diffFromSnapshot(model, snapshot);
   history.commit({ type: 'flip', layer: getActiveFile(project).activeLayerIndex, axis, before, after });
-  draw();
 }
 
 function moveSelection(dx, dy, moveContentToo) {
@@ -338,13 +395,14 @@ function moveSelection(dx, dy, moveContentToo) {
   if (moveContentToo) {
     const snapshot = snapshotPixels(model);
     selectionMask = moveContent(model, selectionMask, dx, dy);
+    selectionRender = toRenderSelection(model, selectionMask);
     const { before, after } = diffFromSnapshot(model, snapshot);
-    history.commit({ type: 'moveSelectionContent', dx, dy, before, after });
+    history.commit({ type: 'moveSelectionContent', dx, dy, before, after }); // triggers the full refresh
   } else {
     selectionMask = shiftMask(model, selectionMask, dx, dy);
+    selectionRender = toRenderSelection(model, selectionMask);
+    renderCanvas(); // boundary-only move: no committed edit, just a cheap redraw
   }
-  selectionRender = toRenderSelection(model, selectionMask);
-  draw();
 }
 
 function beginRotate() {
@@ -368,15 +426,14 @@ function updateRotate(px, py, snap) {
   rotating.angle = angle;
   for (let i = 0; i < model.pixels.length; i++) model.pixels[i] = rotating.snapshot[i];
   rotate(model, selectionMask, angle);
-  draw();
+  renderCanvas(); // live drag feedback only; endRotate does the full refresh
 }
 
 function endRotate() {
   if (!rotating) return;
   const { before, after } = diffFromSnapshot(model, rotating.snapshot);
-  history.commit({ type: 'rotate', degrees: rotating.angle, before, after });
+  history.commit({ type: 'rotate', degrees: rotating.angle, before, after }); // triggers the full refresh
   rotating = null;
-  draw();
 }
 
 function deleteSelectionOrHover() {
@@ -415,7 +472,7 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'G' && e.shiftKey) {
     showRuler = !showRuler;
     draw();
-  } else if (e.key === 'p' || e.key === 'P') {
+  } else if (!e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
     paletteReveal.togglePin();
   } else if (e.key === 'Tab' && e.shiftKey) {
     e.preventDefault();

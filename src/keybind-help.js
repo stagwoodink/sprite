@@ -6,7 +6,7 @@ const GROUPS = [
     ['G', 'Toggle grid'],
     ['Shift+G', 'Toggle ruler'],
     ['1-0 / Alt+1-0', 'Primary / secondary color from palette chips 1-10'],
-    ['P', 'Pin/unpin palette'],
+    ['C', 'Pin/unpin palette'],
     ['Tab', 'Pin/unpin project panel'],
     ['Shift+Tab', 'Hide/restore all pinned panels'],
     ['L', 'Pin/unpin layers panel'],

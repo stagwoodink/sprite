@@ -14,7 +14,7 @@ const RULER_HIGHLIGHT = '#F2F2F0';
 const ONION_BEFORE_TINT = '#BE1425';
 const ONION_AFTER_TINT = '#3366FF';
 
-export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPixel, selection, onionFrames, brushCursor }) {
+export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPixel, selection, onionFrames, brushCursor, cursorPos }) {
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, viewW, viewH);
 
@@ -60,15 +60,18 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
     drawSelection(ctx, selection, scale, ox, oy);
   }
 
-  if (brushCursor && hoverPixel) {
-    drawBrushCursor(ctx, hoverPixel, brushCursor, scale, ox, oy);
+  if (brushCursor && cursorPos) {
+    drawBrushCursor(ctx, cursorPos, brushCursor, scale, ox, oy);
   }
 }
 
 // Always-visible brush cursor: painted with a "difference" blend so it
 // inverts whatever color is beneath it, rather than a fixed color that
-// could vanish against a similar background.
-function drawBrushCursor(ctx, hoverPixel, { mode, size }, scale, ox, oy) {
+// could vanish against a similar background. `pos` is fractional (the
+// eased/trailing display position, not necessarily the exact hovered
+// pixel) — main.js's animation loop owns that easing, this just draws
+// wherever it's told.
+function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy) {
   if (mode !== 'paint' && mode !== 'antialiasedPaint') return;
   ctx.save();
   ctx.globalCompositeOperation = 'difference';
@@ -76,11 +79,11 @@ function drawBrushCursor(ctx, hoverPixel, { mode, size }, scale, ox, oy) {
   if (mode === 'antialiasedPaint') {
     const r = Math.max(0.5, size / 2);
     ctx.beginPath();
-    ctx.arc(ox + (hoverPixel.x + 0.5) * scale, oy + (hoverPixel.y + 0.5) * scale, r * scale, 0, Math.PI * 2);
+    ctx.arc(ox + (pos.x + 0.5) * scale, oy + (pos.y + 0.5) * scale, r * scale, 0, Math.PI * 2);
     ctx.fill();
   } else {
     const half = Math.floor(size / 2);
-    ctx.fillRect(ox + (hoverPixel.x - half) * scale, oy + (hoverPixel.y - half) * scale, size * scale, size * scale);
+    ctx.fillRect(ox + (pos.x - half) * scale, oy + (pos.y - half) * scale, size * scale, size * scale);
   }
   ctx.restore();
 }
