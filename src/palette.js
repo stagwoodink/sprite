@@ -88,6 +88,7 @@ export function createPalette(container, initial, onChange, onSelectColor) {
   };
   let scrollPx = 0; // pixel offset into the chip track, only used above MAX_VISIBLE_CHIPS
   let draggingIndex = null; // chip index currently being dragged, for the live reorder preview
+  let dragHoverIndex = null; // last chip index dragged over — the actual drop target
 
   function loadPreset(key) {
     const p = PRESETS[key];
@@ -183,21 +184,33 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       chip.addEventListener('dragover', (e) => {
         e.preventDefault();
         if (draggingIndex === null || draggingIndex === i) return;
+        dragHoverIndex = i;
         previewShift(row, draggingIndex, i);
       });
-      chip.addEventListener('dragend', () => {
+      // The reorder happens here, not on 'drop': previewShift's transform
+      // can visually move a chip out from under the pointer, so whatever
+      // element the browser resolves as the drop target can be wrong (or
+      // have no listener at all). dragend always fires on the dragged
+      // element itself regardless, so it's the reliable place to commit
+      // using the last hovered index tracked above.
+      chip.addEventListener('dragend', (e) => {
+        const droppedOutside = !document.elementFromPoint(e.clientX, e.clientY)?.closest('.chip-viewport');
+        if (droppedOutside && state.chips.length > 1) {
+          // Drag a chip off the palette entirely to remove it.
+          state.chips.splice(draggingIndex, 1);
+          if (state.primary === hex) state.primary = state.chips[0];
+          if (state.secondary === hex) state.secondary = state.chips[0];
+        } else if (draggingIndex !== null && dragHoverIndex !== null && dragHoverIndex !== draggingIndex) {
+          const [moved] = state.chips.splice(draggingIndex, 1);
+          state.chips.splice(dragHoverIndex, 0, moved);
+        }
         draggingIndex = null;
+        dragHoverIndex = null;
         clearPreviewShift(row);
-        chip.classList.remove('dragging');
-      });
-      chip.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const from = Number(e.dataTransfer.getData('text/plain'));
-        const [moved] = state.chips.splice(from, 1);
-        state.chips.splice(i, 0, moved);
         render();
         onChange(state);
       });
+      chip.addEventListener('drop', (e) => e.preventDefault());
 
       row.append(chip);
     });
