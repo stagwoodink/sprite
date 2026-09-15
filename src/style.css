@@ -109,10 +109,103 @@ h1, h2, .header-text {
 #timeline-bar {
   flex: 0 0 auto;
   width: 100%;
+  height: 56px;
   background: var(--bg-elevated);
   display: flex;
   align-items: stretch;
 }
+
+.fps-field {
+  flex: 0 0 56px;
+  background: var(--bg-elevated);
+  border: none;
+  border-right: 1px solid var(--hairline);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-body);
+  text-align: center;
+}
+
+.onion-toggle {
+  flex: 0 0 40px;
+  background: var(--bg-elevated);
+  border: none;
+  border-right: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+}
+.onion-toggle.active { background: var(--accent); color: var(--text-primary); }
+
+.frame-strip {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  position: relative;
+}
+
+.frame-tile {
+  position: relative;
+  flex: 0 0 auto;
+  height: 40px;
+  align-self: center;
+  border-top: 1px solid rgba(0, 0, 0, 0.3); /* shares the layer-thumbnail hairline (§6) */
+  cursor: pointer;
+}
+.frame-tile::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 5px;
+  background: var(--border-strong);
+}
+.frame-tile.active::after { background: var(--accent); }
+.frame-tile canvas { display: block; height: 40px; width: auto; image-rendering: pixelated; }
+
+.frame-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+}
+.frame-tile:hover .frame-delete { display: flex; }
+
+.frame-insert-gap {
+  flex: 0 0 0;
+  position: relative;
+  width: 0;
+  transition: width 100ms ease;
+}
+.frame-insert-gap:hover { width: 16px; }
+.frame-insert-btn {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: none;
+  cursor: pointer;
+}
+.frame-insert-gap:hover .frame-insert-btn { opacity: 1; }
+
+.frame-add-btn {
+  flex: 0 0 40px;
+  background: var(--bg-elevated);
+  border: none;
+  border-left: 1px solid var(--hairline);
+  color: var(--text-primary);
+  font-size: 18px;
+  cursor: pointer;
+}
+.frame-add-btn:hover { background: var(--bg-hover); }
 
 /* ---- Chunky button (§1.2) ------------------------------------------ */
 .btn {

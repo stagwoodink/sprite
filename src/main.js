@@ -6,9 +6,13 @@ import { createPalette } from './palette.js';
 import { maskFromRect, fullMask, toRenderSelection } from './selection.js';
 import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
 import { createProject, activeFile as getActiveFile, addFile } from './project.js';
-import { activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer, reorderLayer } from './pixi-file.js';
+import {
+  activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer, reorderLayer,
+  addFrame, deleteFrame, duplicateFrame, reorderFrame,
+} from './pixi-file.js';
 import { renderProjectPanel } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
+import { renderTimelinePanel } from './timeline-panel.js';
 import { chooseBackend, loadProject, saveProject, debounce } from './persistence.js';
 
 const canvas = document.getElementById('pixi-canvas');
@@ -16,6 +20,7 @@ const ctx = canvas.getContext('2d');
 const paletteBar = document.getElementById('palette-bar');
 const projectPanel = document.getElementById('project-panel');
 const layersPanel = document.getElementById('layers-panel');
+const timelineBar = document.getElementById('timeline-bar');
 
 // Autosave (§10, §18): every committed change writes to whichever backend
 // was resolved (real folder via FSA, or the IndexedDB fallback), debounced
@@ -48,12 +53,17 @@ let hoverPixel = null;
 let palettePinned = true;
 let projectPinned = false;
 let layersPinned = false;
+let timelinePinned = false;
 let layersPanelFocused = false; // hover-only focus stand-in until Phase 13's real model
+let timelinePanelFocused = false;
 let selectionMask = null;
 let selectionRender = null;
+const playback = { fps: 8, onionSkin: false, playing: false, timer: null };
 
 layersPanel.addEventListener('mouseenter', () => { layersPanelFocused = true; });
 layersPanel.addEventListener('mouseleave', () => { layersPanelFocused = false; });
+timelineBar.addEventListener('mouseenter', () => { timelinePanelFocused = true; });
+timelineBar.addEventListener('mouseleave', () => { timelinePanelFocused = false; });
 
 const palette = createPalette(paletteBar, project.palette, () => autosave());
 const colors = { primary: () => palette.getPrimary(), secondary: () => palette.getSecondary() };
@@ -92,6 +102,7 @@ function draw() {
   const display = { width: model.width, height: model.height, pixels: compositeFrame(getActiveFile(project)) };
   render(ctx, display, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender });
   redrawLayersPanel();
+  redrawTimelinePanel();
 }
 
 function redrawProjectPanel() {
@@ -139,6 +150,39 @@ function openOpacitySlider(anchor, layer, onChange) {
   setTimeout(() => window.addEventListener('pointerdown', function onOutside(e) {
     if (!popup.contains(e.target)) { popup.remove(); window.removeEventListener('pointerdown', onOutside); }
   }), 0);
+}
+
+function redrawTimelinePanel() {
+  const file = getActiveFile(project);
+  renderTimelinePanel(timelineBar, file, playback, {
+    onSetFps: (fps) => { playback.fps = fps; if (playback.playing) startPlayback(); },
+    onToggleOnion: () => { playback.onionSkin = !playback.onionSkin; draw(); },
+    onSelect: (i) => { file.activeFrameIndex = i; bindActiveFile(); selectionApi.clear(); draw(); },
+    onAddFrame: () => { addFrame(file); bindActiveFile(); draw(); autosave(); },
+    onInsertFrame: (i) => { addFrame(file, i); bindActiveFile(); draw(); autosave(); },
+    onDelete: (i) => { deleteFrame(file, i); bindActiveFile(); draw(); autosave(); },
+    onReorder: (from, to) => { reorderFrame(file, from, to); draw(); autosave(); },
+  });
+}
+
+function stepFrame(dir) {
+  const file = getActiveFile(project);
+  const next = (file.activeFrameIndex + dir + file.frames.length) % file.frames.length;
+  file.activeFrameIndex = next;
+  bindActiveFile();
+  selectionApi.clear();
+  draw();
+}
+
+function startPlayback() {
+  clearInterval(playback.timer);
+  playback.timer = setInterval(() => stepFrame(1), 1000 / playback.fps);
+}
+
+function togglePlayback() {
+  playback.playing = !playback.playing;
+  if (playback.playing) startPlayback();
+  else clearInterval(playback.timer);
 }
 
 createInputController(canvas, model, colors, draw, selectionApi, history);
@@ -200,6 +244,38 @@ window.addEventListener('keydown', (e) => {
   } else if (layersPanelFocused && (e.key === 'Backspace' || e.key === 'Delete')) {
     const file = getActiveFile(project);
     deleteLayer(file, file.activeLayerIndex);
+    bindActiveFile();
+    draw();
+    autosave();
+  } else if (e.key === 't' || e.key === 'T') {
+    timelinePinned = !timelinePinned;
+    timelineBar.hidden = !timelinePinned;
+  } else if (e.ctrlKey && e.code === 'Space') {
+    e.preventDefault();
+    togglePlayback();
+  } else if (timelinePanelFocused && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+    const file = getActiveFile(project);
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    if (e.shiftKey) {
+      const next = file.activeFrameIndex + dir;
+      reorderFrame(file, file.activeFrameIndex, next);
+      bindActiveFile();
+    } else {
+      stepFrame(dir);
+    }
+    draw();
+    autosave();
+  } else if (timelinePanelFocused && e.key === '+') {
+    const file = getActiveFile(project);
+    if (e.ctrlKey) duplicateFrame(file, file.activeFrameIndex);
+    else addFrame(file);
+    bindActiveFile();
+    draw();
+    autosave();
+  } else if (timelinePanelFocused && (e.key === 'Backspace' || e.key === 'Delete')) {
+    const file = getActiveFile(project);
+    deleteFrame(file, file.activeFrameIndex);
     bindActiveFile();
     draw();
     autosave();

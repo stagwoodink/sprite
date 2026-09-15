@@ -1,37 +1,7 @@
 // Layers panel (design-doc §11, ui-design-system §4).
-const CHECKER_LIGHT = '#DEDEDE';
-const CHECKER_DARK = '#CFCFCF';
+import { paintThumbnail } from './thumbnail.js';
+
 const THUMB_H = 40;
-
-function paintThumbnail(canvasEl, file, layerIndex) {
-  const w = Math.max(1, Math.round(THUMB_H * file.visibleWidth / file.visibleHeight));
-  canvasEl.width = w;
-  canvasEl.height = THUMB_H;
-  const ctx = canvasEl.getContext('2d');
-
-  // Single 2x2 checkerboard filling the whole thumbnail (§4.2), not a tiled pattern.
-  ctx.fillStyle = CHECKER_LIGHT;
-  ctx.fillRect(0, 0, w, THUMB_H);
-  ctx.fillStyle = CHECKER_DARK;
-  ctx.fillRect(0, 0, w / 2, THUMB_H / 2);
-  ctx.fillRect(w / 2, THUMB_H / 2, w / 2, THUMB_H / 2);
-
-  const scaleX = w / file.visibleWidth, scaleY = THUMB_H / file.visibleHeight;
-  const pixels = file.frames[file.activeFrameIndex].layerPixels[layerIndex];
-  for (let y = 0; y < file.visibleHeight; y++) {
-    for (let x = 0; x < file.visibleWidth; x++) {
-      const c = pixels[y * file.canvasWidth + x];
-      if (!c) continue;
-      ctx.fillStyle = c;
-      ctx.fillRect(x * scaleX, y * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
-    }
-  }
-
-  if (!file.layers[layerIndex].visible) {
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, 0, w, THUMB_H);
-  }
-}
 
 export function renderLayersPanel(container, file, callbacks) {
   container.innerHTML = '';
@@ -58,7 +28,7 @@ export function renderLayersPanel(container, file, callbacks) {
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'layer-thumb';
     const canvasEl = document.createElement('canvas');
-    paintThumbnail(canvasEl, file, i);
+    paintThumbnail(canvasEl, file, file.frames[file.activeFrameIndex].layerPixels[i], THUMB_H, { dim: !layer.visible });
     const eyePip = document.createElement('div');
     eyePip.className = 'eye-pip' + (layer.visible ? '' : ' hidden-indicator');
     thumbWrap.append(canvasEl, eyePip);

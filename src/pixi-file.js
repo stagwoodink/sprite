@@ -34,9 +34,13 @@ export function activePixels(file) {
 // buffer for display (§11) — drawing still targets the single active
 // layer's own array via activePixels(), this is display-only.
 export function compositeFrame(file) {
+  return compositeFrameAt(file, file.activeFrameIndex);
+}
+
+export function compositeFrameAt(file, frameIndex) {
   const w = file.visibleWidth, h = file.visibleHeight;
   const out = new Array(w * h).fill(null);
-  const frame = file.frames[file.activeFrameIndex];
+  const frame = file.frames[frameIndex];
   file.layers.forEach((layer, li) => {
     if (!layer.visible) return;
     const src = frame.layerPixels[li];
@@ -65,6 +69,33 @@ export function deleteLayer(file, index) {
   file.layers.splice(index, 1);
   for (const frame of file.frames) frame.layerPixels.splice(index, 1);
   file.activeLayerIndex = Math.min(file.activeLayerIndex, file.layers.length - 1);
+}
+
+// Frame operations (§12.1). Every frame shares the file's layer stack, so a
+// new frame gets one empty pixel buffer per existing layer.
+export function addFrame(file, atIndex = file.frames.length) {
+  file.frames.splice(atIndex, 0, createFrame(file.layers.length, file.canvasWidth * file.canvasHeight));
+  file.activeFrameIndex = atIndex;
+}
+
+export function duplicateFrame(file, index) {
+  const source = file.frames[index];
+  const copy = { layerPixels: source.layerPixels.map((p) => p.slice()) };
+  file.frames.splice(index + 1, 0, copy);
+  file.activeFrameIndex = index + 1;
+}
+
+export function deleteFrame(file, index) {
+  if (file.frames.length <= 1) return; // a File always has at least one Frame
+  file.frames.splice(index, 1);
+  file.activeFrameIndex = Math.min(file.activeFrameIndex, file.frames.length - 1);
+}
+
+export function reorderFrame(file, from, to) {
+  if (to < 0 || to >= file.frames.length) return;
+  const [frame] = file.frames.splice(from, 1);
+  file.frames.splice(to, 0, frame);
+  if (file.activeFrameIndex === from) file.activeFrameIndex = to;
 }
 
 export function reorderLayer(file, from, to) {
