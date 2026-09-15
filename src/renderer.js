@@ -1,4 +1,4 @@
-import { getPixel, blendColors } from './canvas-model.js';
+import { getPixel, blendColors, hexToRgb } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
 
 const CANVAS_BG = '#121214'; // bg-base — same family as the panel bg-elevated, just darker
@@ -30,14 +30,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
     for (const ghost of onionFrames) drawGhost(ctx, model, ghost, scale, ox, oy);
   }
 
-  for (let y = 0; y < model.height; y++) {
-    for (let x = 0; x < model.width; x++) {
-      const color = getPixel(model, x, y);
-      if (!color) continue;
-      ctx.fillStyle = color;
-      ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
-    }
-  }
+  drawPixels(ctx, model, scale, ox, oy, w, h);
 
   if (showGrid) {
     // A reference, not a measurement: at 1 screen-pixel-per-canvas-pixel
@@ -236,6 +229,38 @@ function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX 
   // The corner where the two bars meet.
   ctx.fillStyle = RULER_BG;
   ctx.fillRect(leftX, topY, RULER_THICKNESS, RULER_THICKNESS);
+}
+
+// Reused 1:1 offscreen buffer for the sprite's pixel content. A single
+// drawImage() blit (nearest-neighbor, imageSmoothingEnabled off) has no
+// seams between pixels at any zoom — tiling one fillRect per pixel does:
+// adjacent same-color rects can leave hairline gaps between them from
+// sub-pixel rasterization once devicePixelRatio scaling isn't a clean
+// integer, which read as a phantom grid even with the real grid off.
+let pixelBuffer = null;
+let pixelBufferCtx = null;
+
+function drawPixels(ctx, model, scale, ox, oy, w, h) {
+  if (!pixelBuffer || pixelBuffer.width !== model.width || pixelBuffer.height !== model.height) {
+    pixelBuffer = document.createElement('canvas');
+    pixelBuffer.width = model.width;
+    pixelBuffer.height = model.height;
+    pixelBufferCtx = pixelBuffer.getContext('2d');
+  }
+  const imageData = pixelBufferCtx.createImageData(model.width, model.height);
+  const data = imageData.data;
+  for (let y = 0; y < model.height; y++) {
+    for (let x = 0; x < model.width; x++) {
+      const color = getPixel(model, x, y);
+      const i = (y * model.width + x) * 4;
+      if (!color) continue; // leaves alpha 0 — transparent
+      const { r, g, b } = hexToRgb(color);
+      data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
+    }
+  }
+  pixelBufferCtx.putImageData(imageData, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(pixelBuffer, 0, 0, model.width, model.height, ox, oy, w, h);
 }
 
 function line(ctx, x1, y1, x2, y2) {

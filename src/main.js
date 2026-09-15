@@ -56,20 +56,16 @@ paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palet
 updatePushes(); // final pass — the four constructions above ran with partial info
 const keybindHelp = createKeybindHelp();
 
-// Shift+Tab: hide every pinned panel at once (not in the spec — added on
-// request), remembering which were pinned so a second press restores them.
-let hiddenPanelsStash = null;
+// Shift+Tab: pin/unpin every panel at once (not in the spec — added on
+// request). A plain toggle on whether *any* panel is currently pinned —
+// the earlier stash-and-restore-exact-prior-state version was a no-op
+// whenever nothing happened to be pinned yet, which read as broken.
 function toggleHideAllPanels() {
-  const reveals = { project: projectReveal, layers: layersReveal, timeline: timelineReveal, palette: paletteReveal };
-  if (hiddenPanelsStash) {
-    for (const key in reveals) reveals[key].setPinned(hiddenPanelsStash[key]);
-    hiddenPanelsStash = null;
-  } else {
-    hiddenPanelsStash = {};
-    for (const key in reveals) {
-      hiddenPanelsStash[key] = reveals[key].isPinned();
-      reveals[key].forceHide();
-    }
+  const reveals = [projectReveal, layersReveal, timelineReveal, paletteReveal];
+  const anyPinned = reveals.some((r) => r.isPinned());
+  for (const r of reveals) {
+    if (anyPinned) r.forceHide();
+    else r.setPinned(true);
   }
 }
 
