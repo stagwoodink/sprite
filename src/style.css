@@ -64,6 +64,14 @@
      blocks tall (thumbnail needs the extra vertical room); everything
      else is 1. */
   --block: 37px;
+
+  /* Every icon in the app is a plain Unicode character, not a drawn
+     shape — but the pixel font (m3x6) doesn't define most of these
+     glyphs, so each one was silently falling back to whatever font the
+     browser happened to substitute per-character, at inconsistent
+     metrics. Force one explicit fallback stack so every icon glyph
+     renders from the same font, at the same size, everywhere. */
+  --icon-font: 'Segoe UI Symbol', 'Noto Sans Symbols', 'Apple Symbols', sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -223,6 +231,7 @@ h1, h2, .header-text {
    is just font-size, so it sits on the same grid as every other button
    and drops straight into a real icon font later with no markup change. */
 .version-tab-icon {
+  font-family: var(--icon-font);
   width: var(--block);
   height: var(--block);
   padding: 0;
@@ -298,6 +307,7 @@ h1, h2, .header-text {
 }
 
 .onion-toggle {
+  font-family: var(--icon-font);
   flex: 0 0 var(--block);
   background: var(--bg-elevated);
   border: none;
@@ -337,6 +347,7 @@ h1, h2, .header-text {
 .frame-tile canvas { display: block; height: var(--block); width: auto; image-rendering: pixelated; }
 
 .frame-delete {
+  font-family: var(--icon-font);
   position: absolute;
   top: 0;
   right: 0;
@@ -359,6 +370,7 @@ h1, h2, .header-text {
 }
 .frame-insert-gap:hover { width: 24px; }
 .frame-insert-btn {
+  font-family: var(--icon-font);
   position: absolute;
   inset: 0;
   opacity: 0;
@@ -370,6 +382,7 @@ h1, h2, .header-text {
 .frame-insert-gap:hover .frame-insert-btn { opacity: 1; }
 
 .frame-add-btn {
+  font-family: var(--icon-font);
   flex: 0 0 var(--block);
   background: var(--bg-elevated);
   border: none;
@@ -471,6 +484,7 @@ h1, h2, .header-text {
 .chip.removing { opacity: 1; }
 .chip.removing .chip-face::after {
   content: '✕';
+  font-family: var(--icon-font);
   position: absolute;
   inset: 0;
   z-index: 1;
@@ -487,6 +501,7 @@ h1, h2, .header-text {
 
 /* Hamburger: opens the palette-preset slide-out (left of the chip row). */
 .palette-hamburger {
+  font-family: var(--icon-font);
   flex: 0 0 var(--block);
   height: var(--block);
   background: var(--bg-elevated);
@@ -543,6 +558,7 @@ h1, h2, .header-text {
    hover-reveal was a needless extra step — the "+" belongs with the rest
    of the row, not hidden). */
 .chip-add {
+  font-family: var(--icon-font);
   flex: 0 0 32px;
   height: var(--block);
   background: var(--bg-elevated);
@@ -638,6 +654,7 @@ h1, h2, .header-text {
   text-overflow: ellipsis;
 }
 .panel-header-btn {
+  font-family: var(--icon-font);
   flex: 0 0 var(--block);
   background: var(--bg-elevated);
   border: none;
@@ -650,7 +667,7 @@ h1, h2, .header-text {
 .panel-header-btn:hover { background: var(--bg-hover); }
 
 .panel-add-btn { width: 100%; }
-.panel-add-btn .btn-face { border-top-width: 2px; }
+.panel-add-btn .btn-face { border-top-width: 2px; font-family: var(--icon-font); }
 
 .file-list {
   flex: 1 1 auto;
@@ -693,6 +710,7 @@ h1, h2, .header-text {
 
 /* Resize button: slides in from the right on hover, no context menu needed. */
 .file-resize-btn {
+  font-family: var(--icon-font);
   flex: 0 0 0;
   width: 0;
   display: flex;
@@ -889,6 +907,7 @@ h1, h2, .header-text {
    plain character (Braille all-dots, reads as a grip texture), sized by
    font-size like every other icon so it drops onto the same grid. */
 .drag-handle {
+  font-family: var(--icon-font);
   flex: 0 0 24px;
   height: 100%;
   cursor: grab;
@@ -935,6 +954,7 @@ h1, h2, .header-text {
 .layer-row.active .layer-label { color: var(--text-primary); }
 
 .layer-delete {
+  font-family: var(--icon-font);
   flex: 0 0 40px;
   display: none;
   align-items: center;
