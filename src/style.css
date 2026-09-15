@@ -198,6 +198,7 @@ h1, h2, .header-text {
   border: 1px solid var(--border-strong);
   transition: right 180ms ease, bottom 180ms ease;
 }
+#version-tab.hidden-tag { display: none; }
 #version-tab a {
   display: flex;
   align-items: center;
@@ -239,6 +240,35 @@ h1, h2, .header-text {
 }
 .version-tab-help::after { content: none; }
 .version-tab-help:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+/* Tool reference tag — same idea as #version-tab, mirrored to the bottom
+   left: hugs the corner, pushed right by the Project panel instead of
+   left by the Layers panel. "`" toggles both tags at once. */
+#tool-tag {
+  position: absolute;
+  left: var(--push-left, 0);
+  bottom: var(--push-bottom, 0);
+  z-index: 10;
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  transition: left 180ms ease, bottom 180ms ease;
+}
+#tool-tag.hidden-tag { display: none; }
+.tool-tag-label {
+  display: flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 24px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.tool-tag-swatch {
+  width: 32px;
+  height: 32px;
+  border-left: 1px solid var(--hairline);
+}
 
 /* Where an open side panel visually stacks in front of the Timeline/
    Palette (their shrunk edge butts against it), a plain dark shadow line

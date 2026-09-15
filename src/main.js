@@ -28,6 +28,7 @@ const projectPanel = document.getElementById('project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
 const versionTab = document.getElementById('version-tab');
+const toolTag = document.getElementById('tool-tag');
 
 // Floats above the palette's right edge; slides left with it when the
 // layers panel pushes the palette over.
@@ -61,6 +62,57 @@ helpBtn.addEventListener('click', () => keybindHelp.toggle());
 
 versionTab.append(versionLink, bugBtn, discordBtn, helpBtn);
 
+// Tool reference tag — mirrors version-tab on the opposite corner. Left
+// side: current tool + brush size. Right: zoom %, then primary/secondary
+// swatches. Content refreshed every frame from renderCanvas() (cheap: a
+// handful of textContent/background writes).
+const toolLabel = document.createElement('div');
+toolLabel.className = 'tool-tag-label';
+const zoomIcon = document.createElement('div');
+zoomIcon.className = 'version-tab-icon';
+zoomIcon.title = 'Zoom';
+const zoomLabel = document.createElement('div');
+zoomLabel.className = 'tool-tag-label';
+const primarySwatch = document.createElement('div');
+primarySwatch.className = 'tool-tag-swatch';
+primarySwatch.title = 'Primary color';
+const secondarySwatch = document.createElement('div');
+secondarySwatch.className = 'tool-tag-swatch';
+secondarySwatch.title = 'Secondary color';
+toolTag.append(toolLabel, zoomIcon, zoomLabel, primarySwatch, secondarySwatch);
+
+const MODE_LABELS = {
+  paint: 'Draw', antialiasedPaint: 'Draw (AA)',
+  fill: 'Fill', antialiasedFill: 'Fill (AA)',
+  erase: 'Erase',
+  selectRect: 'Select', selectWand: 'Select', selectPolygon: 'Select',
+  pan: 'Move', panning: 'Move',
+  shaperect: 'Shape: Rectangle', shapetriangle: 'Shape: Triangle', shapecircle: 'Shape: Circle',
+};
+
+function updateToolTag() {
+  const modeLabel = eyedropperActive ? 'Pick' : (MODE_LABELS[inputController && inputController.getMode()] || 'Draw');
+  const size = inputController ? inputController.getBrushSize() : 1;
+  toolLabel.textContent = `${size}px ${modeLabel}`;
+  const rect = canvas.getBoundingClientRect();
+  const scale = (viewState.zoom || fitScale(model, rect.width, rect.height));
+  zoomLabel.textContent = Math.round(scale * 100) + '%';
+  primarySwatch.style.background = colors.primary();
+  secondarySwatch.style.background = colors.secondary();
+}
+
+// "`" hides/shows both corner tags at once.
+let tagsHidden = false;
+window.addEventListener('keydown', (e) => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === '`') {
+    tagsHidden = !tagsHidden;
+    versionTab.classList.toggle('hidden-tag', tagsHidden);
+    toolTag.classList.toggle('hidden-tag', tagsHidden);
+  }
+});
+
 // Timeline (top) and Palette (bottom) both shrink horizontally to clear
 // whichever side panel is open, rather than staying full width and
 // pushing anything — side panels just run the full viewport height.
@@ -77,7 +129,7 @@ function updatePushes() {
   // layers panel when closed, flush with the window bottom when the
   // palette itself is closed, not pinned to the palette's height always.
   const paletteVisible = !!(paletteReveal && paletteReveal.isFocused());
-  versionTab.style.setProperty('--push-bottom', (paletteVisible ? PALETTE_HEIGHT : 0) + 'px');
+  const bottomPush = (paletteVisible ? PALETTE_HEIGHT : 0) + 'px';
   for (const el of [timelineBar, paletteBar]) {
     el.style.setProperty('--push-left', leftPush + 'px');
     el.style.setProperty('--push-right', rightPush + 'px');
@@ -86,7 +138,13 @@ function updatePushes() {
     el.classList.toggle('pushed-left', pushedLeft);
     el.classList.toggle('pushed-right', pushedRight);
   }
+  // Both corner tags always sit as far into their corner as they can — only
+  // lifted above the palette when it's actually visible, only pulled in
+  // from their side when that side panel is actually open.
   versionTab.style.setProperty('--push-right', rightPush + 'px');
+  versionTab.style.setProperty('--push-bottom', bottomPush);
+  toolTag.style.setProperty('--push-left', leftPush + 'px');
+  toolTag.style.setProperty('--push-bottom', bottomPush);
 }
 
 // Shared reveal/hide/pin/focus mechanic (§15), one instance per panel.
@@ -247,6 +305,7 @@ function renderCanvas() {
   render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
     showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos,
   });
+  updateToolTag();
 }
 
 function draw() {

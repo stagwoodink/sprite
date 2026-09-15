@@ -15,6 +15,8 @@ const GROUPS = [
     ['Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z', 'Undo / redo'],
     ['Ctrl+Space', 'Play/pause timeline'],
     ['?', 'Toggle this help'],
+    ['`', 'Hide/show the version and tool tags'],
+    ['I (hold) + click', 'Eyedropper — pick a color from anywhere'],
   ]],
   ['Canvas — drawing', [
     ['Click / drag', 'Paint primary (left) or secondary (right)'],
