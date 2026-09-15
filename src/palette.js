@@ -180,6 +180,14 @@ export function createPalette(container, initial, onChange, onSelectColor) {
         chip.classList.add('dragging');
         e.dataTransfer.setData('text/plain', String(i));
       });
+      // 'drag' fires continuously (unlike 'dragover', which only fires over
+      // valid drop targets) — use it to flag when the chip has been pulled
+      // outside the palette, so removal has a visible cue before release.
+      chip.addEventListener('drag', (e) => {
+        if (e.clientX === 0 && e.clientY === 0) return; // fires once with zeroed coords
+        const outside = !document.elementFromPoint(e.clientX, e.clientY)?.closest('.chip-viewport');
+        chip.classList.toggle('removing', outside && state.chips.length > 1);
+      });
       chip.addEventListener('dragover', (e) => {
         e.preventDefault();
         if (draggingIndex === null || draggingIndex === i) return;
