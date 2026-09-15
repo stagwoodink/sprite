@@ -38,7 +38,6 @@ export function renderProjectPanel(container, project, callbacks) {
     callbacks.onAddFile(w, h);
   }));
   addFileBtn.classList.add('panel-add-btn');
-  fileStack.append(addFileBtn);
 
   project.files.forEach((file, i) => {
     const row = document.createElement('div');
@@ -70,6 +69,7 @@ export function renderProjectPanel(container, project, callbacks) {
     fileStack.append(row);
   });
 
+  fileStack.append(addFileBtn);
   fileList.append(fileStack);
 
   const footer = document.createElement('div');

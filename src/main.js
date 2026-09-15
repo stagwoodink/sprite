@@ -52,7 +52,14 @@ discordBtn.rel = 'noopener';
 discordBtn.className = 'version-tab-icon';
 discordBtn.title = 'Join the Discord';
 
-versionTab.append(versionLink, bugBtn, discordBtn);
+// Text for now, a real icon later — toggles the same Controls modal as "?".
+const helpBtn = document.createElement('button');
+helpBtn.className = 'version-tab-icon version-tab-help';
+helpBtn.textContent = '[?]';
+helpBtn.title = 'Controls';
+helpBtn.addEventListener('click', () => keybindHelp.toggle());
+
+versionTab.append(versionLink, bugBtn, discordBtn, helpBtn);
 
 // Timeline (top) and Palette (bottom) both shrink horizontally to clear
 // whichever side panel is open, rather than staying full width and
