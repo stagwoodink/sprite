@@ -58,43 +58,18 @@ h1, h2, .header-text {
 
 #app {
   position: relative;
-  display: flex;
-  flex-direction: column;
   height: 100%;
   width: 100%;
 }
 
-/* ---- Palette bar (top, anchored) --------------------------------- */
-#palette-bar {
-  flex: 0 0 auto;
-  height: 39px; /* matches the chip row (§7.2) — needed so height can transition */
-  display: flex;
-  align-items: stretch;
-  overflow: hidden;
-  background: var(--bg-elevated);
-  transition: height 180ms ease;
-}
-#palette-bar.panel-hidden { height: 0; }
-
-/* ---- Middle row: project | canvas | layers ------------------------ */
-#middle-row {
-  position: relative;
-  flex: 1 1 auto;
-  display: flex;
-  min-height: 0;
-}
-
-/* Invisible edge-hover zones that reveal a panel (§15). */
-.edge-trigger { position: absolute; z-index: 5; }
-.edge-trigger-left { left: 0; top: 0; bottom: 0; width: 10px; }
-.edge-trigger-right { right: 0; top: 0; bottom: 0; width: 10px; }
-.edge-trigger-bottom { position: relative; height: 10px; width: 100%; }
-.edge-trigger-top { position: absolute; top: 0; left: 0; right: 0; height: 10px; }
-
+/* The canvas always fills the entire app, edge to edge, regardless of which
+   panels are open — panels are overlays drawn on top of it, never flex
+   siblings that resize it. This is what keeps the canvas centered under
+   panel show/hide instead of shifting/squishing it. */
 #canvas-area {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 #pixi-canvas {
@@ -103,31 +78,51 @@ h1, h2, .header-text {
   height: 100%;
 }
 
-/* Side panels span from top of canvas area down to the timeline's top edge
-   (§5) — they live inside #middle-row, not the full window height. */
-.side-panel {
-  flex: 0 0 auto;
-  width: 220px;
+/* Invisible edge-hover zones that reveal a panel (§15). */
+.edge-trigger { position: absolute; z-index: 5; }
+.edge-trigger-left { left: 0; top: 0; bottom: 0; width: 10px; }
+.edge-trigger-right { right: 0; top: 0; bottom: 0; width: 10px; }
+.edge-trigger-top { left: 0; right: 0; top: 0; height: 10px; }
+.edge-trigger-bottom { left: 0; right: 0; bottom: 0; height: 10px; }
+
+/* Panels overlay the canvas (never in flow), each anchored to its edge and
+   sliding by collapsing width/height with a transition. */
+.panel-overlay {
+  position: absolute;
+  z-index: 10;
   background: var(--bg-elevated);
+  overflow: hidden;
+}
+.panel-overlay-left { left: 0; top: 0; bottom: 0; }
+.panel-overlay-right { right: 0; top: 0; bottom: 0; }
+.panel-overlay-top { top: 0; left: 0; right: 0; }
+.panel-overlay-bottom { bottom: 0; left: 0; right: 0; }
+
+.side-panel {
+  width: 220px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   transition: width 180ms ease;
 }
 .side-panel.panel-hidden { width: 0; }
 
-/* ---- Timeline (bottom, full width, never shrinks) ------------------ */
+/* ---- Timeline (top edge) --------------------------------------------- */
 #timeline-bar {
-  flex: 0 0 auto;
-  width: 100%;
   height: 56px;
-  background: var(--bg-elevated);
   display: flex;
   align-items: stretch;
-  overflow: hidden;
   transition: height 180ms ease;
 }
 #timeline-bar.panel-hidden { height: 0; }
+
+/* ---- Palette bar (bottom edge) ---------------------------------------- */
+#palette-bar {
+  height: 39px; /* matches the chip row (§7.2) — needed so height can transition */
+  display: flex;
+  align-items: stretch;
+  transition: height 180ms ease;
+}
+#palette-bar.panel-hidden { height: 0; }
 
 .fps-field {
   flex: 0 0 56px;

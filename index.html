@@ -9,19 +9,21 @@
 </head>
 <body>
   <div id="app">
-    <div id="timeline-trigger" class="edge-trigger edge-trigger-top"></div>
-    <div id="timeline-bar" class="panel-hidden"></div>
-    <div id="middle-row">
-      <div id="project-trigger" class="edge-trigger edge-trigger-left"></div>
-      <div id="project-panel" class="side-panel panel-hidden"></div>
-      <div id="canvas-area">
-        <canvas id="pixi-canvas"></canvas>
-      </div>
-      <div id="layers-panel" class="side-panel panel-hidden"></div>
-      <div id="layers-trigger" class="edge-trigger edge-trigger-right"></div>
+    <div id="canvas-area">
+      <canvas id="pixi-canvas"></canvas>
     </div>
+
+    <div id="timeline-trigger" class="edge-trigger edge-trigger-top"></div>
+    <div id="timeline-bar" class="panel-overlay panel-overlay-top panel-hidden"></div>
+
+    <div id="project-trigger" class="edge-trigger edge-trigger-left"></div>
+    <div id="project-panel" class="side-panel panel-overlay panel-overlay-left panel-hidden"></div>
+
+    <div id="layers-panel" class="side-panel panel-overlay panel-overlay-right panel-hidden"></div>
+    <div id="layers-trigger" class="edge-trigger edge-trigger-right"></div>
+
     <div id="palette-trigger" class="edge-trigger edge-trigger-bottom"></div>
-    <div id="palette-bar"></div>
+    <div id="palette-bar" class="panel-overlay panel-overlay-bottom"></div>
   </div>
   <script type="module" src="src/main.js"></script>
 </body>
