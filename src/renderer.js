@@ -28,7 +28,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
   const w = model.width * scale;
   const h = model.height * scale;
 
-  drawCheckerboard(ctx, model, scale, ox, oy);
+  drawCheckerboard(ctx, model, scale, ox, oy, w, h);
 
   if (onionFrames) {
     for (const ghost of onionFrames) drawGhost(ctx, model, ghost, scale, ox, oy);
@@ -107,15 +107,34 @@ function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy) {
 // Transparency checkerboard under the sprite, sized so the checker density
 // itself signals resolution: a fixed 4-canvas-pixel cell means an 8x8 sprite
 // reads as a 2x2 checkerboard, 16x16 as 4x4, and so on as the canvas grows.
-function drawCheckerboard(ctx, model, scale, ox, oy) {
-  for (let cy = 0, gy = 0; cy < model.height; cy += CHECKER_CELL, gy++) {
-    const cellH = Math.min(CHECKER_CELL, model.height - cy) * scale;
-    for (let cx = 0, gx = 0; cx < model.width; cx += CHECKER_CELL, gx++) {
-      const cellW = Math.min(CHECKER_CELL, model.width - cx) * scale;
-      ctx.fillStyle = (gx + gy) % 2 === 0 ? CHECKER_LIGHT : CHECKER_DARK;
-      ctx.fillRect(ox + cx * scale, oy + cy * scale, cellW, cellH);
+// Built as one small offscreen buffer (one pixel per checker cell) and
+// blitted with a single drawImage — tiling individual fillRects per cell
+// left the same hairline seams between them that drawPixels() had.
+let checkerBuffer = null;
+let checkerBufferCtx = null;
+
+function drawCheckerboard(ctx, model, scale, ox, oy, w, h) {
+  const cols = Math.ceil(model.width / CHECKER_CELL);
+  const rows = Math.ceil(model.height / CHECKER_CELL);
+  if (!checkerBuffer || checkerBuffer.width !== cols || checkerBuffer.height !== rows) {
+    checkerBuffer = document.createElement('canvas');
+    checkerBuffer.width = cols;
+    checkerBuffer.height = rows;
+    checkerBufferCtx = checkerBuffer.getContext('2d');
+    const imageData = checkerBufferCtx.createImageData(cols, rows);
+    const data = imageData.data;
+    const light = hexToRgb(CHECKER_LIGHT), dark = hexToRgb(CHECKER_DARK);
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        const c = (cx + cy) % 2 === 0 ? light : dark;
+        const i = (cy * cols + cx) * 4;
+        data[i] = c.r; data[i + 1] = c.g; data[i + 2] = c.b; data[i + 3] = 255;
+      }
     }
+    checkerBufferCtx.putImageData(imageData, 0, 0);
   }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(checkerBuffer, 0, 0, cols, rows, ox, oy, w, h);
 }
 
 // Onion skinning (§12.3): ghost frames tint toward red (before) or blue
