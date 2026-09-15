@@ -60,8 +60,11 @@ const GROUPS = [
   ]],
 ];
 
+const TRANSITION_MS = 180;
+
 export function createKeybindHelp() {
   let overlay = null;
+  let closeTimer = null;
 
   function build() {
     overlay = document.createElement('div');
@@ -96,17 +99,23 @@ export function createKeybindHelp() {
     overlay.append(panel);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     document.body.append(overlay);
+
+    // Fade the dark filter layer in, slide the panel up into place.
+    requestAnimationFrame(() => overlay.classList.add('visible'));
   }
 
   function open() {
+    clearTimeout(closeTimer);
     if (overlay) return;
     build();
   }
 
   function close() {
     if (!overlay) return;
-    overlay.remove();
+    const el = overlay;
     overlay = null;
+    el.classList.remove('visible'); // fade out, slide back down
+    closeTimer = setTimeout(() => el.remove(), TRANSITION_MS);
   }
 
   return {

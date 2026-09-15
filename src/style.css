@@ -688,23 +688,34 @@ h1, h2, .header-text {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 180ms ease;
+}
+.keybind-help-overlay.visible { background: rgba(0, 0, 0, 0.6); }
+.keybind-help-overlay .keybind-help-panel {
+  transform: translateY(24px);
+  opacity: 0;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+.keybind-help-overlay.visible .keybind-help-panel {
+  transform: translateY(0);
+  opacity: 1;
 }
 .keybind-help-panel {
   background: var(--bg-elevated);
   border: 2px solid var(--border-strong);
   padding: calc(var(--unit) * 3);
-  width: min(480px, 90vw);
+  width: min(620px, 90vw);
   max-height: 80vh;
   overflow-y: auto;
   margin: auto;
-  font-size: 16px; /* smaller than the app default — a dense reference list, not body text */
+  font-size: 20px;
 }
 .keybind-help-title {
-  font-size: 24px;
+  font-size: 28px;
   margin-bottom: calc(var(--unit) * 2);
   text-align: center;
 }
@@ -723,7 +734,7 @@ h1, h2, .header-text {
   color: var(--text-secondary);
 }
 .keybind-help-key {
-  flex: 0 0 200px;
+  flex: 0 0 260px;
   text-align: right;
   color: var(--text-primary);
 }
