@@ -8,7 +8,7 @@ import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
 import { createProject, activeFile as getActiveFile, addFile } from './project.js';
 import {
   activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer, reorderLayer,
-  addFrame, deleteFrame, duplicateFrame, reorderFrame,
+  addFrame, deleteFrame, duplicateFrame, reorderFrame, ghostSource,
 } from './pixi-file.js';
 import { renderProjectPanel } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
@@ -58,7 +58,23 @@ let layersPanelFocused = false; // hover-only focus stand-in until Phase 13's re
 let timelinePanelFocused = false;
 let selectionMask = null;
 let selectionRender = null;
-const playback = { fps: 8, onionSkin: false, playing: false, timer: null };
+const playback = { fps: 8, onionSkin: false, onionLayerOnly: false, playing: false, timer: null };
+
+// Fixed range: 2 frames each direction, not user-configurable (§12.3).
+const ONION_RANGE = 2;
+function computeOnionFrames(file) {
+  if (!playback.onionSkin) return null;
+  const ghosts = [];
+  for (let d = 1; d <= ONION_RANGE; d++) {
+    if (file.activeFrameIndex - d >= 0) {
+      ghosts.push({ side: 'before', distance: d, pixels: ghostSource(file, file.activeFrameIndex - d, playback.onionLayerOnly) });
+    }
+    if (file.activeFrameIndex + d < file.frames.length) {
+      ghosts.push({ side: 'after', distance: d, pixels: ghostSource(file, file.activeFrameIndex + d, playback.onionLayerOnly) });
+    }
+  }
+  return ghosts;
+}
 
 layersPanel.addEventListener('mouseenter', () => { layersPanelFocused = true; });
 layersPanel.addEventListener('mouseleave', () => { layersPanelFocused = false; });
@@ -99,8 +115,10 @@ function draw() {
   // The canvas always shows the composited result of every visible layer
   // (§11), while `model` (the active layer's own raw buffer) is what
   // painting/selection/undo actually mutate.
-  const display = { width: model.width, height: model.height, pixels: compositeFrame(getActiveFile(project)) };
-  render(ctx, display, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender });
+  const file = getActiveFile(project);
+  const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
+  const onionFrames = computeOnionFrames(file);
+  render(ctx, display, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames });
   redrawLayersPanel();
   redrawTimelinePanel();
 }
@@ -157,6 +175,7 @@ function redrawTimelinePanel() {
   renderTimelinePanel(timelineBar, file, playback, {
     onSetFps: (fps) => { playback.fps = fps; if (playback.playing) startPlayback(); },
     onToggleOnion: () => { playback.onionSkin = !playback.onionSkin; draw(); },
+    onToggleOnionSource: () => { playback.onionLayerOnly = !playback.onionLayerOnly; draw(); },
     onSelect: (i) => { file.activeFrameIndex = i; bindActiveFile(); selectionApi.clear(); draw(); },
     onAddFrame: () => { addFrame(file); bindActiveFile(); draw(); autosave(); },
     onInsertFrame: (i) => { addFrame(file, i); bindActiveFile(); draw(); autosave(); },

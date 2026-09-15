@@ -56,6 +56,26 @@ export function compositeFrameAt(file, frameIndex) {
   return out;
 }
 
+// Crops a full-stride (canvasWidth x canvasHeight) buffer down to the
+// visible window, matching compositeFrame's output shape.
+function cropToVisible(file, fullPixels) {
+  const w = file.visibleWidth, h = file.visibleHeight;
+  const out = new Array(w * h).fill(null);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) out[y * w + x] = fullPixels[y * file.canvasWidth + x];
+  }
+  return out;
+}
+
+// Onion-skin ghost source for one frame (§12.3): either the full composite
+// or just the active layer, toggleable.
+export function ghostSource(file, frameIndex, activeLayerOnly) {
+  if (activeLayerOnly) {
+    return cropToVisible(file, file.frames[frameIndex].layerPixels[file.activeLayerIndex]);
+  }
+  return compositeFrameAt(file, frameIndex);
+}
+
 export function addLayer(file, name) {
   file.layers.push(createLayer(name || `Layer ${file.layers.length + 1}`));
   for (const frame of file.frames) {

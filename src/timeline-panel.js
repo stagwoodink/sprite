@@ -16,9 +16,10 @@ export function renderTimelinePanel(container, file, playback, callbacks) {
 
   const onionBtn = document.createElement('button');
   onionBtn.className = 'onion-toggle' + (playback.onionSkin ? ' active' : '');
-  onionBtn.title = 'Onion skin';
+  onionBtn.title = 'Onion skin (right-click: toggle full-composite vs active-layer-only ghost source)';
   onionBtn.textContent = '◈'; // diamond glyph, per the brand's rotated-square motif
   onionBtn.addEventListener('click', () => callbacks.onToggleOnion());
+  onionBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); callbacks.onToggleOnionSource(); });
 
   const strip = document.createElement('div');
   strip.className = 'frame-strip';

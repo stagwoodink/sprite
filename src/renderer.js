@@ -1,4 +1,4 @@
-import { getPixel } from './canvas-model.js';
+import { getPixel, blendColors } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
 
 const CANVAS_BG = '#0A0A0A';
@@ -8,14 +8,20 @@ const RULER_H = 14;
 const RULER_BG = '#1A1A1D';
 const RULER_TICK = '#444441';
 const RULER_HIGHLIGHT = '#F2F2F0';
+const ONION_BEFORE_TINT = '#BE1425';
+const ONION_AFTER_TINT = '#3366FF';
 
-export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPixel, selection }) {
+export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPixel, selection, onionFrames }) {
   ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, viewW, viewH);
 
   const { scale, ox, oy } = computeViewport(model, viewW, viewH);
   const w = model.width * scale;
   const h = model.height * scale;
+
+  if (onionFrames) {
+    for (const ghost of onionFrames) drawGhost(ctx, model, ghost, scale, ox, oy);
+  }
 
   for (let y = 0; y < model.height; y++) {
     for (let x = 0; x < model.width; x++) {
@@ -48,6 +54,24 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, hoverPix
   if (selection) {
     drawSelection(ctx, selection, scale, ox, oy);
   }
+}
+
+// Onion skinning (§12.3): ghost frames tint toward red (before) or blue
+// (after) with opacity falling off by distance, fixed range 2 in each
+// direction — no range control exists in the UI.
+function drawGhost(ctx, model, ghost, scale, ox, oy) {
+  const tint = ghost.side === 'before' ? ONION_BEFORE_TINT : ONION_AFTER_TINT;
+  const alpha = ghost.distance === 1 ? 0.35 : 0.18;
+  for (let y = 0; y < model.height; y++) {
+    for (let x = 0; x < model.width; x++) {
+      const color = ghost.pixels[y * model.width + x];
+      if (!color) continue;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = blendColors(color, tint, 0.5);
+      ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawSelection(ctx, selection, scale, ox, oy) {
