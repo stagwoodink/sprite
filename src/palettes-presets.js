@@ -11,8 +11,10 @@ export const PRESETS = {
     ],
   },
   dmg: {
+    // Sampled directly from spec/gameboy-color.png (user-provided reference),
+    // darkest to lightest, replacing the generic monochrome-green guess.
     name: 'Game Boy DMG',
-    chips: ['#0F380F', '#306230', '#8BAC0F', '#9BBC0F'],
+    chips: ['#01121C', '#20594A', '#6DA56E', '#D8F7D8'],
   },
   default: {
     name: 'Default',
