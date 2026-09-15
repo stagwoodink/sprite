@@ -71,14 +71,26 @@ export function blendPixel(model, x, y, colorHex, alpha) {
 }
 
 // Antialiased stamp: soft circular brush, alpha falling off from center.
-export function stampBrush(model, cx, cy, radius, colorHex) {
-  const r = Math.max(1, radius);
+// `size` is the same NxN unit the plain square brush uses (§8) — radius is
+// derived from it so both tools share one brush-size value.
+export function stampBrush(model, cx, cy, size, colorHex) {
+  const r = Math.max(0.5, size / 2);
   for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
     for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
       const d = Math.hypot(x - cx, y - cy);
       if (d > r) continue;
-      const alpha = r <= 1 ? 1 : Math.max(0, Math.min(1, 1 - d / r));
+      const alpha = r <= 0.5 ? 1 : Math.max(0, Math.min(1, 1 - d / r));
       blendPixel(model, x, y, colorHex, alpha);
+    }
+  }
+}
+
+// Plain (hard-edged) square brush stamp: 1x1, 2x2, 3x3, and so on.
+export function stampSquare(model, cx, cy, size, colorHex) {
+  const half = Math.floor(size / 2);
+  for (let y = cy - half; y < cy - half + size; y++) {
+    for (let x = cx - half; x < cx - half + size; x++) {
+      setPixel(model, x, y, colorHex);
     }
   }
 }

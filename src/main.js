@@ -17,6 +17,7 @@ import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
 import { chooseBackend, loadProject, saveProject, debounce } from './persistence.js';
 import { createRevealablePanel } from './panel-reveal.js';
+import { createKeybindHelp } from './keybind-help.js';
 import { openExportBar } from './export-bar.js';
 
 const canvas = document.getElementById('pixi-canvas');
@@ -32,6 +33,7 @@ const projectReveal = createRevealablePanel(projectPanel, document.getElementByI
 const layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'));
 const timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'));
 const paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), { initiallyPinned: true });
+const keybindHelp = createKeybindHelp();
 
 // Shift+Tab: hide every pinned panel at once (not in the spec — added on
 // request), remembering which were pinned so a second press restores them.
@@ -85,6 +87,7 @@ function bindActiveFile() {
 }
 bindActiveFile();
 
+let inputController = null;
 let showGrid = true;
 let showRuler = false;
 let hoverPixel = null;
@@ -170,7 +173,8 @@ function draw() {
   const file = getActiveFile(project);
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
-  render(ctx, display, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames });
+  const brushCursor = inputController && { mode: inputController.getMode(), size: inputController.getBrushSize() };
+  render(ctx, display, canvas.clientWidth, canvas.clientHeight, { showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames, brushCursor });
   redrawLayersPanel();
   redrawTimelinePanel();
 }
@@ -265,15 +269,16 @@ function togglePlayback() {
   else clearInterval(playback.timer);
 }
 
-createInputController(canvas, model, colors, draw, selectionApi, history);
+inputController = createInputController(canvas, model, colors, draw, selectionApi, history);
 
 canvas.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
   const viewport = computeViewport(model, rect.width, rect.height);
   hoverPixel = screenToPixel(viewport, e.clientX - rect.left, e.clientY - rect.top);
   if (rotating) updateRotate(hoverPixel.x, hoverPixel.y, e.shiftKey);
-  else if (showRuler) draw();
+  else draw(); // needed every move so the brush-size cursor tracks the pointer
 });
+canvas.addEventListener('pointerleave', () => { hoverPixel = null; draw(); });
 
 // Scroll wheel zooms (§6). Scale is snapped to whole numbers — the spec
 // calls for continuous zoom, but a fractional scale would leave subpixel
@@ -398,7 +403,13 @@ window.addEventListener('keydown', (e) => {
   // single-letter/arrow shortcuts fight typing in them.
   const tag = document.activeElement && document.activeElement.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (e.key === 'g' && !e.shiftKey) {
+  if (keybindHelp.isOpen()) {
+    if (e.key === '?' || e.key === 'Escape') { e.preventDefault(); keybindHelp.close(); }
+    return; // swallow every other shortcut while the help is up
+  }
+  if (e.key === '?') {
+    keybindHelp.toggle();
+  } else if (e.key === 'g' && !e.shiftKey) {
     showGrid = !showGrid;
     draw();
   } else if (e.key === 'G' && e.shiftKey) {

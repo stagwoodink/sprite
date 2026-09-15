@@ -1,10 +1,10 @@
-import { setPixel, stampBrush, floodFill, linePixels, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
+import { setPixel, stampBrush, stampSquare, floodFill, linePixels, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { computeViewport, screenToPixel } from './viewport.js';
 import { cursorForMode } from './cursors.js';
 import { maskFromRect, maskFromWand, maskFromPolygon } from './selection.js';
 import { viewState } from './view-state.js';
 
-const MAX_BRUSH_FRACTION = 0.25; // "[" / "]" while Alt held, capped at 1/4 canvas dimension (§8)
+const MAX_BRUSH_FRACTION = 0.25; // "[" / "]", capped at 1/4 canvas dimension (§8)
 
 // Modifier-driven single-tool interaction (§8). No selection creation here
 // yet (Shift-family lands in Phase 4) — cursor modes for it are wired now so
@@ -19,7 +19,9 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   // recover short of pressing the key again. Live event flags can't get
   // stuck: they always reflect the browser's actual current modifier state.
   const keys = { alt: false, ctrl: false, shift: false, space: false };
-  let brushRadius = 1;
+  // Shared by the plain (hard square) and antialiased (soft circle) brush —
+  // "any tool with a brush size" grows/shrinks together. 1 = a single pixel.
+  let brushSize = 1;
   let panning = false;
   let lastPan = null;
   let lastPixel = null;
@@ -56,7 +58,9 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   function paintAt(x, y, button, antialiased) {
     const color = colorForButton(button);
     if (antialiased) {
-      stampBrush(model, x, y, brushRadius, color);
+      stampBrush(model, x, y, brushSize, color);
+    } else if (brushSize > 1) {
+      stampSquare(model, x, y, brushSize, color);
     } else {
       setPixel(model, x, y, color);
     }
@@ -93,8 +97,14 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
     if (e.code === 'Space' && !e.repeat) { keys.space = true; changed = true; e.preventDefault(); }
     const tag = document.activeElement && document.activeElement.tagName;
     const typing = tag === 'INPUT' || tag === 'TEXTAREA';
-    if (!typing && keys.alt && (e.key === '[' || e.key === ']')) {
-      brushRadius = Math.max(1, Math.min(maxBrush(), brushRadius + (e.key === ']' ? 1 : -1)));
+    if (!typing && (e.key === '[' || e.key === ']')) {
+      const growing = e.key === ']';
+      if (e.shiftKey) {
+        // Shift+[ / Shift+]: halve / double, for fast large jumps.
+        brushSize = growing ? Math.min(maxBrush(), brushSize * 2) : Math.max(1, Math.floor(brushSize / 2));
+      } else {
+        brushSize = Math.max(1, Math.min(maxBrush(), brushSize + (growing ? 1 : -1)));
+      }
       changed = true;
       e.preventDefault();
     }
@@ -235,5 +245,5 @@ export function createInputController(canvas, model, colors, onPaint, selectionA
   });
 
   updateCursor();
-  return { getBrushRadius: () => brushRadius };
+  return { getBrushSize: () => brushSize, getMode: currentMode };
 }

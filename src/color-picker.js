@@ -1,5 +1,9 @@
-// HSL-square + hue-slider + hex-field popup (design-doc §7.2, ui-design-system
-// §1: 0px corners, flat, dark chrome). Opened on right-click of a chip.
+// HSL-square + hue-slider + hex-field slide-out (design-doc §7.2,
+// ui-design-system §1: 0px corners, flat, dark chrome). Opened on Alt+click
+// of a chip. Per CONTEXT.md's "Slide-Out Context Bar" vocabulary — every
+// secondary control surface slides out from the element that triggered it,
+// not a floating dropdown — this slides up from the chip rather than
+// appearing as a fixed popup.
 const SIZE = 120;
 
 function hexToHsl(hex) {
@@ -58,9 +62,18 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
   popup.append(square, hue, hexField);
   document.body.append(popup);
 
+  // Slides out from the chip: anchored above it (the palette bar docks to
+  // the bottom edge), starting translated down + transparent, then
+  // animating up into place.
   const rect = anchorEl.getBoundingClientRect();
   popup.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
-  popup.style.top = rect.bottom + 4 + 'px';
+  popup.style.bottom = window.innerHeight - rect.top + 4 + 'px';
+  popup.style.transform = 'translateY(12px)';
+  popup.style.opacity = '0';
+  requestAnimationFrame(() => {
+    popup.style.transform = 'translateY(0)';
+    popup.style.opacity = '1';
+  });
 
   const sctx = square.getContext('2d');
 

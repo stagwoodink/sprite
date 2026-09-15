@@ -8,6 +8,45 @@ function darken(hex, amount) {
   return '#' + [r, g, b].map((v) => clampDark(v).toString(16).padStart(2, '0')).join('');
 }
 
+// Slides up from the hamburger (palette docks to the bottom edge) — lists
+// the built-in presets plus a "+ New Palette" to start a blank one.
+function openPresetPanel(anchor, onLoadPreset, onNewPalette) {
+  document.querySelectorAll('.palette-preset-panel').forEach((el) => el.remove());
+  const panel = document.createElement('div');
+  panel.className = 'palette-preset-panel';
+
+  Object.entries(PRESETS).forEach(([key, preset]) => {
+    const btn = document.createElement('button');
+    btn.textContent = preset.name;
+    btn.addEventListener('click', () => { onLoadPreset(key); panel.remove(); });
+    panel.append(btn);
+  });
+
+  const newBtn = document.createElement('button');
+  newBtn.className = 'new-palette-btn';
+  newBtn.textContent = '+ New Palette';
+  newBtn.addEventListener('click', () => { onNewPalette(); panel.remove(); });
+  panel.append(newBtn);
+
+  const rect = anchor.getBoundingClientRect();
+  panel.style.left = rect.left + 'px';
+  panel.style.bottom = window.innerHeight - rect.top + 4 + 'px';
+  panel.style.transform = 'translateY(12px)';
+  panel.style.opacity = '0';
+  document.body.append(panel);
+  requestAnimationFrame(() => {
+    panel.style.transform = 'translateY(0)';
+    panel.style.opacity = '1';
+  });
+
+  setTimeout(() => window.addEventListener('pointerdown', function onOutside(e) {
+    if (!panel.contains(e.target) && e.target !== anchor) {
+      panel.remove();
+      window.removeEventListener('pointerdown', onOutside);
+    }
+  }), 0);
+}
+
 // Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
 // loaded/created Project's own palette object; the returned `state` is that
 // same live object (mutated in place) so main.js can persist it directly.
@@ -19,8 +58,33 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     secondary: preset.chips[1] || preset.chips[0],
   };
 
+  function loadPreset(key) {
+    const p = PRESETS[key];
+    state.chips = [...p.chips];
+    state.primary = state.chips[0];
+    state.secondary = state.chips[1] || state.chips[0];
+    render();
+    onChange(state);
+  }
+
+  function newPalette() {
+    state.chips = ['#FFFFFF'];
+    state.primary = '#FFFFFF';
+    state.secondary = '#FFFFFF';
+    render();
+    onChange(state);
+  }
+
   function render() {
     container.innerHTML = '';
+
+    const hamburger = document.createElement('button');
+    hamburger.className = 'palette-hamburger';
+    hamburger.textContent = '☰';
+    hamburger.title = 'Palettes';
+    hamburger.addEventListener('click', () => openPresetPanel(hamburger, loadPreset, newPalette));
+    container.append(hamburger);
+
     const row = document.createElement('div');
     row.className = 'chip-row';
 
