@@ -5,6 +5,7 @@ import { ensureLoaded } from './persistence.js';
 import { computeArtboardLayout } from './renderer.js';
 import { zipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
+import { encodeGifStream } from './gif-index.js';
 
 // Export (§14): PNG, GIF, SVG per File/Collection, plus a whole-Project
 // .sprite archive. Scale is an integer upscale, nearest-neighbor — no
@@ -96,28 +97,6 @@ function pixelsToSvgString(pixels, w, h, scale) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w * scale} ${h * scale}">${rects}</svg>`;
 }
 
-// Flat RGBA bytes (4 per pixel, upscaled), the shape gifenc's quantize/
-// applyPalette both require — `null` cells (this app's own "transparent"
-// value) become alpha 0.
-function pixelsToRgba(pixels, w, h, scale) {
-  const out = new Uint8ClampedArray(w * scale * h * scale * 4);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const c = pixels[y * w + x];
-      const r = c & 255, g = (c >> 8) & 255, b = (c >> 16) & 255;
-      const a = c ? 255 : 0;
-      for (let sy = 0; sy < scale; sy++) {
-        for (let sx = 0; sx < scale; sx++) {
-          const px = x * scale + sx, py = y * scale + sy;
-          const i = (py * w * scale + px) * 4;
-          out[i] = r; out[i + 1] = g; out[i + 2] = b; out[i + 3] = a;
-        }
-      }
-    }
-  }
-  return out;
-}
-
 // --- download plumbing ---------------------------------------------------
 
 function downloadBlob(blob, filename) {
@@ -180,36 +159,25 @@ async function downloadResults(entries, zipFilename) {
 
 // --- GIF -------------------------------------------------------------
 
-// One shared palette across every frame (quantized from all of them
-// together) — every frame draws from the identical global color table, so
-// a color already used doesn't shift or flicker between frames the way
-// separately-quantized per-frame palettes could.
-function encodeGif(rgbaFrames, w, h, delayMs, onFrame) {
-  const combined = new Uint8ClampedArray(rgbaFrames.length * rgbaFrames[0].length);
-  rgbaFrames.forEach((f, i) => combined.set(f, i * f.length));
-  const palette = quantize(combined, 256);
-
-  const gif = GIFEncoder();
-  rgbaFrames.forEach((rgba, i) => {
-    const index = applyPalette(rgba, palette);
-    gif.writeFrame(index, w, h, { palette, delay: delayMs, repeat: 0 });
-    onFrame?.((i + 1) / rgbaFrames.length);
-  });
-  gif.finish();
-  return gif.bytes();
-}
+// One shared palette across every frame, so a color already used doesn't
+// shift or flicker between frames the way separately-quantized per-frame
+// palettes could. `frames` are packed composites; see gif-index.js.
+const gifenc = { GIFEncoder, quantize, applyPalette };
+const encodeGif = (frames, w, h, scale, delayMs, onFrame) => encodeGifStream({
+  frameCount: frames.length, wordsAt: (i) => frames[i], w, h, scale, delayMs, onFrame, gifenc,
+});
 
 // A File's own GIF: one plain image if it has just the one Frame, an
 // animated loop (at `fps`) if it has more — no separate mode/picker for
 // this, unlike PNG/SVG's canvas/layers/frames choice below, since a GIF is
 // inherently a sequence-or-not already.
 async function exportFileGif(file, scale, fps, onProgress) {
-  const w = file.visibleWidth, h = file.visibleHeight;
-  const rgbaFrames = file.frames.map((_, i) => {
-    onProgress((i + 1) / file.frames.length * 0.5);
-    return pixelsToRgba(compositeFrameAt(file, i), w, h, scale);
+  // Frames are composited on demand and dropped after each write, so memory
+  // holds one frame however long the animation is.
+  const bytes = encodeGifStream({
+    frameCount: file.frames.length, wordsAt: (i) => compositeFrameAt(file, i), w: file.visibleWidth, h: file.visibleHeight,
+    scale, delayMs: Math.round(1000 / fps), onFrame: (f) => onProgress(f * 0.9), gifenc,
   });
-  const bytes = encodeGif(rgbaFrames, w * scale, h * scale, Math.round(1000 / fps), (f) => onProgress(0.5 + f * 0.4));
   await downloadResults([{ path: `${file.name}.gif`, blob: new Blob([bytes], { type: 'image/gif' }) }], `${file.name}.gif`);
 }
 
@@ -319,10 +287,8 @@ async function exportCollectionSheet(collectionName, artboards, format, scale, g
     onProgress((i + 1) / cells.length * 0.6);
   });
   if (format === 'gif') {
-    const rgba = new Uint8ClampedArray(w * scale * h * scale * 4);
-    const imgData = ctx.getImageData(0, 0, w * scale, h * scale).data;
-    rgba.set(imgData);
-    const bytes = encodeGif([rgba], w * scale, h * scale, 0, (f) => onProgress(0.6 + f * 0.3));
+    const words = new Uint32Array(ctx.getImageData(0, 0, w * scale, h * scale).data.buffer);
+    const bytes = encodeGif([words], w * scale, h * scale, 1, 0, (f) => onProgress(0.6 + f * 0.3));
     return downloadResults([{ path: `${collectionName}.gif`, blob: new Blob([bytes], { type: 'image/gif' }) }], `${collectionName}.gif`);
   }
   const blob = await canvasToBlob(canvasEl, 'image/png');
@@ -353,7 +319,7 @@ async function exportCollectionFiles(collectionName, artboards, format, scale, o
   for (let i = 0; i < artboards.length; i++) {
     const board = artboards[i];
     const blob = format === 'gif'
-      ? new Blob([encodeGif([pixelsToRgba(board.pixels, board.width, board.height, scale)], board.width * scale, board.height * scale, 0)], { type: 'image/gif' })
+      ? new Blob([encodeGif([board.pixels], board.width, board.height, scale, 0)], { type: 'image/gif' })
       : await canvasToBlob(pixelsToCanvas(board.pixels, board.width, board.height, scale, null), 'image/png');
     entries.push({ path: `${dir}/${sanitizeName(board.name)}.${format === 'gif' ? 'gif' : 'png'}`, blob });
     onProgress((i + 1) / artboards.length * 0.9);
