@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createSpriteFile, addFrame } from '../src/sprite-file.js';
 import { setPixel } from '../src/canvas-model.js';
-import { saveProject, loadProject, ensureLoaded } from '../src/persistence.js';
+import { saveProject, loadProject, ensureLoaded, unloadIdle } from '../src/persistence.js';
 
 const store = new Map(), writes = [];
 const backend = {
@@ -71,4 +71,15 @@ assert.equal(!!stub._stub, false);
 writes.length = 0;
 await saveProject(backend, lazy);
 assert.deepEqual(writes.filter((w) => w.startsWith('p/')), [], 'a freshly loaded file is not rewritten');
+
+// unloading: an idle saved file drops back to a stub and reloads intact
+const pixelsOf = (f) => Array.from(f.frames[0].layerPixels[0]);
+setPixel({ width: 4, height: 4, stride: 4, pixels: stub.frames[0].layerPixels[0], colors: stub.colors }, 3, 3, '#0000FF');
+const before = pixelsOf(stub);
+await unloadIdle(backend, lazy, (f) => f === act, { keep: 0, idleMs: 0 });
+assert.equal(!!stub._stub, true, 'idle file was unloaded');
+assert.equal(!!act._stub, false, 'file in use was kept');
+assert.throws(() => pixelsOf(stub), /isn't loaded yet/);
+await ensureLoaded(stub);
+assert.deepEqual(pixelsOf(stub), before, 'edits made before unloading survive it');
 console.log('persistence-skip ok');

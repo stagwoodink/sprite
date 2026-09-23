@@ -136,8 +136,46 @@ async function loadStub(backend, projectId, fileName, raw, stub) {
 // are). Anything about to read a File that may not be the active one —
 // export, resize, the collection grid — awaits this first.
 export function ensureLoaded(file) {
+  markUsed(file);
   if (!file._stub) return Promise.resolve();
   return file._loading ||= file._load().finally(() => { delete file._loading; });
+}
+
+const lastUsed = new WeakMap(); // File -> ms timestamp of its last activation/load
+export const markUsed = (file) => lastUsed.set(file, Date.now());
+
+// Turns a saved, loaded File back into a stub (drops its buffers and undo
+// history from memory; both are on disk). `raw` is its current saved meta.
+function becomeStub(backend, projectId, file, raw) {
+  const stub = stubFile(raw);
+  file.frames = stub.frames;
+  file.undoStack = [];
+  file.redoStack = [];
+  file._undoMeta = stub._undoMeta;
+  file._stub = true;
+  file._load = () => loadStub(backend, projectId, `${file.name}.sprite`, raw, file);
+  lastWritten.set(file, { path: `${projectId}/${file.name}`, json: JSON.stringify(encodeStubMeta(file)), frameSigs: new Map(), undoSig: '' });
+}
+
+// Releases the pixels of Files nobody is using, so memory follows what's
+// actually open rather than everything ever visited. A File is kept if
+// `inUse` says so, if it's one of the `keep` most recently used, or if it was
+// used within `idleMs` (which also covers an export still reading it). It is
+// saved first, and left alone if anything changed while that write ran.
+export async function unloadIdle(backend, project, inUse, { keep = 3, idleMs = 60_000 } = {}) {
+  const candidates = project.files
+    .filter((f) => !f._stub && !inUse(f))
+    .sort((a, b) => (lastUsed.get(b) || 0) - (lastUsed.get(a) || 0))
+    .slice(keep);
+  for (const file of candidates) {
+    if (Date.now() - (lastUsed.get(file) || 0) < idleMs) continue;
+    await writeFile(backend, project.id, file);
+    if (file._stub || inUse(file)) continue;
+    const enc = encodeFile(file);
+    const last = lastWritten.get(file);
+    if (enc.frames.some((fr) => last.frameSigs.get(fr.id) !== fr.sig) || last.undoSig !== enc.undo.sig) continue;
+    becomeStub(backend, project.id, file, JSON.parse(JSON.stringify(enc.meta)));
+  }
 }
 
 // Deletes every file a project owns (its subtree is flat — project.json

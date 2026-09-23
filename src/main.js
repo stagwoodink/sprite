@@ -22,7 +22,7 @@ import {
 import { renderProjectPanel, openSizePopup } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
-import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, deleteStoredFile, ensureLoaded, debounce, autosaveDelay } from './persistence.js';
+import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, deleteStoredFile, ensureLoaded, markUsed, unloadIdle, debounce, autosaveDelay } from './persistence.js';
 import { createRevealablePanel } from './panel-reveal.js';
 import { createKeybindHelp } from './keybind-help.js';
 import { renderExportPanel } from './export-panel.js';
@@ -504,6 +504,15 @@ const autosave = debounce(() => saveProject(backend, project).catch((err) => con
 });
 autosave();
 
+// Memory follows what's open: a File nobody has used for a minute (and that
+// isn't one of the few most recent) drops its pixels; they reload from
+// storage on next use.
+setInterval(() => {
+  const active = getActiveFile(project);
+  unloadIdle(backend, project, (f) => f === active || (!!activeGroupId && f.groupId === activeGroupId))
+    .catch((err) => console.error('Unload failed:', err));
+}, 15_000);
+
 // The debounce can be several seconds on a large canvas, so flush right
 // away when the tab is hidden or closed rather than lose the last edits.
 document.addEventListener('visibilitychange', () => {
@@ -524,6 +533,7 @@ function bindActiveFile() {
   model.height = file.visibleHeight;
   model.stride = file.canvasWidth;
   model.colors = file.colors;
+  markUsed(file);
   if (file._stub) {
     // Not loaded yet (persistence.js lazy loading): a blank stand-in until
     // the pixels arrive, then bind for real and refresh everything.
