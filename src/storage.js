@@ -4,9 +4,11 @@
 // Both backends share the same path-based interface so callers (Phase 7's
 // Project/File model) never need to know which one is active.
 //
-// Path = an array of segments, e.g. ['MyProject', 'sprite.pixi'].
+// Path = an array of segments, e.g. ['MyProject', 'icon.sprite'].
+// `write` takes either a JSON-able value or a Uint8Array (stored raw — the
+// binary pixel sidecars); binary entries are read back with `readBytes`.
 
-const IDB_NAME = 'pixi-vfs';
+const IDB_NAME = 'sprite-vfs';
 const IDB_STORE = 'entries';
 const IDB_HANDLE_STORE = 'fsa-handle';
 
@@ -42,6 +44,10 @@ function createIndexedDbBackend() {
       const v = await idbRequest(IDB_STORE, 'readonly', (s) => s.get(path.join('/')));
       return v === undefined ? null : v;
     },
+    async readBytes(path) {
+      const v = await this.read(path);
+      return v && new Uint8Array(v);
+    },
     async delete(path) {
       await idbRequest(IDB_STORE, 'readwrite', (s) => s.delete(path.join('/')));
     },
@@ -71,7 +77,7 @@ function createFsaBackend(rootHandle) {
       const dir = await fsaDirFor(rootHandle, path, { create: true });
       const fileHandle = await dir.getFileHandle(path[path.length - 1], { create: true });
       const writable = await fileHandle.createWritable();
-      await writable.write(JSON.stringify(data));
+      await writable.write(data instanceof Uint8Array ? data : JSON.stringify(data));
       await writable.close();
     },
     async read(path) {
@@ -80,6 +86,15 @@ function createFsaBackend(rootHandle) {
         const fileHandle = await dir.getFileHandle(path[path.length - 1]);
         const file = await fileHandle.getFile();
         return JSON.parse(await file.text());
+      } catch {
+        return null;
+      }
+    },
+    async readBytes(path) {
+      try {
+        const dir = await fsaDirFor(rootHandle, path);
+        const fileHandle = await dir.getFileHandle(path[path.length - 1]);
+        return new Uint8Array(await (await fileHandle.getFile()).arrayBuffer());
       } catch {
         return null;
       }

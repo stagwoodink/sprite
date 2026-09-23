@@ -1,46 +1,54 @@
 // Layers panel (design-doc §11, ui-design-system §4).
 import { paintThumbnail } from './thumbnail.js';
 import { BLOCK } from './grid.js';
+import { button, makeReorderable, startInlineEdit } from './ui.js';
+import { layerOrder, compositeLayerAt } from './sprite-file.js';
+import { visibleOrder } from './ordering.js';
 
 const THUMB_H = BLOCK * 2; // layer tiles are 2 blocks tall
 
-export function renderLayersPanel(container, file, callbacks) {
+// Layer grouping is drag-and-drop only — a layer becomes a group's member
+// by being positioned directly beneath its header (§ ordering.js), same as
+// file collections. No separate "move to group" control.
+export function renderLayersPanel(container, file, callbacks, focusedGroupId, layerSelection, multiSelection) {
   container.innerHTML = '';
+  const selLo = layerSelection ? Math.min(layerSelection.anchor, layerSelection.to) : -1;
+  const selHi = layerSelection ? Math.max(layerSelection.anchor, layerSelection.to) : -1;
 
   // Anchored to the bottom of the panel, not the top — a stack of layers
   // reads more naturally sitting at the floor than floating at the ceiling.
   const stack = document.createElement('div');
   stack.className = 'layer-stack';
 
-  const addBtn = document.createElement('button');
-  addBtn.className = 'btn panel-add-btn';
-  const face = document.createElement('div');
-  face.className = 'btn-face';
-  face.textContent = '+';
-  const shadow = document.createElement('div');
-  shadow.className = 'btn-shadow';
-  addBtn.append(face, shadow);
-  addBtn.addEventListener('click', () => callbacks.onAddLayer());
+  // Left click: new layer. Right click: new group, straight away — same
+  // two-gesture pattern the project panel's own "+" uses now.
+  const addBtn = button({
+    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New layer (right-click: new group)',
+    onClick: () => callbacks.onAddLayer(),
+    onContextMenu: (e) => { e.preventDefault(); callbacks.onAddGroup(); },
+  });
   stack.append(addBtn);
 
-  // Top of the stack is drawn first (§11): last layer in the array renders
-  // on top, so the panel lists layers back-to-front, topmost first.
-  for (let i = file.layers.length - 1; i >= 0; i--) {
-    const layer = file.layers[i];
+  function buildLayerRow(layer, i, pos, nested) {
     const row = document.createElement('div');
-    row.className = 'layer-row' + (i === file.activeLayerIndex ? ' active' : '');
-    row.draggable = true;
+    const multiSelected = !!(multiSelection && multiSelection.has(i));
+    row.className = 'layer-row tile tile--tall reveal-on-hover' + (nested ? ' layer-row--nested' : '') + ((multiSelected || i === file.activeLayerIndex) ? ' selected' : '') + (pos >= selLo && pos <= selHi ? ' layer-row--selected' : '');
+    row.dataset.layerIndex = i; // § multi-select menu anchor lookup
 
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'layer-thumb';
     const canvasEl = document.createElement('canvas');
-    paintThumbnail(canvasEl, file, file.frames[file.activeFrameIndex].layerPixels[i], THUMB_H, { dim: !layer.visible });
+    paintThumbnail(canvasEl, file, compositeLayerAt(file, i, file.activeFrameIndex), THUMB_H, { dim: !layer.visible });
     const eyePip = document.createElement('div');
     eyePip.className = 'eye-pip' + (layer.visible ? '' : ' hidden-indicator');
     thumbWrap.append(canvasEl, eyePip);
     thumbWrap.addEventListener('click', (e) => {
       e.stopPropagation();
-      callbacks.onToggleVisible(i);
+      // Clicking the thumbnail of a layer that's part of the current
+      // multi-selection toggles every selected layer together, not just
+      // this one.
+      if (multiSelected) callbacks.onToggleVisibleSelection();
+      else callbacks.onToggleVisible(i);
     });
 
     // Hover-revealed vertical slider, OVERLAID on the thumbnail's right edge
@@ -48,7 +56,6 @@ export function renderLayersPanel(container, file, callbacks) {
     // right-click/menu needed. A % readout appears to its left while dragging.
     const opacitySlider = document.createElement('div');
     opacitySlider.className = 'opacity-slider';
-    opacitySlider.title = 'Drag to change layer opacity';
     const opacityFill = document.createElement('div');
     opacityFill.className = 'opacity-slider-fill';
     const opacityPip = document.createElement('div');
@@ -90,40 +97,97 @@ export function renderLayersPanel(container, file, callbacks) {
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
-    handle.textContent = '⠿';
-    handle.title = 'Drag to reorder';
+    handle.textContent = '⋮';
 
     const label = document.createElement('div');
     label.className = 'layer-label';
     label.textContent = layer.name;
-
-    const del = document.createElement('div');
-    del.className = 'layer-delete';
-    del.textContent = '✕';
-    del.addEventListener('click', (e) => {
+    label.addEventListener('dblclick', (e) => {
       e.stopPropagation();
-      callbacks.onDelete(i);
+      startInlineEdit(label, layer.name, (v) => { if (v) { layer.name = v; callbacks.onRename(); } });
+    });
+
+    const del = button({
+      glyph: '✕', icon: true, className: 'btn--reveal', title: 'Delete layer',
+      onClick: (e) => { e.stopPropagation(); callbacks.onDelete(i); },
     });
 
     row.append(thumbWrap, handle, label, del);
-    row.addEventListener('click', () => callbacks.onSelect(i));
-    // Only the grab handle starts a reorder drag — the thumbnail and
-    // opacity slider have their own click/pointer interactions that a
-    // native drag would otherwise steal.
-    row.addEventListener('dragstart', (e) => {
-      if (!e.target.closest('.drag-handle')) {
-        e.preventDefault();
-        return;
-      }
-      e.dataTransfer.setData('text/plain', String(i));
+    row.addEventListener('click', (e) => {
+      // Shift/Alt-click build a multi-layer selection instead of switching
+      // the active layer — same pattern as the file list's rows.
+      if (e.shiftKey) { callbacks.onShiftSelectLayer(i); return; }
+      if (e.altKey) { callbacks.onAltSelectLayer(i); return; }
+      // Same no-op guard as the file list — onSelect re-renders this
+      // panel, which was destroying `label` mid-double-click.
+      if (i === file.activeLayerIndex && !multiSelection) return;
+      callbacks.onSelect(i);
     });
-    row.addEventListener('dragover', (e) => e.preventDefault());
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      callbacks.onReorder(Number(e.dataTransfer.getData('text/plain')), i);
+    makeReorderable(handle, row, pos, {
+      listEl: stack,
+      boundsEl: container,
+      onReorder: (from, to) => callbacks.onReorder(from, to),
+      onRemove: () => callbacks.onDelete(i),
     });
 
-    stack.append(row);
+    return row;
+  }
+
+  function buildGroupHeader(group, pos) {
+    const row = document.createElement('div');
+    row.className = 'layer-group-header tile reveal-on-hover' + (group.id === focusedGroupId ? ' selected' : '') + (pos >= selLo && pos <= selHi ? ' layer-row--selected' : '');
+    row.dataset.groupId = group.id;
+
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle';
+    handle.textContent = '⋮';
+    makeReorderable(handle, row, pos, {
+      listEl: stack,
+      boundsEl: container,
+      onReorder: (from, to) => callbacks.onReorder(from, to),
+    });
+
+    const eyePip = document.createElement('div');
+    eyePip.className = 'eye-pip standalone' + (group.visible ? '' : ' hidden-indicator');
+    eyePip.addEventListener('click', (e) => { e.stopPropagation(); callbacks.onToggleGroupVisible(group.id); });
+
+    const arrow = document.createElement('span');
+    arrow.className = 'fold-arrow';
+    arrow.textContent = group.collapsed ? '▸' : '▾';
+    arrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      group.collapsed = !group.collapsed;
+      callbacks.onChange();
+    });
+
+    const label = document.createElement('div');
+    label.className = 'layer-label';
+    label.textContent = group.name;
+    label.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startInlineEdit(label, group.name, (v) => { if (v) { group.name = v; callbacks.onRename(); } });
+    });
+
+    const deleteBtn = button({
+      glyph: '✕', icon: true, className: 'btn--reveal', title: 'Delete group (layers move to the first group)',
+      onClick: (e) => { e.stopPropagation(); callbacks.onDeleteGroup(group.id); },
+    });
+
+    row.append(handle, eyePip, arrow, label, deleteBtn);
+    return row;
+  }
+
+  // Ascending order = top-to-bottom in the panel (§ ordering.js) — the
+  // reverse of `file.layers`' own bottom-to-top compositing order, so this
+  // reads front-to-back same as before, just off the derived combined view
+  // instead of iterating the raw array backwards.
+  for (const entry of visibleOrder(layerOrder(file))) {
+    if (entry.isHeader) {
+      stack.append(buildGroupHeader(entry.item, entry.pos));
+    } else {
+      const i = file.layers.indexOf(entry.item);
+      stack.append(buildLayerRow(entry.item, i, entry.pos, entry.item.groupId != null));
+    }
   }
 
   container.append(stack);

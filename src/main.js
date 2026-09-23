@@ -1,35 +1,62 @@
-import { setPixel, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
-import { render } from './renderer.js';
+import { setPixel, getPixel, stampBrush, floodFill, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
+import { parseFile } from './sprite-format.js';
+import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
 import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale } from './viewport.js';
-import { viewState, resetView } from './view-state.js';
+import { viewState, resetView, groupViewState, resetGroupView } from './view-state.js';
 import { createPalette } from './palette.js';
-import { maskFromRect, maskFromColor, fullMask, toRenderSelection } from './selection.js';
+import { maskFromRect, maskFromWand, maskFromColor, fullMask, toRenderSelection } from './selection.js';
 import { extract, stamp, flip, rotate, shiftMask, moveContent, maskBounds } from './selection-ops.js';
 import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
-import { createProject, activeFile as getActiveFile, addFile, reorderFile } from './project.js';
 import {
-  activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer, reorderLayer,
+  createProject, activeFile as getActiveFile, addFile, deleteFile,
+  addCollection, deleteCollection, NEW_FILE_SIZES, projectOrder, moveProjectItem,
+  lastCollection, mostRecentFileIn,
+} from './project.js';
+import {
+  activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer,
   addFrame, deleteFrame, duplicateFrame, reorderFrame, ghostSource,
-} from './pixi-file.js';
+  addLayerGroup, deleteLayerGroup, layerOrder, moveLayerItem,
+} from './sprite-file.js';
 import { renderProjectPanel } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
-import { chooseBackend, loadProject, saveProject, debounce } from './persistence.js';
+import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, debounce } from './persistence.js';
 import { createRevealablePanel } from './panel-reveal.js';
 import { createKeybindHelp } from './keybind-help.js';
-import { openExportBar } from './export-bar.js';
+import { renderExportPanel } from './export-panel.js';
+import { renderOpenProjectPanel } from './open-project-panel.js';
 import { VERSION, GITHUB_ISSUES_URL, ITCH_IO_URL, DISCORD_URL } from './version.js';
 import { BLOCK } from './grid.js';
+import { loadUiPrefs, saveUiPrefs } from './ui-prefs.js';
+import { startInlineEdit, onHoverTip, button } from './ui.js';
+import { exportFile, exportCollection, exportProjectSprite, onExportProgress } from './export.js';
+import { unzipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
+import { SHAPE_OUTLINES, constrainSquare } from './shapes.js';
+import { openSlideOut } from './slide-out.js';
+import { visibleOrder } from './ordering.js';
 
-const canvas = document.getElementById('pixi-canvas');
+const canvas = document.getElementById('sprite-canvas');
 const ctx = canvas.getContext('2d');
 const paletteBar = document.getElementById('palette-bar');
 const projectPanel = document.getElementById('project-panel');
+const exportPanel = document.getElementById('export-panel');
+const openProjectPanel = document.getElementById('open-project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
 const versionTab = document.getElementById('version-tab');
 const toolTag = document.getElementById('tool-tag');
+versionTab.classList.add('panel');
+toolTag.classList.add('panel');
+
+const uiPrefs = loadUiPrefs();
+
+// App icon, left of the name — static (not itself clickable), same
+// `.version-tab-icon` treatment the tool tag's zoom glyph uses. Real glyph
+// TBD; '#' is a placeholder.
+const appIcon = document.createElement('div');
+appIcon.className = 'version-tab-icon';
+appIcon.textContent = '#';
 
 // Floats above the palette's right edge; slides left with it when the
 // layers panel pushes the palette over.
@@ -37,97 +64,188 @@ const versionLink = document.createElement('a');
 versionLink.href = ITCH_IO_URL;
 versionLink.target = '_blank';
 versionLink.rel = 'noopener';
-versionLink.textContent = `Pixi v${VERSION}`;
+versionLink.textContent = `Sprite v${VERSION}`;
+
+// Plain ASCII (!, @, ?) reads visibly bigger than the hand-picked symbol
+// glyphs used elsewhere in this fallback font (@ especially) — scaled
+// down via an inner span, not the button's own font-size: --block is a
+// real `em` value, so font-size on the button itself would also shrink
+// its width/height (they're derived from its own em context), leaving it
+// a smaller square than every other icon button instead of the same
+// size with a smaller glyph.
+function scaledGlyph(text) {
+  const span = document.createElement('span');
+  span.style.fontSize = '0.8em';
+  span.textContent = text;
+  return span;
+}
+
 // Plain text/Unicode stand-ins — real icons come later (a custom icon
 // font), swapped in by just changing this character, no markup change.
 const bugBtn = document.createElement('a');
 bugBtn.href = GITHUB_ISSUES_URL;
 bugBtn.target = '_blank';
 bugBtn.rel = 'noopener';
-bugBtn.className = 'version-tab-icon';
-bugBtn.textContent = '!';
-bugBtn.title = 'Report a bug';
+bugBtn.className = 'btn btn--icon';
+bugBtn.append(scaledGlyph('!'));
 
 const discordBtn = document.createElement('a');
 discordBtn.href = DISCORD_URL;
 discordBtn.target = '_blank';
 discordBtn.rel = 'noopener';
-discordBtn.className = 'version-tab-icon';
-discordBtn.textContent = '@';
-discordBtn.title = 'Join the Discord';
+discordBtn.className = 'btn btn--icon';
+discordBtn.append(scaledGlyph('@'));
 
 // Text for now, a real icon later — toggles the same Controls modal as "?".
-const helpBtn = document.createElement('button');
-helpBtn.className = 'version-tab-icon version-tab-help';
-helpBtn.textContent = '?';
-helpBtn.title = 'Controls';
-helpBtn.addEventListener('click', () => keybindHelp.toggle());
+const helpBtn = button({ glyph: scaledGlyph('?'), icon: true, onClick: () => keybindHelp.toggle() });
 
-versionTab.append(versionLink, bugBtn, discordBtn, helpBtn);
+versionTab.append(appIcon, versionLink, bugBtn, discordBtn, helpBtn);
+
+// Hold-`+Left/Right selects a version-tab button, Return activates it —
+// "everything keyboard-accessible". `~` (Global) separately pins/unpins the
+// corner tags.
+const versionNavItems = [versionLink, bugBtn, discordBtn, helpBtn];
+let versionNavIndex = 0;
+let heldBacktick = false;
+function updateVersionNavHighlight() {
+  versionNavItems.forEach((el, i) => el.classList.toggle('version-nav-focused', heldBacktick && i === versionNavIndex));
+}
 
 // Tool reference tag — mirrors version-tab on the opposite corner. Left
-// side: current tool + brush size. Right: zoom %, then primary/secondary
-// swatches. Content refreshed every frame from renderCanvas() (cheap: a
-// handful of textContent/background writes).
+// side: current tool + brush size. Right: zoom %, then the primary swatch.
+// Content refreshed every frame from renderCanvas() (cheap: a handful of
+// textContent/background writes).
 const toolLabel = document.createElement('div');
 toolLabel.className = 'tool-tag-label';
 const zoomIcon = document.createElement('div');
 zoomIcon.className = 'version-tab-icon';
 zoomIcon.textContent = '⌕';
-zoomIcon.title = 'Zoom';
 const zoomLabel = document.createElement('div');
-zoomLabel.className = 'tool-tag-label';
+zoomLabel.className = 'tool-tag-label tool-tag-label--divider';
 const primarySwatch = document.createElement('div');
 primarySwatch.className = 'tool-tag-swatch';
-primarySwatch.title = 'Primary color';
-const secondarySwatch = document.createElement('div');
-secondarySwatch.className = 'tool-tag-swatch';
-secondarySwatch.title = 'Secondary color';
-toolTag.append(zoomIcon, zoomLabel, toolLabel, primarySwatch, secondarySwatch);
+// Export progress (§14, export.js's onExportProgress) — a small bar that
+// takes the tool label's place while an export is running, so it doesn't
+// need its own reserved slot the rest of the time.
+const exportBar = document.createElement('div');
+exportBar.className = 'tool-tag-export';
+exportBar.hidden = true;
+const exportBarTrack = document.createElement('div');
+exportBarTrack.className = 'tool-tag-export-track';
+const exportBarFill = document.createElement('div');
+exportBarFill.className = 'tool-tag-export-fill';
+exportBarTrack.append(exportBarFill);
+exportBar.append(exportBarTrack);
+// Lingering export-failure marker — hidden while nothing has failed (or a
+// fresh export is running), shown as a short clickable label otherwise;
+// click opens a modal with the full error detail (openExportErrorModal,
+// below). Red/white styling only for failures the user can act on.
+const exportErrorLabel = document.createElement('div');
+exportErrorLabel.className = 'tool-tag-label tool-tag-export-error';
+exportErrorLabel.hidden = true;
+exportErrorLabel.addEventListener('click', () => { if (exportError) openExportErrorModal(exportError); });
+toolTag.append(zoomIcon, zoomLabel, toolLabel, exportBar, exportErrorLabel, primarySwatch);
 
-const MODE_LABELS = {
-  paint: 'Draw', antialiasedPaint: 'Draw (AA)',
-  fill: 'Fill', antialiasedFill: 'Fill (AA)',
-  erase: 'Erase',
-  selectRect: 'Select', selectWand: 'Select', selectPolygon: 'Select',
-  pan: 'Move', panning: 'Move',
-  shaperect: 'Shape: Rectangle', shapetriangle: 'Shape: Triangle', shapecircle: 'Shape: Circle',
-};
+const MODE_LABELS = { place: 'Place', paint: 'Paint', erase: 'Erase' };
+
+// A final export failure leaves a quiet marker here (cleared the moment
+// the next export starts) instead of an interrupting dialog — see
+// export.js's runExport for the retry-then-classify logic that decides
+// `actionable` (red/white, worth a click) vs. not.
+let exportError = null;
+onExportProgress((status) => {
+  exportBar.hidden = !status.active;
+  if (status.active) exportBarFill.style.width = Math.round((status.fraction ?? 0) * 100) + '%';
+  if ('error' in status) exportError = status.error;
+  exportErrorLabel.hidden = status.active || !exportError;
+  if (exportError) {
+    exportErrorLabel.textContent = exportError.short;
+    exportErrorLabel.classList.toggle('tool-tag-export-error--actionable', exportError.actionable);
+  }
+  updateToolTag();
+});
+
+// A hovered/focused button's own tip text takes over the tool tag's label
+// in place of a native tooltip — cleared back to the normal tool/brush
+// readout on mouseleave/blur. Set synchronously (not waiting for the next
+// animation frame) so it's responsive even while that loop is paused (e.g.
+// viewing a read-only group grid, § renderGroupCanvas).
+let hoverTip = null;
+onHoverTip((text) => { hoverTip = text; updateToolTag(); });
+// Whichever artboard the mouse is over in the group grid (§ canvas
+// pointermove, below) — "name WxH", or null over empty space between
+// cells. A button's own hoverTip still wins if somehow both are set.
+let groupHoverTip = null;
 
 function updateToolTag() {
-  const modeLabel = eyedropperActive ? 'Pick' : (MODE_LABELS[inputController && inputController.getMode()] || 'Draw');
-  const size = inputController ? inputController.getBrushSize() : 1;
-  toolLabel.textContent = `${size}px ${modeLabel}`;
   const rect = canvas.getBoundingClientRect();
+  // An export in progress takes over the label slot with the progress bar
+  // (already shown/hidden by the onExportProgress subscription above) —
+  // nothing else competes for it while that's up.
+  if (!exportBar.hidden) {
+    toolLabel.hidden = true;
+  } else if (activeGroupId) {
+    // The group grid (§ project panel group select) has no active tool or
+    // color — a hovered button's tip is still worth showing there, but the
+    // brush/mode readout and primary-swatch are meaningless outside actual
+    // editing, and the zoom % needs to read the grid's own camera, not the
+    // single-file canvas's.
+    const tip = hoverTip || groupHoverTip;
+    toolLabel.hidden = !tip; // nothing to show between artboards — don't render an empty tip section
+    toolLabel.textContent = tip || '';
+    primarySwatch.hidden = true;
+    const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
+    zoomLabel.textContent = Math.round(scale * 100) + '%';
+    return;
+  } else {
+    toolLabel.hidden = false;
+    const modeLabel = MODE_LABELS[inputController && inputController.getMode()] || 'Place';
+    const size = brushSize;
+    toolLabel.textContent = hoverTip || `${size}px ${modeLabel}`;
+  }
+  primarySwatch.hidden = false;
   const scale = (viewState.zoom || fitScale(model, rect.width, rect.height));
   zoomLabel.textContent = Math.round(scale * 100) + '%';
   primarySwatch.style.background = colors.primary();
-  secondarySwatch.style.background = colors.secondary();
 }
 
-// "`" hides/shows both corner tags at once.
-let tagsHidden = false;
-window.addEventListener('keydown', (e) => {
-  const tag = document.activeElement && document.activeElement.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (e.key === '`') {
-    tagsHidden = !tagsHidden;
-    versionTab.classList.toggle('hidden-tag', tagsHidden);
-    toolTag.classList.toggle('hidden-tag', tagsHidden);
-  }
-});
+// Corner-tag hide/show state — `~` (Global) pins/unpins both at once.
+let tagsHidden = uiPrefs.tagsHidden;
+versionTab.classList.toggle('hidden-tag', tagsHidden);
+toolTag.classList.toggle('hidden-tag', tagsHidden);
+function toggleTagsHidden() {
+  tagsHidden = !tagsHidden;
+  versionTab.classList.toggle('hidden-tag', tagsHidden);
+  toolTag.classList.toggle('hidden-tag', tagsHidden);
+  uiPrefs.tagsHidden = tagsHidden;
+  saveUiPrefs(uiPrefs);
+}
 
 // Timeline (top) and Palette (bottom) both shrink horizontally to clear
 // whichever side panel is open, rather than staying full width and
 // pushing anything — side panels just run the full viewport height.
-const SIDE_PANEL_WIDTH = 220;
+const SIDE_PANEL_WIDTH = BLOCK * 6; // must match --panel-width in style.css
 const PALETTE_HEIGHT = BLOCK;
 
-let projectReveal, layersReveal, timelineReveal, paletteReveal;
+let projectReveal, exportReveal, openProjectReveal, layersReveal, timelineReveal, paletteReveal;
 function updatePushes() {
-  const pushedLeft = !!(projectReveal && projectReveal.isFocused());
+  const projectOpen = !!(projectReveal && projectReveal.isFocused());
+  // Export and Open Project only ever show docked beside an open Project
+  // panel, and never both at once (each force-closes the other when
+  // opened, below) — if Project closes out from under whichever is open
+  // (e.g. unpinned via Tab), close it too.
+  if (!projectOpen) {
+    if (exportReveal && exportReveal.isFocused()) exportReveal.forceHide();
+    if (openProjectReveal && openProjectReveal.isFocused()) openProjectReveal.forceHide();
+  }
+  const exportOpen = !!(exportReveal && exportReveal.isFocused());
+  const openProjectOpen = !!(openProjectReveal && openProjectReveal.isFocused());
+  const secondSlotOpen = exportOpen || openProjectOpen;
+  if (exportPanel) exportPanel.style.setProperty('--export-left', (projectOpen ? SIDE_PANEL_WIDTH : 0) + 'px');
+  if (openProjectPanel) openProjectPanel.style.setProperty('--open-project-left', (projectOpen ? SIDE_PANEL_WIDTH : 0) + 'px');
+  const pushedLeft = projectOpen || secondSlotOpen;
   const pushedRight = !!(layersReveal && layersReveal.isFocused());
-  const leftPush = pushedLeft ? SIDE_PANEL_WIDTH : 0;
+  const leftPush = (projectOpen ? SIDE_PANEL_WIDTH : 0) + (secondSlotOpen ? SIDE_PANEL_WIDTH : 0);
   const rightPush = pushedRight ? SIDE_PANEL_WIDTH : 0;
   // The version tab always sits as far right/down as it can — right of the
   // layers panel when closed, flush with the window bottom when the
@@ -152,24 +270,194 @@ function updatePushes() {
 }
 
 // Shared reveal/hide/pin/focus mechanic (§15), one instance per panel.
-// Palette starts pinned (visible) by default (§7.2 flagged assumption 3).
-projectReveal = createRevealablePanel(projectPanel, document.getElementById('project-trigger'), { onVisibility: updatePushes });
-layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'), { onVisibility: updatePushes });
-timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'), { onVisibility: updatePushes });
-paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), { initiallyPinned: true, onVisibility: updatePushes });
+// Pin state is restored from uiPrefs (palette starts pinned by default —
+// §7.2 flagged assumption 3 — on a first run with nothing saved yet), and
+// persisted back on every pin/unpin so a reload looks the way you left it.
+// Export doesn't get this: it isn't independently pinnable (only ever
+// opens alongside Project, via openExport()), so there's no pin state of
+// its own worth remembering.
+projectReveal = createRevealablePanel(projectPanel, document.getElementById('project-trigger'), {
+  initiallyPinned: uiPrefs.project, onVisibility: updatePushes,
+  onPinChange: (v) => { uiPrefs.project = v; saveUiPrefs(uiPrefs); },
+});
+// No edge trigger — opened only by the Project panel's Export button
+// (openExport(), below); its own element is its "trigger" so hovering it
+// keeps it open with the same grace-period behavior as every other panel.
+exportReveal = createRevealablePanel(exportPanel, exportPanel, { onVisibility: updatePushes });
+// Same non-pinnable, own-element-as-trigger treatment as Export — opened
+// only by the Project panel's "Open" menu item (openProjectListPanel(), below).
+openProjectReveal = createRevealablePanel(openProjectPanel, openProjectPanel, { onVisibility: updatePushes });
+layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'), {
+  initiallyPinned: uiPrefs.layers, onVisibility: updatePushes,
+  onPinChange: (v) => { uiPrefs.layers = v; saveUiPrefs(uiPrefs); },
+});
+timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'), {
+  initiallyPinned: uiPrefs.timeline, onVisibility: updatePushes,
+  onPinChange: (v) => { uiPrefs.timeline = v; saveUiPrefs(uiPrefs); },
+});
+paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), {
+  initiallyPinned: uiPrefs.palette, onVisibility: updatePushes,
+  onPinChange: (v) => { uiPrefs.palette = v; saveUiPrefs(uiPrefs); },
+});
 updatePushes(); // final pass — the four constructions above ran with partial info
 const keybindHelp = createKeybindHelp();
 
-// Shift+Tab: pin/unpin every panel at once (not in the spec — added on
-// request). A plain toggle on whether *any* panel is currently pinned —
-// the earlier stash-and-restore-exact-prior-state version was a no-op
-// whenever nothing happened to be pinned yet, which read as broken.
+// Minimal generic modal for the export-error label's "click for more info"
+// (openExportErrorModal above). Mirrors keybind-help.js's proven
+// overlay+panel+fade pattern but with its own classes — deliberately not
+// shared, keybind-help.js is unrelated and untouched.
+let exportErrorOverlay = null;
+function openExportErrorModal(error) {
+  if (exportErrorOverlay) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const panel = document.createElement('div');
+  panel.className = 'modal-panel panel';
+  const title = document.createElement('div');
+  title.className = 'modal-title';
+  title.textContent = 'Export failed';
+  const body = document.createElement('div');
+  body.className = 'modal-body';
+  body.textContent = error.detail;
+  panel.append(title, body);
+  overlay.append(panel);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeExportErrorModal(); });
+  document.body.append(overlay);
+  exportErrorOverlay = overlay;
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+function closeExportErrorModal() {
+  if (!exportErrorOverlay) return;
+  const el = exportErrorOverlay;
+  exportErrorOverlay = null;
+  el.classList.remove('visible');
+  setTimeout(() => el.remove(), 180); // matches keybind-help.js's TRANSITION_MS
+}
+
+// Shift+Tab: pin/unpin every panel at once. A plain toggle on whether *any*
+// panel is currently pinned — the earlier stash-and-restore-exact-prior-state
+// version was a no-op whenever nothing happened to be pinned yet, which read
+// as broken.
 function toggleHideAllPanels() {
-  const reveals = [projectReveal, layersReveal, timelineReveal, paletteReveal];
+  // Colors/Layers/Timeline are removed outright in group view (setActiveGroup)
+  // — Shift+Tab shouldn't be able to pin them back open behind the scenes.
+  const reveals = activeGroupId ? [projectReveal] : [projectReveal, layersReveal, timelineReveal, paletteReveal];
   const anyPinned = reveals.some((r) => r.isPinned());
   for (const r of reveals) {
     if (anyPinned) r.forceHide();
     else r.setPinned(true);
+  }
+}
+
+// --- Focus-based control scheme: Ctrl(left)+Arrow focuses a panel (pulling
+// it out, red hairline), staying focused after keyup until focus moves
+// elsewhere — unlike the old hold-to-reveal Tab/C/\/T keys. `Tab` cycles
+// through PANEL_CYCLE; a tap of Ctrl alone (no arrow) returns to 'canvas'.
+let focusedPanel = 'canvas'; // 'canvas' | 'timeline' | 'layers' | 'colors' | 'projects'
+const PANEL_REVEAL = { timeline: timelineReveal, layers: layersReveal, colors: paletteReveal, projects: projectReveal };
+const PANEL_EL = { timeline: timelineBar, layers: layersPanel, colors: paletteBar, projects: projectPanel };
+const PANEL_CYCLE = ['timeline', 'layers', 'colors', 'projects'];
+function setFocus(panel) {
+  if (focusedPanel === panel) {
+    // Focusing the panel that's already focused pins/unpins it instead of
+    // no-op-ing — "call it twice in a row" toggles whether it stays open.
+    if (PANEL_REVEAL[panel]) PANEL_REVEAL[panel].togglePin();
+    return;
+  }
+  if (PANEL_REVEAL[focusedPanel]) PANEL_REVEAL[focusedPanel].setKeyHeld(false);
+  focusedPanel = panel;
+  if (PANEL_REVEAL[panel]) PANEL_REVEAL[panel].setKeyHeld(true);
+  syncFocusRing();
+}
+
+// Hovering a panel gives it keyboard focus too, same as Ctrl+Arrow — mouse
+// and keyboard stay in sync rather than needing a keyboard focus step after
+// an already-visible (hovered) panel. Colors/Layers/Timeline aren't
+// reachable in group view (§ setActiveGroup) — Projects is the only one
+// still worth hover-focusing there.
+const PANEL_TRIGGER_ID = { timeline: 'timeline-trigger', layers: 'layers-trigger', colors: 'palette-trigger', projects: 'project-trigger' };
+for (const name of PANEL_CYCLE) {
+  const trigger = document.getElementById(PANEL_TRIGGER_ID[name]);
+  const onHoverEnter = () => { if (name !== 'projects' && activeGroupId) return; if (focusedPanel !== name) setFocus(name); };
+  const onHoverLeave = () => { if (focusedPanel === name) setFocus('canvas'); };
+  PANEL_EL[name].addEventListener('mouseenter', onHoverEnter);
+  PANEL_EL[name].addEventListener('mouseleave', onHoverLeave);
+  if (trigger) { trigger.addEventListener('mouseenter', onHoverEnter); trigger.addEventListener('mouseleave', onHoverLeave); }
+}
+
+// #kb-focus-ring (index.html) is a single <body>-level element kept in
+// sync with whichever panel currently owns the keyboard, rather than a
+// class/::after on the panel itself — see the CSS rule's own comment for
+// why. Tracks position/size every frame (not just once, or on a resize
+// event) so it stays glued to the panel through its open/close width or
+// height transition too, not just its resting state. The loop starts only
+// while a panel actually is focused and stops the moment focus leaves, so
+// it costs nothing the rest of the time.
+const kbFocusRing = document.getElementById('kb-focus-ring');
+let focusRingFrame = null;
+// Rounding to a whole CSS pixel isn't actually enough: `devicePixelRatio`
+// itself is very often not a clean integer (OS display scaling, browser
+// zoom slightly off 100% — 1.015625 is a real observed value, not a typo),
+// so a "whole" CSS pixel still isn't a whole *device* pixel there. Two
+// edges of the same border can each land on a different fractional device
+// pixel and get anti-aliased by a different amount, rendering as two
+// visibly different shades of the exact same color. Snapping to the
+// nearest device pixel (round in device-pixel space, convert back to CSS
+// px) — not just the nearest CSS pixel — is what actually guarantees every
+// edge is crisp and identical regardless of zoom or display scaling.
+function snapToDevicePixel(cssPx) {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.round(cssPx * dpr) / dpr;
+}
+
+function syncFocusRing() {
+  cancelAnimationFrame(focusRingFrame);
+  const el = PANEL_EL[focusedPanel];
+  if (!el) { kbFocusRing.style.display = 'none'; return; }
+  kbFocusRing.style.display = 'block';
+  (function track() {
+    const r = el.getBoundingClientRect();
+    const left = snapToDevicePixel(r.left), top = snapToDevicePixel(r.top);
+    kbFocusRing.style.left = left + 'px';
+    kbFocusRing.style.top = top + 'px';
+    kbFocusRing.style.width = (snapToDevicePixel(r.right) - left) + 'px';
+    kbFocusRing.style.height = (snapToDevicePixel(r.bottom) - top) + 'px';
+    focusRingFrame = requestAnimationFrame(track);
+  })();
+}
+
+// The read-only group grid (§ project panel group select) has no colors,
+// layers, or frames of its own to show — it's an overview of other files'
+// already-composited pixels, none of it editable. Colors/Layers/Timeline
+// have nothing to do there, so entering group view force-closes and hides
+// all three (CSS keyed off `.group-view` on <body>, toggled here) instead
+// of leaving them reachable but pointless. The single call site every
+// `activeGroupId` assignment now goes through, so this can't be missed by
+// a future one.
+function setActiveGroup(id) {
+  // Remember the outgoing collection's own zoom/pan (§7 issue: "remember
+  // zoom per collection"), and restore the incoming one's — stored directly
+  // on the collection object, same as .order/.collapsed. Only persists on
+  // switch, not live-tracked mid-pan/zoom.
+  if (activeGroupId) {
+    const prev = project.collections.find((c) => c.id === activeGroupId);
+    if (prev) { prev.zoom = groupViewState.zoom; prev.panX = groupViewState.panX; prev.panY = groupViewState.panY; }
+  }
+  activeGroupId = id;
+  fileSelection = null; // group view has no per-file menu concept
+  multiLayerSelection = null; // group view has no layers panel either
+  groupHoverTip = null; // stale artboard tip from whichever group was last shown
+  document.body.classList.toggle('group-view', !!id);
+  if (id) {
+    const target = project.collections.find((c) => c.id === id);
+    if (target && target.zoom != null) { groupViewState.zoom = target.zoom; groupViewState.panX = target.panX || 0; groupViewState.panY = target.panY || 0; }
+    else resetGroupView();
+    layersReveal.forceHide();
+    timelineReveal.forceHide();
+    paletteReveal.forceHide();
+    if (focusedPanel === 'colors' || focusedPanel === 'layers' || focusedPanel === 'timeline') setFocus('canvas');
+  } else {
+    resetGroupView();
   }
 }
 
@@ -182,22 +470,36 @@ function toggleHideAllPanels() {
 let backend, project;
 try {
   backend = await chooseBackend();
-  project = (await loadProject(backend)) || createProject('My Project');
+  // Reopen whichever project was open last time; failing that, whatever's
+  // most recently touched in the registry; failing that (first-ever run),
+  // start a fresh one. Projects persist indefinitely once saved (§
+  // ProjectSwitching) — this is just which one to land on, not the only one.
+  project = (uiPrefs.lastProjectId && await loadProject(backend, uiPrefs.lastProjectId)) || null;
+  if (!project) {
+    const registry = await listProjects(backend);
+    if (registry.length) {
+      const mostRecent = registry.reduce((a, b) => (a.updatedAt > b.updatedAt ? a : b));
+      project = await loadProject(backend, mostRecent.id);
+    }
+  }
+  if (!project) project = createProject('My Project');
 } catch (err) {
   console.error('Storage backend unavailable, autosave disabled:', err);
   backend = { write: async () => {}, read: async () => null, delete: async () => {}, list: async () => [] };
   project = createProject('My Project');
 }
+uiPrefs.lastProjectId = project.id;
+saveUiPrefs(uiPrefs);
 const autosave = debounce(() => saveProject(backend, project).catch((err) => console.error('Autosave failed:', err)));
 autosave();
 
 // `model` is a stable view object; switching files/layers/frames re-points
 // model.pixels at that combination's array in place (same reference the
-// PixiFile stores) rather than rebuilding every module that holds `model`.
+// SpriteFile stores) rather than rebuilding every module that holds `model`.
 // stride = the logical canvas width, which can exceed the visible width
 // after a shrink (§13.4) — width/height stay the visible (edit/display)
 // window, cropped from the top-left of that wider backing array.
-const model = { width: 0, height: 0, stride: 0, pixels: null };
+const model = { width: 0, height: 0, stride: 0, pixels: null, colors: null };
 
 function bindActiveFile() {
   const file = getActiveFile(project);
@@ -205,22 +507,116 @@ function bindActiveFile() {
   model.height = file.visibleHeight;
   model.stride = file.canvasWidth;
   model.pixels = activePixels(file);
+  model.colors = file.colors;
 }
 bindActiveFile();
 
 let inputController = null;
-let showGrid = true;
-let showRuler = false;
+let showGrid = uiPrefs.showGrid;
+let showRuler = uiPrefs.showRuler;
+// Shared step order for every checker/solid backdrop in the app (the
+// single-file canvas's own `u`, its app-wide `Shift+U` chrome, and the
+// group grid's `U` — the group grid has no per-artboard canvas background
+// of its own, every artboard is always transparent, showing this one
+// shared backdrop through it) — transparent, then dark to light, looping.
+// One array: all three cycles share the exact same stops.
+const BG_STEPS = ['checker', 'black', 'grey', 'white'];
+// Pre-unification saves may still have the old 'dark'/'mid'/'light' app
+// backdrop names on disk — map them onto their new equivalents so an
+// upgrade doesn't silently reset (or crash indexOf into -1) a returning
+// user's chosen background.
+const LEGACY_BG_NAMES = { dark: 'black', mid: 'grey', light: 'white' };
+function normalizeBg(value, fallback) { return LEGACY_BG_NAMES[value] || value || fallback; }
+
+// One shared "advance to the next step, persist, redraw" shape behind
+// every backdrop cycle key below — they differ only in which uiPrefs key
+// they read/write and their own starting fallback.
+function makeBgCycler(prefsKey, fallback) {
+  let value = normalizeBg(uiPrefs[prefsKey], fallback);
+  return {
+    get: () => value,
+    set(v) { value = v; uiPrefs[prefsKey] = value; saveUiPrefs(uiPrefs); },
+    cycle() {
+      this.set(BG_STEPS[(BG_STEPS.indexOf(value) + 1) % BG_STEPS.length]);
+      draw();
+    },
+  };
+}
+
+const canvasBgCycler = makeBgCycler('canvasBg', 'checker');
+function cycleCanvasBg() { canvasBgCycler.cycle(); }
+
+// App-wide chrome background (Shift+U) — the space the canvas itself sits
+// on, painted by renderer.js as part of the canvas fill (the canvas element
+// covers the full viewport, so a CSS body background would never be
+// visible). Distinct from the sprite's own backdrop (`u`/canvasBgCycler
+// above), though both share the same transparency checkerboard —
+// renderer.js draws it once, pixel-aligned to the canvas, as a base layer
+// under both, so the two can never drift out of alignment with each other.
+const appBgCycler = makeBgCycler('appBg', 'black');
+function cycleAppBg() { appBgCycler.cycle(); }
+
+// Ctrl+U: cycle the canvas and app backdrops together instead of one at a
+// time. If they're currently different colors, the first press just snaps
+// the app backdrop onto the canvas's own (canvas wins) rather than also
+// stepping past it — only once they agree does a press actually cycle
+// both, in step, from there. Genuinely its own thing (not another
+// makeBgCycler instance) — it reads and compares two cyclers' values
+// together, which the shared factory has no shape for.
+function cycleBothBg() {
+  if (appBgCycler.get() !== canvasBgCycler.get()) {
+    appBgCycler.set(canvasBgCycler.get());
+    draw();
+  } else {
+    appBgCycler.cycle(); // also redraws
+    canvasBgCycler.set(appBgCycler.get());
+  }
+}
+
+const groupAppBgCycler = makeBgCycler('groupAppBg', 'white');
+function cycleGroupAppBg() { groupAppBgCycler.cycle(); }
 let hoverPixel = null;
 // Declared this early because updateToolTag() (called from renderCanvas(),
 // which the animateCursor loop invokes synchronously right away) reads it —
 // a `let` declared further down is in the temporal dead zone until its own
 // line runs, so referencing it before then throws and silently aborts the
 // entire module, which is what broke rendering/the tool tag altogether.
-let eyedropperActive = false;
-let eyedropperPreview = null;
+let heldD = false;
+let dPickPreview = null;
+// Keyboard-first control scheme (CONTEXT.md): brush size is keyboard-owned
+// state, read by both the tool tag and input.js's mouse handlers (which
+// just mirror whatever's set here). Paint/erase is momentary now — which
+// key/button is down at the time, not a persisted mode.
+let brushSize = 1;
+// Panel keyboard focus: a position in the panel's visible combined order
+// (project-panel.js/layers-panel.js) that Up/Down moves through — distinct
+// from `activeFileIndex`/`activeLayerIndex`, since focus can land on a
+// header (to fold/unfold it with Space) where "the active file/layer"
+// doesn't mean anything. Landing on a file/layer still syncs the active
+// one, same as before. Declared this early (like brushSize
+// above) because redrawProjectPanel()'s first call, a few lines down, reads
+// it via focusedCollectionId() before this point in the file would
+// otherwise have run.
+let tabFocusPos = null;
+let backslashFocusPos = null;
+let layerSelection = null; // { anchor, to } inclusive layer/group range, while Layers panel Shift+Up/Down selects multiple
 let selectionMask = null;
 let selectionRender = null;
+// The Collection currently shown as a read-only artboard grid instead of
+// the normal single-file editing canvas (§ project panel group select) —
+// null means the canvas shows the active file as usual.
+let activeGroupId = null;
+// Multi-file selection in the project panel (Shift/Alt-click, § buildFileRow)
+// — a Set of `project.files` indices, or null when nothing's multi-selected
+// (the plain single active-file highlight applies instead). Indices, not
+// file references, matching how layerSelection/frameSelection already
+// track transient panel selection elsewhere in this app.
+let fileSelection = null;
+// Same idea, for the layers panel (Shift/Alt-click, § layers-panel.js's
+// buildLayerRow) — a Set of `file.layers` indices, distinct from the
+// existing `layerSelection` {anchor,to} range (that one drives the
+// backslash+arrows bulk-reorder feature, an unrelated keyboard mechanic).
+let multiLayerSelection = null;
 let clipboard = null;
 let rotating = null; // { snapshot, center } while R is held
 const playback = { fps: 8, onionSkin: false, onionLayerOnly: false, playing: false, timer: null };
@@ -228,6 +624,21 @@ const playback = { fps: 8, onionSkin: false, onionLayerOnly: false, playing: fal
 // Fixed range: 2 frames each direction, not user-configurable (§12.3).
 const ONION_RANGE = 2;
 function computeOnionFrames(file) {
+  // T+Shift+Left/Right (multi-frame select) onion-ghosts every frame in the
+  // selected range instead of the fixed ±2 — "onion all" (§ new control
+  // scheme), still focused on the active frame as the real (non-ghost) one.
+  // This overrides the plain onion-skin toggle rather than requiring it —
+  // a multi-frame selection is itself the signal to show the ghosts.
+  if (frameSelection) {
+    const lo = Math.min(frameSelection.anchor, frameSelection.to);
+    const hi = Math.max(frameSelection.anchor, frameSelection.to);
+    const ghosts = [];
+    for (let i = lo; i <= hi; i++) {
+      if (i === file.activeFrameIndex) continue;
+      ghosts.push({ side: i < file.activeFrameIndex ? 'before' : 'after', distance: Math.abs(i - file.activeFrameIndex), pixels: ghostSource(file, i, playback.onionLayerOnly) });
+    }
+    return ghosts;
+  }
   if (!playback.onionSkin) return null;
   const ghosts = [];
   for (let d = 1; d <= ONION_RANGE; d++) {
@@ -240,13 +651,14 @@ function computeOnionFrames(file) {
   }
   return ghosts;
 }
+let frameSelection = null; // { anchor, to } inclusive frame-index range, while T+Shift+Left/Right selects multiple
 
 
 const palette = createPalette(paletteBar, project.palette, () => autosave(), (hex) => {
   selectionApi.set(maskFromColor(model, hex));
   draw();
 });
-const colors = { primary: () => palette.getPrimary(), secondary: () => palette.getSecondary() };
+const colors = { primary: () => palette.getPrimary() };
 
 let contentDragSnapshot = null;
 const selectionApi = {
@@ -277,13 +689,24 @@ const selectionApi = {
   },
 };
 
-// Undo/redo lives on the active PixiFile (§5, §10) — this just resolves it.
+// Undo/redo lives on the active SpriteFile (§5, §10) — this just resolves it.
 const history = {
   // Full refresh (thumbnails included) once per committed edit — not per
   // animation frame or per pointermove, which is what made this laggy
   // before (see the animateCursor comment further down).
   commit: (cmd) => { commitCommand(getActiveFile(project), cmd); autosave(); draw(); },
 };
+
+// Layer structural edits (add/delete/reorder) go through undo too, as a
+// whole-state snapshot rather than a pixel diff — snapshot before, run the
+// mutation, snapshot after, hand both to history.commit.
+function commitLayerChange(file, mutate) {
+  const before = { layers: structuredClone(file.layers), frames: structuredClone(file.frames), activeLayerIndex: file.activeLayerIndex };
+  mutate();
+  const after = { layers: structuredClone(file.layers), frames: structuredClone(file.frames), activeLayerIndex: file.activeLayerIndex };
+  bindActiveFile();
+  history.commit({ type: 'layers', before, after });
+}
 
 function resize() {
   canvas.width = canvas.clientWidth * devicePixelRatio;
@@ -306,17 +729,90 @@ const CURSOR_TRAIL_EASE = 0.35; // 1 = no lag (snaps instantly), lower = laggier
 let displayCursorPos = null;
 
 function renderCanvas() {
+  if (activeGroupId) { renderGroupCanvas(); return; }
   // The canvas always shows the composited result of every visible layer
   // (§11), while `model` (the active layer's own raw buffer) is what
   // painting/selection/undo actually mutate.
   const file = getActiveFile(project);
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
-  const brushCursor = inputController && { mode: inputController.getMode(), size: inputController.getBrushSize() };
+  const brushCursor = { mode: (inputController && inputController.getMode()) || 'place', size: brushSize };
   render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
-    showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos,
+    showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos, canvasBg: canvasBgCycler.get(), appBg: appBgCycler.get(),
   });
   updateToolTag();
+}
+
+// Read-only grid view of a Collection's files (§ project panel group
+// select) — no editing tool touches these pixels, this is display only.
+// `groupId` defaults to whichever collection is actively open in the group
+// grid, but export.js's collection export needs this for an arbitrary
+// collection without first entering group view for it.
+function groupArtboards(groupId = activeGroupId) {
+  const combined = projectOrder(project); // order-sorted [header|file] view
+  const artboards = [];
+  combined.forEach((entry) => {
+    if (entry.isHeader || entry.item.groupId !== groupId) return;
+    const f = entry.item;
+    // `fileIndex` isn't read by renderArtboardGrid itself — carried through
+    // purely so double-clicking an artboard (§ canvas dblclick, below) can
+    // jump straight to the right File without a fragile lookup by name.
+    const fileIndex = project.files.indexOf(f);
+    artboards.push({ name: f.name, width: f.visibleWidth, height: f.visibleHeight, pixels: compositeFrame(f), fileIndex });
+  });
+  return artboards;
+}
+
+// The whole laid-out grid, treated as one "model" purely so the existing
+// fit/min/max zoom-bound math (viewport.js, written for the single-file
+// canvas) applies unchanged to panning/zooming the collection as a whole.
+// The active Collection's own preferred wrap-column count (§ project panel
+// group select "Grid columns"), or undefined to fall back to the default
+// auto square-ish layout.
+function activeGridset() {
+  const c = project.collections.find((c) => c.id === activeGroupId);
+  return c && c.gridset;
+}
+
+function groupLayoutModel() {
+  const layout = computeArtboardLayout(groupArtboards(), activeGridset());
+  return { width: Math.max(1, layout.totalW), height: Math.max(1, layout.totalH) };
+}
+
+// This is an overview, not a single sprite being edited — "fit" leaves a
+// margin around the whole grid instead of running it edge-to-edge (which is
+// what the single-file canvas's own fitScale does, floored to whole pixels
+// and never below 1:1 — both wrong here: a large collection needs to shrink
+// below 1:1 to fit at all, and it should never fit flush to the viewport).
+const GROUP_FIT_PADDING = 96; // screen px margin on every side at "fit" zoom
+function groupFitScale(layoutModel, viewW, viewH) {
+  return Math.max(0.05, Math.min((viewW - GROUP_FIT_PADDING * 2) / layoutModel.width, (viewH - GROUP_FIT_PADDING * 2) / layoutModel.height));
+}
+
+function renderGroupCanvas() {
+  const artboards = groupArtboards();
+  const rect = canvas.getBoundingClientRect();
+  const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
+  renderArtboardGrid(ctx, canvas.clientWidth, canvas.clientHeight, artboards, {
+    appBg: groupAppBgCycler.get(), scale, panX: groupViewState.panX, panY: groupViewState.panY, gridset: activeGridset(),
+  });
+  updateToolTag();
+}
+
+function groupZoomTo(nextScale) {
+  const rect = canvas.getBoundingClientRect();
+  const layoutModel = groupLayoutModel();
+  const fit = groupFitScale(layoutModel, rect.width, rect.height);
+  const min = minZoomScale(layoutModel, rect.width, rect.height);
+  const max = maxZoomScale(layoutModel, rect.width, rect.height);
+  groupViewState.zoom = Math.max(min, Math.min(max, nextScale));
+  if (Math.abs(groupViewState.zoom - fit) < 0.01) { groupViewState.zoom = fit; groupViewState.panX = 0; groupViewState.panY = 0; }
+  draw();
+}
+function groupZoomStep(dir) {
+  const rect = canvas.getBoundingClientRect();
+  const current = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
+  groupZoomTo(current * (dir > 0 ? 1.15 : 1 / 1.15));
 }
 
 function draw() {
@@ -329,65 +825,501 @@ function draw() {
 }
 
 (function animateCursor() {
-  if (hoverPixel) {
-    if (!displayCursorPos) displayCursorPos = { x: hoverPixel.x, y: hoverPixel.y };
-    displayCursorPos.x += (hoverPixel.x - displayCursorPos.x) * CURSOR_TRAIL_EASE;
-    displayCursorPos.y += (hoverPixel.y - displayCursorPos.y) * CURSOR_TRAIL_EASE;
-  } else {
-    displayCursorPos = null;
+  // The group grid has nothing that animates (no cursor trail, nothing
+  // live), so redrawing it 60x/sec here is pure waste. Every state change
+  // it cares about (zoom, pan, backdrop cycle, selecting a different group)
+  // already calls draw()/renderCanvas() on its own, so skipping this loop's
+  // call entirely while it's showing loses nothing.
+  if (!activeGroupId) {
+    if (hoverPixel) {
+      if (!displayCursorPos) displayCursorPos = { x: hoverPixel.x, y: hoverPixel.y };
+      displayCursorPos.x += (hoverPixel.x - displayCursorPos.x) * CURSOR_TRAIL_EASE;
+      displayCursorPos.y += (hoverPixel.y - displayCursorPos.y) * CURSOR_TRAIL_EASE;
+    } else {
+      displayCursorPos = null;
+    }
+    renderCanvas();
   }
-  renderCanvas();
   requestAnimationFrame(animateCursor);
 })();
 
+// redrawProjectPanel() fully rebuilds the panel's DOM (innerHTML=''),
+// resetting scroll to the top — used after that rebuild to bring a specific
+// file or collection row back into view instead of leaving the list stuck
+// at the top. Shared by new-file creation and inline rename.
+function scrollProjectRowIntoView({ scrollToFileIndex, scrollToCollectionId } = {}) {
+  const selector = scrollToFileIndex != null ? `[data-file-index="${scrollToFileIndex}"]`
+    : scrollToCollectionId != null ? `[data-collection-id="${scrollToCollectionId}"]`
+    : null;
+  const row = selector && projectPanel.querySelector(selector);
+  if (row) row.scrollIntoView({ block: 'nearest' });
+}
+
+// The Collection a new File should join by default: whichever one is
+// currently being worked on — the open group grid, or the active File's own
+// Collection — rather than always whichever Collection happens to sit last
+// in display order.
+function currentCollectionId() {
+  if (activeGroupId) return activeGroupId;
+  projectOrder(project); // refreshes each file's derived .groupId
+  const file = getActiveFile(project);
+  if (file && file.groupId != null) return file.groupId;
+  const lc = lastCollection(project);
+  return lc ? lc.id : null;
+}
+
+// Shared by the size picker's fixed presets and its Current option — both
+// just resolve a (w, h) differently, then land the new File the same way.
+function commitNewFile(w, h) {
+  const collectionId = currentCollectionId(); // read before exiting group view below
+  setActiveGroup(null); // a new file takes over the canvas even if a collection grid was open
+  addFile(project, `sprite${project.files.length + 1}`, w, h, collectionId);
+  bindActiveFile();
+  resetView();
+  redrawProjectPanel();
+  scrollProjectRowIntoView({ scrollToFileIndex: project.activeFileIndex });
+  draw();
+  autosave();
+}
+
+// Makes File `i` the active one, keeping the current zoom/pan — shared by
+// a plain file-row click and double-clicking an artboard in the group grid
+// (§ canvas dblclick listener, below).
+function selectFile(i) {
+  project.activeFileIndex = i;
+  fileSelection = null; // switching file drops any multi-select
+  setActiveGroup(null); // selecting a file exits the read-only group grid
+  bindActiveFile(); selectionApi.clear(); redrawProjectPanel(); draw();
+}
+
 function redrawProjectPanel() {
   renderProjectPanel(projectPanel, project, {
-    onChange: () => { bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw(); },
-    onAddFile: (w, h) => {
-      addFile(project, `sprite${project.files.length + 1}`, w, h);
-      // New file defaults to PICO-8, unless it's the Game Boy DMG screen
-      // size specifically, which defaults to the Game Boy palette instead.
-      palette.loadPreset(w === 160 && h === 144 ? 'dmg' : 'pico8');
-      bindActiveFile();
-      resetView();
+    onChange: (scrollTo) => {
+      bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel();
+      if (scrollTo) scrollProjectRowIntoView(scrollTo);
+      draw();
+      if (exportReveal && exportReveal.isFocused()) redrawExportPanel();
+    },
+    onSelectFile: (i) => selectFile(i),
+    onShiftSelectFile: (targetIndex) => shiftSelectFile(targetIndex),
+    onAltSelectFile: (targetIndex) => altSelectFile(targetIndex),
+    onSelectGroup: (id) => {
+      setActiveGroup(id); // restores (or resets) that collection's own zoom/pan
+      redrawProjectPanel(); draw();
+    },
+    onSetGridset: (collection, n) => {
+      collection.gridset = n || null;
       redrawProjectPanel();
       draw();
       autosave();
     },
+    onAddFile: (w, h) => commitNewFile(w, h),
+    // "Current" (bottom of the New File size picker): same size as
+    // whichever File was most recently worked on in the collection this
+    // new one is about to land in — falls back to the new-project default
+    // (9x9) if that collection has no files yet to match.
+    onAddFileCurrent: () => {
+      const targetId = currentCollectionId();
+      const ref = targetId && mostRecentFileIn(project, targetId);
+      commitNewFile(ref ? ref.visibleWidth : 9, ref ? ref.visibleHeight : 9);
+    },
     onResizeFile: (file, w, h) => {
       resizeCanvas(file, w, h);
+      file.updatedAt = Date.now(); // § project.js's mostRecentFileIn — resize isn't routed through commitCommand
       if (file === getActiveFile(project)) { bindActiveFile(); resetView(); }
       redrawProjectPanel();
       draw();
       autosave();
     },
-    onExport: () => openExport(),
-    onReorderFile: (from, to) => { reorderFile(project, from, to); redrawProjectPanel(); autosave(); },
-  });
+    onExportFile: (file, i) => {
+      project.activeFileIndex = i;
+      setActiveGroup(null);
+      bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw();
+      openExport({ kind: 'file', file, fps: playback.fps });
+    },
+    onExportCollection: (collection) => {
+      openExport({ kind: 'collection', name: collection.name, artboards: groupArtboards(collection.id), gridset: collection.gridset });
+    },
+    onReorder: (from, to) => { moveProjectItem(project, from, to); redrawProjectPanel(); autosave(); },
+    onRemoveFile: (i) => {
+      deleteFile(project, i);
+      bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw();
+      autosave();
+    },
+    onAddCollection: () => { addCollection(project); redrawProjectPanel(); autosave(); },
+    onDeleteCollection: (id) => {
+      deleteCollection(project, id);
+      if (activeGroupId === id) { setActiveGroup(null); draw(); }
+      redrawProjectPanel();
+      autosave();
+    },
+    onOpenProject: (anchor) => openProjectPicker(anchor),
+  }, focusedCollectionId(), activeGroupId, fileSelection);
+}
+
+// Shift+click a file (§ buildFileRow): select it and every file between it
+// and the current active file — but only within one Collection. Different
+// collection (or the target IS the current file, i.e. no real range) is a
+// no-op, same as this app's other "nothing to do" guards rather than doing
+// something surprising.
+function shiftSelectFile(targetIndex) {
+  projectOrder(project); // refreshes every file's derived .groupId
+  const currentFile = project.files[project.activeFileIndex];
+  const targetFile = project.files[targetIndex];
+  if (!currentFile || !targetFile || currentFile.groupId == null || currentFile.groupId !== targetFile.groupId) return;
+  const members = visibleOrder(projectOrder(project))
+    .filter((e) => !e.isHeader && e.item.groupId === currentFile.groupId)
+    .map((e) => e.item);
+  const a = members.indexOf(currentFile), b = members.indexOf(targetFile);
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  fileSelection = new Set(members.slice(lo, hi + 1).map((f) => project.files.indexOf(f)));
+  openFileSelectionMenu(targetIndex);
+}
+
+// Alt+click a file (§ buildFileRow): add it to whatever's already
+// multi-selected (starting from just the current active file if nothing
+// was yet) — unlike Shift, not restricted to one collection.
+function altSelectFile(targetIndex) {
+  if (!fileSelection) fileSelection = new Set([project.activeFileIndex]);
+  fileSelection.add(targetIndex);
+  openFileSelectionMenu(targetIndex);
+}
+
+// Clicking away from a multi-select menu without picking anything collapses
+// the selection back down too — passed as every such menu's `onDismiss`.
+function dismissFileSelection() {
+  fileSelection = null;
+  redrawProjectPanel();
+}
+
+// Resize/Export/Remove all for the whole multi-selection, anchored (chevron
+// included, same as every other row menu) at whichever file was most
+// recently added to it — the same "⋯" menu shape a single file gets, just
+// scoped wider. Every action ends the multi-select the same way dismissing
+// it does — the menu was for this one operation.
+function openFileSelectionMenu(lastAddedIndex) {
+  redrawProjectPanel();
+  const anchor = projectPanel.querySelector(`[data-file-index="${lastAddedIndex}"]`);
+  if (!anchor || !fileSelection) return;
+  const files = [...fileSelection].map((i) => project.files[i]).filter(Boolean);
+  openSlideOut(anchor, [
+    { label: 'Resize canvas', onClick: () => openMultiResizePopup(anchor, files) },
+    { label: 'Export', onClick: () => exportSelectedFiles(files) },
+    { label: 'Remove all', onClick: () => removeSelectedFiles(files) },
+  ], { onDismiss: dismissFileSelection });
+}
+
+function openMultiResizePopup(anchor, files) {
+  const items = [...NEW_FILE_SIZES].reverse().map(({ label, w, h }) => ({
+    label,
+    onClick: () => {
+      for (const file of files) {
+        resizeCanvas(file, w, h);
+        file.updatedAt = Date.now(); // § project.js's mostRecentFileIn
+      }
+      fileSelection = null;
+      bindActiveFile(); resetView(); redrawProjectPanel(); draw(); autosave();
+    },
+  }));
+  openSlideOut(anchor, items, { side: 'up', onDismiss: dismissFileSelection });
+}
+
+// One PNG download per selected file (the same default 'e' itself exports
+// a single active file with) — a full per-file format/scale picker for a
+// multi-export is more than this needed yet.
+async function exportSelectedFiles(files) {
+  for (const file of files) await exportFile(file, { format: 'png', scale: 1, mode: 'canvas' });
+  fileSelection = null;
+  redrawProjectPanel();
+}
+
+// Descending index order — deleting high indices first means earlier ones
+// never shift out from under the next delete. deleteFile's own "at least
+// one file" guard already stops short of emptying the project entirely.
+function removeSelectedFiles(files) {
+  const indices = files.map((f) => project.files.indexOf(f)).filter((i) => i >= 0).sort((a, b) => b - a);
+  for (const i of indices) deleteFile(project, i);
+  fileSelection = null;
+  bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw();
+  autosave();
+}
+
+// The collection header currently under keyboard focus (Tab held, Up/Down
+// navigated onto it) — null whenever focus is on a file instead, or Tab
+// hasn't been used to navigate at all this hold.
+function focusedCollectionId() {
+  if (tabFocusPos === null) return null;
+  const list = visibleOrder(projectOrder(project));
+  const entry = list[tabFocusPos];
+  return entry && entry.isHeader ? entry.item.id : null;
 }
 redrawProjectPanel();
 
-// E (§14): reveals the Project panel if hidden, then opens the export
-// context bar beside the currently selected file's row.
-function openExport() {
+// What the Export panel is currently showing — a File, a Collection, or
+// the whole Project (§ export-panel.js's own `target` shapes) — so a
+// generic refresh (e.g. onChange, below, whenever anything the panel might
+// be displaying could have changed) knows what to re-render without every
+// caller having to re-supply it.
+let exportTarget = null;
+function redrawExportPanel() {
+  if (exportTarget) renderExportPanel(exportPanel, exportTarget);
+}
+
+// Opens the Export panel already showing `target`, docked beside the
+// Project panel (which it reveals/pins open too, since Export only makes
+// sense next to it). Switching to a new target while already open just
+// re-points it, rather than toggling closed — only the plain "E" shortcut
+// (toggleExportForActiveFile, below) toggles.
+function openExport(target) {
+  if (openProjectReveal.isPinned()) openProjectReveal.forceHide(); // same docked slot — mutually exclusive
+  exportTarget = target;
   projectReveal.setPinned(true);
-  const anchor = projectPanel.querySelector('.file-row.active') || projectPanel;
-  openExportBar(anchor, getActiveFile(project), colors.secondary);
+  exportReveal.setPinned(true);
+  redrawExportPanel();
+}
+
+function toggleExportForActiveFile() {
+  if (exportReveal.isPinned()) { exportReveal.forceHide(); return; }
+  openExport({ kind: 'file', file: getActiveFile(project), fps: playback.fps });
+}
+
+async function redrawOpenProjectPanel() {
+  const registry = await listProjects(backend);
+  const otherProjects = registry.filter((entry) => entry.id !== project.id).sort((a, b) => b.updatedAt - a.updatedAt);
+  renderOpenProjectPanel(openProjectPanel, otherProjects, async (entry) => {
+    const p = await loadProject(backend, entry.id);
+    if (p) await switchToProject(p);
+    openProjectReveal.forceHide();
+  }, async (entry) => {
+    await deleteProject(backend, entry.id);
+    redrawOpenProjectPanel();
+  }, () => {
+    openProjectReveal.forceHide();
+    newProject();
+  });
+}
+
+// "Open" (project panel menu, § openProjectPicker below): docks the list of
+// other saved projects beside Project, same treatment as Export (openExport
+// above) rather than a floating slide-out menu — switching projects is a
+// real navigation action with its own list, not a one-off pick.
+function openProjectListPanel() {
+  if (openProjectReveal.isPinned()) { openProjectReveal.forceHide(); return; }
+  if (exportReveal.isPinned()) exportReveal.forceHide(); // same docked slot — mutually exclusive
+  projectReveal.setPinned(true);
+  openProjectReveal.setPinned(true);
+  redrawOpenProjectPanel();
+}
+
+// --- Project switching (§ ProjectSwitching, Tab+N/Tab+O) ---
+// Only one project is ever open at a time (no simultaneous multi-project),
+// but every saved project persists in the registry indefinitely — switching
+// away doesn't touch the old one, it just stops being what's on screen.
+async function switchToProject(newProject) {
+  await saveProject(backend, project); // flush the outgoing project's latest edits first
+  project = newProject;
+  uiPrefs.lastProjectId = project.id;
+  saveUiPrefs(uiPrefs);
+  palette.setState(project.palette);
+  setActiveGroup(null); // a different project has no relation to the previous one's group view
+  bindActiveFile();
+  resetView();
+  selectionApi.clear();
+  redrawProjectPanel();
+  redrawLayersPanel();
+  redrawTimelinePanel();
+  draw();
+  autosave();
+}
+
+// Import (project panel menu): a real system file-picker dialog
+// (<input type="file"> — the native/platform picker, no custom UI of its
+// own), accepting the same whole-project .sprite archive
+// exportProjectSprite (Tab+Shift+E) writes — its inverse — or a
+// pre-archive plain-JSON whole-project export, for anything exported
+// before that format existed. Routed through saveProject+loadProject
+// rather than switched to directly, so an imported project picks up the
+// same field defaults/migrations every other saved project gets on load.
+function importProject() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.sprite,.json,application/json';
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B; // 'PK' — zip local-file-header signature
+      let data;
+      if (isZip) {
+        const entries = unzipSync(bytes);
+        const decode = (name) => JSON.parse(new TextDecoder().decode(entries[name]));
+        const meta = decode('project.json');
+        data = {
+          name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex,
+          collections: meta.collections, files: meta.fileNames.map((name) => parseFile(decode(`${name}.sprite`), entries[`${name}.sprite.bin`])),
+        };
+      } else {
+        data = JSON.parse(new TextDecoder().decode(bytes));
+        data.files = data.files.map((f) => parseFile(f, null));
+      }
+      // Fresh id — importing an exported copy of a still-open (or
+      // previously-imported) project shouldn't collide with it in the registry.
+      const imported = { ...data, id: crypto.randomUUID() };
+      await saveProject(backend, imported);
+      const p = await loadProject(backend, imported.id);
+      if (p) await switchToProject(p);
+    } catch (err) {
+      console.error('Import failed — not a project archive/JSON file:', err);
+    }
+  });
+  input.click();
+}
+
+async function newProject() {
+  // Iterative naming (matches how new files/layers avoid colliding, just
+  // checked against the real saved-project registry instead of an index) —
+  // "New Project", then "New Project 2", "New Project 3", ... rather than
+  // every click producing another project literally named "New Project".
+  const registry = await listProjects(backend);
+  const existing = new Set(registry.map((entry) => entry.name));
+  let name = 'New Project';
+  for (let n = 2; existing.has(name); n++) name = `New Project ${n}`;
+  const p = createProject(name);
+  await saveProject(backend, p);
+  await switchToProject(p);
+}
+
+function openProjectPicker(anchor) {
+  const options = [
+    { label: 'New', onClick: () => newProject() },
+    { label: 'Import', onClick: () => importProject() },
+    // Docks the actual project list beside Project (openProjectListPanel) —
+    // not flattened into this menu (projects aren't fixed one-off actions
+    // like New/Import, and the list can be long).
+    { label: 'Open', onClick: () => openProjectListPanel() },
+  ];
+  // Right (the default): snapped to the project panel's own outer edge
+  // with a chevron pointing back at the button, same treatment as every
+  // other row menu — not the floating-popup feel `{ side: 'up' }` gave it.
+  openSlideOut(anchor, options);
 }
 
 function redrawLayersPanel() {
   const file = getActiveFile(project);
   renderLayersPanel(layersPanel, file, {
-    onAddLayer: () => { addLayer(file); bindActiveFile(); draw(); autosave(); },
-    onSelect: (i) => { file.activeLayerIndex = i; bindActiveFile(); redrawLayersPanel(); },
+    onAddLayer: () => commitLayerChange(file, () => addLayer(file)),
+    onSelect: (i) => { file.activeLayerIndex = i; multiLayerSelection = null; bindActiveFile(); redrawLayersPanel(); },
+    onShiftSelectLayer: (i) => shiftSelectLayer(i),
+    onAltSelectLayer: (i) => altSelectLayer(i),
     onToggleVisible: (i) => { file.layers[i].visible = !file.layers[i].visible; draw(); autosave(); },
-    onDelete: (i) => { deleteLayer(file, i); bindActiveFile(); draw(); autosave(); },
-    onReorder: (from, to) => { reorderLayer(file, from, to); draw(); autosave(); },
+    onToggleVisibleSelection: () => toggleSelectedLayersVisibility(),
+    onDelete: (i) => commitLayerChange(file, () => deleteLayer(file, i)),
+    onReorder: (from, to) => commitLayerChange(file, () => moveLayerItem(file, from, to)),
+    onRename: () => { redrawLayersPanel(); autosave(); },
     // Live drag feedback is cheap (canvas only); autosave/thumbnail
     // refresh happens once when the drag ends, not on every tick.
     onOpacityChange: (i, value) => { file.layers[i].opacity = value; renderCanvas(); },
     onOpacityCommit: () => { redrawLayersPanel(); autosave(); },
-  });
+    onAddGroup: () => { addLayerGroup(file); redrawLayersPanel(); autosave(); },
+    // Both can change what's actually composited (a deleted group's members
+    // re-render at full visibility; a hidden group's members stop
+    // rendering), so a full draw() — which also redraws this panel — not
+    // just a plain redrawLayersPanel().
+    onDeleteGroup: (id) => { deleteLayerGroup(file, id); draw(); autosave(); },
+    onToggleGroupVisible: (id) => {
+      const g = file.layerGroups.find((group) => group.id === id);
+      g.visible = !g.visible;
+      draw(); autosave();
+    },
+    onChange: () => { redrawLayersPanel(); autosave(); },
+  }, focusedGroupId(), layerSelection, multiLayerSelection);
+}
+
+// Shift+click a layer (§ layers-panel.js buildLayerRow): select it and
+// every layer between it and the current active layer — but only within
+// one Group (including "no group" — an ungrouped layer's groupId is null
+// either way, so two ungrouped layers still count as the same context).
+// Different group is a no-op.
+function shiftSelectLayer(targetIndex) {
+  const file = getActiveFile(project);
+  layerOrder(file); // refreshes every layer's derived .groupId
+  const currentLayer = file.layers[file.activeLayerIndex];
+  const targetLayer = file.layers[targetIndex];
+  if (!currentLayer || !targetLayer || currentLayer.groupId !== targetLayer.groupId) return;
+  const members = visibleOrder(layerOrder(file))
+    .filter((e) => !e.isHeader && e.item.groupId === currentLayer.groupId)
+    .map((e) => e.item);
+  const a = members.indexOf(currentLayer), b = members.indexOf(targetLayer);
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  multiLayerSelection = new Set(members.slice(lo, hi + 1).map((l) => file.layers.indexOf(l)));
+  openLayerSelectionMenu(targetIndex);
+}
+
+// Alt+click a layer: add it to whatever's already multi-selected (starting
+// from just the current active layer if nothing was yet) — not restricted
+// to one group.
+function altSelectLayer(targetIndex) {
+  const file = getActiveFile(project);
+  if (!multiLayerSelection) multiLayerSelection = new Set([file.activeLayerIndex]);
+  multiLayerSelection.add(targetIndex);
+  openLayerSelectionMenu(targetIndex);
+}
+
+function dismissLayerSelection() {
+  multiLayerSelection = null;
+  redrawLayersPanel();
+}
+
+// Toggle-all, not "flip each independently": if any selected layer is
+// currently visible, hide the whole selection; only once they're all
+// already hidden does it show them all again — same aggregate rule
+// onToggleGroupVisible already uses for a layer group's own single flag,
+// just computed across a set instead of read off one field. Also what a
+// selected layer's own thumbnail click does (layers-panel.js).
+function toggleSelectedLayersVisibility() {
+  if (!multiLayerSelection) return;
+  const file = getActiveFile(project);
+  const layers = [...multiLayerSelection].map((i) => file.layers[i]).filter(Boolean);
+  const anyVisible = layers.some((l) => l.visible);
+  for (const l of layers) l.visible = !anyVisible;
+  draw(); autosave();
+}
+
+// Descending index order — deleting high indices first means earlier ones
+// never shift out from under the next delete. deleteLayer's own "at least
+// one layer" guard already stops short of emptying the file entirely.
+function removeSelectedLayers() {
+  if (!multiLayerSelection) return;
+  const file = getActiveFile(project);
+  const indices = [...multiLayerSelection].sort((a, b) => b - a);
+  commitLayerChange(file, () => { for (const i of indices) deleteLayer(file, i); });
+  multiLayerSelection = null;
+}
+
+// Hide/Remove for the whole multi-selection, anchored at whichever layer
+// was most recently added to it. Layers panel docks at the right edge, so
+// 'left' (not the default 'right', which would run the menu off-screen) —
+// same side its own "Add layer or group" menu already uses.
+function openLayerSelectionMenu(lastAddedIndex) {
+  redrawLayersPanel();
+  const anchor = layersPanel.querySelector(`[data-layer-index="${lastAddedIndex}"]`);
+  if (!anchor || !multiLayerSelection) return;
+  openSlideOut(anchor, [
+    { label: 'Hide', onClick: () => { toggleSelectedLayersVisibility(); multiLayerSelection = null; redrawLayersPanel(); } },
+    { label: 'Remove', onClick: () => removeSelectedLayers() },
+  ], { side: 'left', onDismiss: dismissLayerSelection });
+}
+
+// The layer-group header currently under keyboard focus (\ held, Up/Down
+// navigated onto it) — null whenever focus is on a layer, or \ hasn't been
+// used to navigate at all this hold.
+function focusedGroupId() {
+  if (backslashFocusPos === null) return null;
+  const file = getActiveFile(project);
+  const list = visibleOrder(layerOrder(file));
+  const entry = list[backslashFocusPos];
+  return entry && entry.isHeader ? entry.item.id : null;
 }
 
 function redrawTimelinePanel() {
@@ -401,7 +1333,7 @@ function redrawTimelinePanel() {
     onInsertFrame: (i) => { addFrame(file, i); bindActiveFile(); draw(); autosave(); },
     onDelete: (i) => { deleteFrame(file, i); bindActiveFile(); draw(); autosave(); },
     onReorder: (from, to) => { reorderFrame(file, from, to); draw(); autosave(); },
-  });
+  }, frameSelection);
 }
 
 function stepFrame(dir) {
@@ -423,19 +1355,72 @@ function togglePlayback() {
   else clearInterval(playback.timer);
 }
 
-inputController = createInputController(canvas, model, colors, renderCanvas, selectionApi, history);
+// Lets the mouse drive whichever tool the keyboard already has armed: a
+// held shape key (Q/W/A/S) sizes that shape by drag instead of painting,
+// and held Shift drags out a selection rect instead — both mirroring the
+// existing keyboard-arrow versions of the same gestures.
+const mouseDragTools = {
+  shapeActive: () => !!shapeState,
+  shapeStart: (x, y) => { if (shapeState) shapeState.anchor = { x, y }; },
+  shapeDrag: (x, y) => { hoverPixel = { x, y }; updateShapePreview({ x, y }); },
+  shapeEnd: () => endShape(),
+  // Reads the PointerEvent's own live shiftKey/ctrlKey/altKey rather than
+  // our tracked `held` latch — a missed keyup (§ known stuck-Shift bug,
+  // __spriteDebug below) used to only strand arrow-key rect-select; once
+  // the mouse also gated on `held.shift`, the same desync stranded mouse
+  // painting in selection mode too, with no key event left to self-heal it.
+  // Trusting the browser's own per-event modifier state sidesteps that
+  // class of bug entirely, and resyncs `held.shift` on the way.
+  selectActive: (e) => {
+    if (held.shift && !e.shiftKey) { held.shift = held.leftShift = held.rightShift = false; arrowAnchor = null; rectSelecting = false; }
+    return e.shiftKey && !e.ctrlKey && !e.altKey;
+  },
+  selectStart: (x, y) => { arrowAnchor = { x, y }; rectSelecting = true; selectionApi.setLiveRect(x, y, x, y); },
+  selectDrag: (x, y) => { hoverPixel = { x, y }; selectionApi.setLiveRect(arrowAnchor.x, arrowAnchor.y, x, y); },
+  selectEnd: () => {
+    if (rectSelecting && arrowAnchor) {
+      selectionApi.set(maskFromRect(model, arrowAnchor.x, arrowAnchor.y, hoverPixel.x, hoverPixel.y));
+      draw();
+    }
+    arrowAnchor = null;
+    rectSelecting = false;
+  },
+};
+inputController = createInputController(canvas, model, colors, renderCanvas, history, () => brushSize, () => selectionMask, mouseDragTools, () => !!activeGroupId);
 
 canvas.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
+  if (activeGroupId) {
+    // § tool tag tip: name + canvas size of whichever artboard the mouse
+    // is over, same hit-test double-click (canvas dblclick, below) uses.
+    const artboards = groupArtboards();
+    const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
+    const index = hitTestArtboardGrid(
+      canvas.clientWidth, canvas.clientHeight, artboards,
+      { scale, panX: groupViewState.panX, panY: groupViewState.panY, gridset: activeGridset() },
+      e.clientX - rect.left, e.clientY - rect.top,
+    );
+    const hit = artboards[index];
+    groupHoverTip = hit ? `${hit.name} ${hit.width}x${hit.height}` : null;
+    // updateToolTag() isn't in the per-frame render loop while a group is
+    // showing (that loop is paused for it, § renderGroupCanvas) — same
+    // reasoning onHoverTip's own listener already set synchronously here.
+    updateToolTag();
+    return;
+  }
   const viewport = computeViewport(model, rect.width, rect.height);
   hoverPixel = screenToPixel(viewport, e.clientX - rect.left, e.clientY - rect.top);
-  if (rotating) updateRotate(hoverPixel.x, hoverPixel.y, e.shiftKey);
   // No render call here — the animateCursor loop already redraws every
   // frame and picks up the new hoverPixel on its own; forcing a full
   // draw() per pointermove was the original (expensive) cause of the
   // cursor lag this replaced.
 });
-canvas.addEventListener('pointerleave', () => { hoverPixel = null; });
+
+canvas.addEventListener('pointerleave', () => {
+  if (!activeGroupId || !groupHoverTip) return;
+  groupHoverTip = null;
+  updateToolTag();
+});
 
 // Scroll wheel zooms (§6). Scale is snapped to whole numbers — the spec
 // calls for continuous zoom, but a fractional scale would leave subpixel
@@ -448,24 +1433,55 @@ function zoomTo(nextScale) {
   const rect = canvas.getBoundingClientRect();
   const fit = fitScale(model, rect.width, rect.height);
   const min = minZoomScale(model, rect.width, rect.height);
-  const max = maxZoomScale(rect.width, rect.height);
+  const max = maxZoomScale(model, rect.width, rect.height);
   viewState.zoom = Math.max(min, Math.min(max, nextScale));
   if (Math.abs(viewState.zoom - fit) < 0.01) { viewState.zoom = fit; viewState.panX = 0; viewState.panY = 0; }
   draw();
 }
 
+// Inertial zoom step: a notched mouse wheel reports the same |deltaY| on
+// every tick, so speed has to come from the *cadence* between events, not
+// the event's own magnitude. Ticks arriving close together (a fast flick)
+// nudge the smoothed velocity up; a lone slow tick lets it decay back down.
+let wheelVelocity = 0;
+let lastWheelTime = 0;
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  if (activeGroupId) { groupZoomStep(e.deltaY < 0 ? 1 : -1); return; }
   const rect = canvas.getBoundingClientRect();
   const fit = fitScale(model, rect.width, rect.height);
   const min = minZoomScale(model, rect.width, rect.height);
   const current = viewState.zoom || fit;
   const zoomingIn = e.deltaY < 0;
-  const next = current >= 1
-    ? current + (zoomingIn ? 1 : -1)
-    : current * (zoomingIn ? 1.1 : 0.9);
+
+  const now = performance.now();
+  const dt = Math.min(now - lastWheelTime, 300);
+  lastWheelTime = now;
+  const instantSpeed = Math.abs(e.deltaY) / Math.max(dt, 1);
+  wheelVelocity = wheelVelocity * 0.6 + instantSpeed * 0.4;
+
+  const rate = Math.min(wheelVelocity * 0.15, 0.5);
+  const next = current * (zoomingIn ? 1 + rate : 1 - rate);
   zoomTo(next < 1 && min >= 1 ? 1 : next);
 }, { passive: false });
+
+// Double-click an artboard in the group grid (§ project panel group
+// select) to jump straight to editing that File — the grid is otherwise
+// entirely read-only (input.js's getReadOnly), so this lives here instead,
+// gated the same way.
+canvas.addEventListener('dblclick', (e) => {
+  if (!activeGroupId) return;
+  const rect = canvas.getBoundingClientRect();
+  const artboards = groupArtboards();
+  const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
+  const index = hitTestArtboardGrid(
+    canvas.clientWidth, canvas.clientHeight, artboards,
+    { scale, panX: groupViewState.panX, panY: groupViewState.panY, gridset: activeGridset() },
+    e.clientX - rect.left, e.clientY - rect.top,
+  );
+  if (index < 0) return;
+  selectFile(artboards[index].fileIndex);
+});
 
 function doCopy() {
   const mask = selectionMask || (hoverPixel && (() => {
@@ -481,12 +1497,13 @@ function inBoundsPixel(p) {
 }
 
 function doCut() {
+  if (activeGroupId) return; // read-only group grid — nothing here to cut
   doCopy();
   deleteSelectionOrHover();
 }
 
 function doPaste() {
-  if (!clipboard) return;
+  if (!clipboard || activeGroupId) return; // read-only group grid — nothing here to paste into
   const at = hoverPixel || { x: 0, y: 0 };
   const snapshot = snapshotPixels(model);
   stamp(model, clipboard, at.x, at.y, false);
@@ -494,12 +1511,37 @@ function doPaste() {
   history.commit({ type: 'pixelEdit', before, after }); // triggers the full refresh
 }
 
+// Flips the selection if one exists, otherwise the whole active layer.
 function doFlip(axis) {
-  if (!selectionMask) return; // requires an active selection (§9.2)
+  const mask = selectionMask || fullMask(model);
   const snapshot = snapshotPixels(model);
-  flip(model, selectionMask, axis);
+  flip(model, mask, axis);
   const { before, after } = diffFromSnapshot(model, snapshot);
   history.commit({ type: 'flip', layer: getActiveFile(project).activeLayerIndex, axis, before, after });
+}
+
+// [I] — inverts the RGB of every selected pixel, or just the pixel under
+// the cursor when there's no selection. Editing-only (main.js's own keydown
+// handler already gates every canvas edit key on !activeGroupId — the
+// read-only group grid has no cursor/selection of its own to invert).
+function invertColors() {
+  const snapshot = snapshotPixels(model);
+  const invertAt = (x, y, mask) => {
+    const hex = getPixel(model, x, y);
+    if (!hex) return;
+    const { r, g, b } = hexToRgb(hex);
+    setPixel(model, x, y, rgbToHex(255 - r, 255 - g, 255 - b), mask);
+  };
+  if (selectionMask) {
+    for (let y = 0; y < model.height; y++) {
+      for (let x = 0; x < model.width; x++) invertAt(x, y, selectionMask);
+    }
+  } else {
+    const c = currentCursor();
+    invertAt(c.x, c.y);
+  }
+  const { before, after } = diffFromSnapshot(model, snapshot);
+  history.commit({ type: 'invert', before, after });
 }
 
 function moveSelection(dx, dy, moveContentToo) {
@@ -517,34 +1559,36 @@ function moveSelection(dx, dy, moveContentToo) {
   }
 }
 
-function beginRotate() {
-  if (!selectionMask || rotating) return;
-  const b = maskBounds(model, selectionMask);
+// Keyboard-driven rotate (§ new control scheme): hold R, then Left/Right
+// steps degrees — 1° per step (accelerating hold), or 15° per step with
+// Shift+R. Pivot is the selection's own center, or the whole layer's if
+// nothing's selected (same fallback as flip). Left = CCW, right = CW.
+// Re-applies to the pristine snapshot on every step (rather than compounding
+// a small rotation onto an already-rotated, lossy result).
+function beginRotate(stepDegrees) {
+  if (rotating) return;
+  const mask = selectionMask || fullMask(model);
+  const b = maskBounds(model, mask);
   if (!b) return;
   rotating = {
+    mask, step: stepDegrees, angle: 0,
     snapshot: snapshotPixels(model),
     center: { x: b.minX + b.w / 2, y: b.minY + b.h / 2 },
-    angle: 0,
   };
 }
 
-// Re-applies the rotation to the *original* content on every move (rather
-// than compounding a small rotation onto an already-rotated, lossy result)
-// by restoring the pristine snapshot in place before each rotate() call.
-function updateRotate(px, py, snap) {
+function stepRotate(dir) {
   if (!rotating) return;
-  let angle = (Math.atan2(py - rotating.center.y, px - rotating.center.x) * 180) / Math.PI;
-  if (snap) angle = Math.round(angle / 15) * 15;
-  rotating.angle = angle;
+  rotating.angle += dir * rotating.step;
   for (let i = 0; i < model.pixels.length; i++) model.pixels[i] = rotating.snapshot[i];
-  rotate(model, selectionMask, angle);
-  renderCanvas(); // live drag feedback only; endRotate does the full refresh
+  rotate(model, rotating.mask, rotating.angle);
+  renderCanvas(); // live feedback only; endRotate does the full refresh
 }
 
 function endRotate() {
   if (!rotating) return;
   const { before, after } = diffFromSnapshot(model, rotating.snapshot);
-  history.commit({ type: 'rotate', degrees: rotating.angle, before, after }); // triggers the full refresh
+  if (before.length) history.commit({ type: 'rotate', degrees: rotating.angle, before, after });
   rotating = null;
 }
 
@@ -567,161 +1611,843 @@ function deleteSelectionOrHover() {
 const DIGIT_INDEX = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, '7': 6, '8': 7, '9': 8, '0': 9 };
 
 window.addEventListener('resize', resize);
-window.addEventListener('keydown', (e) => {
-  // Text fields (rename, hex, FPS) handle their own keys — don't let global
-  // single-letter/arrow shortcuts fight typing in them.
-  const tag = document.activeElement && document.activeElement.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (keybindHelp.isOpen()) {
-    if (e.key === '?' || e.key === 'Escape') { e.preventDefault(); keybindHelp.close(); }
-    return; // swallow every other shortcut while the help is up
+
+// ===== Focus-based control scheme (CONTEXT.md, todo/control.md) =====
+// Canvas cursor, paint/erase/fill, selection, undo, flip/rotate, brush size,
+// zoom, grid, Q/W/A/S shape tools, and the four focus-based panels
+// (Projects/Colors/Layers/Timeline) are all wired. Multi-project open/new
+// and focused-category/group navigation are still gaps (see dispatchProjects
+// below). Mouse still works alongside this — left click/drag places (Alt:
+// paints; or drives a held shape key / Shift-select instead, see
+// mouseDragTools), right click/drag erases (input.js), scroll zooms (below).
+
+// Generic accelerating hold-repeat, modeled on a phone's backspace-hold:
+// fires once immediately, then again at a shrinking interval the longer a
+// key stays held, without needing to know in advance which key it's for.
+function createHoldRepeater(step) {
+  let timer = null;
+  let heldSince = 0;
+  function tick() {
+    step();
+    const held = performance.now() - heldSince;
+    const interval = held > 1500 ? 20 : held > 600 ? 60 : 150;
+    timer = setTimeout(tick, interval);
   }
-  if (e.key === '?') {
-    keybindHelp.toggle();
-  } else if (e.key === 'Home') {
+  return {
+    start() { if (timer) return; heldSince = performance.now(); tick(); },
+    stop() { clearTimeout(timer); timer = null; },
+    get running() { return timer !== null; },
+  };
+}
+
+function maxBrushSize() {
+  return Math.max(1, Math.floor(Math.min(model.width, model.height) * 0.25)); // §8: capped at 1/4 canvas dimension
+}
+
+// --- Held-modifier tracking (Alt/Ctrl/Shift, distinguishing L/R Shift) ---
+const held = {
+  alt: false, ctrl: false, shift: false, leftShift: false, rightShift: false, space: false, z: false,
+};
+
+// --- Keyboard cursor + arrow dispatch (Canvas focus only) ---
+// One live mode at a time while arrows are held, decided fresh each repeat
+// tick from whatever modifiers are currently down (not latched at the first
+// arrow press) so switching modifiers mid-hold changes behavior live.
+const heldArrows = new Set();
+let arrowAnchor = null; // canvas-pixel anchor captured when Shift first went down, for the live rect preview
+let rectSelecting = false; // true once Shift+arrows actually drew a live rect — gates the commit on Shift's keyup, so a Shift press that never involved arrows (Shift+C, Shift+G, a stray tap) commits no selection
+let contentMoveActive = false; // shift+ctrl+arrows — batches into one undo commit on release
+// Ctrl+Space is ambiguous until it's clear whether arrows follow: no arrows
+// before Space releases = toggle playback (global); any arrow while both are
+// still held = pan instead (and cancels the pending playback toggle).
+let ctrlSpaceArmed = false;
+let panningKeyboard = false;
+const PAN_STEP = 12;
+
+function currentCursor() {
+  return hoverPixel || { x: 0, y: 0 };
+}
+
+function clampToCanvas(p) {
+  return { x: Math.max(0, Math.min(model.width - 1, p.x)), y: Math.max(0, Math.min(model.height - 1, p.y)) };
+}
+
+function moveCursorBy(dx, dy) {
+  hoverPixel = clampToCanvas({ x: currentCursor().x + dx, y: currentCursor().y + dy });
+}
+
+function arrowTick() {
+  let dx = 0, dy = 0;
+  if (heldArrows.has('ArrowLeft')) dx -= 1;
+  if (heldArrows.has('ArrowRight')) dx += 1;
+  if (heldArrows.has('ArrowUp')) dy -= 1;
+  if (heldArrows.has('ArrowDown')) dy += 1;
+  if (!dx && !dy) return;
+
+  if (ctrlSpaceArmed) { // Ctrl+Space+arrows: pan, not playback-toggle (see ctrlSpaceArmed above)
+    panningKeyboard = true;
+    const pan = activeGroupId ? groupViewState : viewState;
+    pan.panX -= dx * PAN_STEP;
+    pan.panY -= dy * PAN_STEP;
+    renderCanvas();
+    return;
+  }
+  // Nothing past this point is interactive over the read-only group grid.
+  if (activeGroupId) return;
+  if (rotating) { // hold-R rotate mode (left/right only)
+    if (dx) stepRotate(dx > 0 ? 1 : -1);
+    return;
+  }
+  if (held.shift && held.alt && !held.ctrl) { // move the selection boundary only
+    moveSelection(dx, dy, false);
+    return;
+  }
+  if (held.shift && held.ctrl && !held.alt) { // move the selected content
+    contentMoveActive = true;
+    selectionApi.moveContentBy(dx, dy);
+    return;
+  }
+  // Every other combination just aims the cursor, stepped by brush size —
+  // the shift-family selection tools (rect) confirm on Shift's own keyup.
+  moveCursorBy(dx * brushSize, dy * brushSize);
+  if (held.shift && !held.ctrl && !held.alt && arrowAnchor) {
+    rectSelecting = true;
+    selectionApi.setLiveRect(arrowAnchor.x, arrowAnchor.y, hoverPixel.x, hoverPixel.y);
+  } else if (held.z && !held.shift && !held.alt) {
+    stampCurrentTool(hoverPixel.x, hoverPixel.y, true); // Z+arrows: erase-while-moving tool
+  } else if (held.alt && !held.shift && !held.z) {
+    stampCurrentTool(hoverPixel.x, hoverPixel.y, false); // Alt+arrows: paint-while-moving tool
+  }
+}
+const arrowRepeater = createHoldRepeater(arrowTick);
+
+// --- Place / Paint / erase / fill ---
+// `erase` is momentary now (Z+arrows, Backspace/Delete), not a persisted
+// mode — every caller says explicitly which one it wants. Place vs Paint
+// (plain vs Alt-held) isn't passed in the same way — it reads `held.alt`
+// live, same as the mouse side reads the click event's own altKey — so
+// Alt+Space and Alt+Arrows (which route through here too) get the
+// antialiased brush for free without their callers needing to know that.
+function stampCurrentTool(x, y, erase = false) {
+  const snap = snapshotPixels(model);
+  if (erase) {
+    if (brushSize > 1) { for (const [px, py] of squareOffsets(brushSize)) setPixel(model, x + px, y + py, null, selectionMask); }
+    else setPixel(model, x, y, null, selectionMask);
+  } else if (held.alt) {
+    // Paint: soft antialiased circular brush, fluid strokes.
+    stampBrush(model, x, y, brushSize, colors.primary(), selectionMask);
+  } else if (brushSize > 1) {
+    // Place: hard-edged square stamp, precision.
+    for (const [px, py] of squareOffsets(brushSize)) setPixel(model, x + px, y + py, colors.primary(), selectionMask);
+  } else {
+    setPixel(model, x, y, colors.primary(), selectionMask);
+  }
+  const { before, after } = diffFromSnapshot(model, snap);
+  if (before.length) history.commit({ type: 'pixelEdit', before, after });
+}
+function squareOffsets(size) {
+  const half = Math.floor(size / 2), out = [];
+  for (let y = -half; y < -half + size; y++) for (let x = -half; x < -half + size; x++) out.push([x, y]);
+  return out;
+}
+const stampRepeater = createHoldRepeater(() => stampCurrentTool(currentCursor().x, currentCursor().y));
+
+// Ctrl+Enter: flood fill at cursor, or (with an active selection) solid-fill
+// every selected pixel — same mask-walk `deleteSelectionOrHover` already
+// uses, just setting the primary color instead of clearing.
+function fillCurrentTool(x, y) {
+  const snap = snapshotPixels(model);
+  if (selectionMask) {
+    for (let py = 0; py < model.height; py++) {
+      for (let px = 0; px < model.width; px++) {
+        if (selectionMask[py * model.width + px]) setPixel(model, px, py, colors.primary());
+      }
+    }
+  } else {
+    floodFill(model, x, y, colors.primary());
+  }
+  const { before, after } = diffFromSnapshot(model, snap);
+  if (before.length) history.commit({ type: 'fill', before, after });
+}
+
+// --- Zoom ---
+function zoomStep(dir) {
+  const rect = canvas.getBoundingClientRect();
+  const current = viewState.zoom || fitScale(model, rect.width, rect.height);
+  zoomTo(current * (dir > 0 ? 1.15 : 1 / 1.15));
+}
+
+// --- Focus-based panels: Projects, Colors, Layers, Timeline ---
+// Each panel owns the whole keyboard while `focusedPanel` points at it (see
+// setFocus() above) — no held-key gate anymore. Phase 2 gap: no "focused
+// category/group" concept exists yet, so new/delete-category and
+// new/delete-group act on the project's/active layer's *current* one rather
+// than an independently navigable one.
+
+function renameInline(selector, getName, setName, redrawFn) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  const name = getName();
+  el.textContent = name; // drop any ▸/▾ fold prefix (headers) before it becomes editable text
+  startInlineEdit(el, name, (v) => { if (v) { setName(v); redrawFn(); autosave(); } });
+}
+const renameActiveFile = () => renameInline('.file-row.selected .file-row-name', () => getActiveFile(project).name, (v) => { getActiveFile(project).name = v; }, redrawProjectPanel);
+// A single-file project reads as one thing to the user — its one .sprite
+// file should track the project's own name, not drift to whatever the file
+// was originally called.
+const renameProject = () => renameInline('.project-name', () => project.name, (v) => {
+  project.name = v;
+  if (project.files.length === 1) project.files[0].name = v;
+}, redrawProjectPanel);
+const renameActiveLayer = () => renameInline('.layer-row.selected .layer-label', () => getActiveFile(project).layers[getActiveFile(project).activeLayerIndex].name, (v) => { getActiveFile(project).layers[getActiveFile(project).activeLayerIndex].name = v; }, redrawLayersPanel);
+
+// Tab + [+]: arrows cycle NEW_FILE_SIZES, Return creates the file at that
+// size and drops straight into renaming it.
+let pickingFileSize = null;
+function beginPickFileSize() { pickingFileSize = 0; }
+function stepPickFileSize(dir) { pickingFileSize = (pickingFileSize + dir + NEW_FILE_SIZES.length) % NEW_FILE_SIZES.length; draw(); }
+function commitPickFileSize() {
+  const { w, h } = NEW_FILE_SIZES[pickingFileSize];
+  addFile(project, `sprite${project.files.length + 1}`, w, h, focusedCollectionId());
+  bindActiveFile(); resetView(); redrawProjectPanel(); draw(); autosave();
+  pickingFileSize = null;
+  requestAnimationFrame(renameActiveFile); // panel needs one redraw for the new row to exist
+}
+
+function opacityStep(dir, step = 1) {
+  const file = getActiveFile(project);
+  const layer = file.layers[file.activeLayerIndex];
+  layer.opacity = Math.max(0, Math.min(1, layer.opacity + dir * step * 0.01));
+  renderCanvas(); redrawLayersPanel();
+}
+let fpsRepeater = null;
+
+// --- Q/W/A/S shape tools: hold, arrows resize from the cursor's position
+// when the key went down, Shift constrains to equal width/height, release
+// commits. Always paint (primary color) — no keyboard erase-shape variant. ---
+const SHAPE_KEYS = { q: 'rect', w: 'triangle', a: 'circle', s: 'line' };
+let shapeState = null; // { key, anchor, snapshot } while a shape key is held
+
+function beginShape(key, anchor) {
+  if (shapeState) return;
+  shapeState = { key, anchor: anchor || { ...currentCursor() }, snapshot: snapshotPixels(model) };
+}
+function updateShapePreview(endpoint) {
+  if (!shapeState) return;
+  for (let i = 0; i < model.pixels.length; i++) model.pixels[i] = shapeState.snapshot[i];
+  const { x: x0, y: y0 } = shapeState.anchor;
+  let { x: x1, y: y1 } = endpoint || currentCursor();
+  if (held.shift) [x1, y1] = constrainSquare(x0, y0, x1, y1);
+  for (const [x, y] of SHAPE_OUTLINES[shapeState.key](x0, y0, x1, y1)) setPixel(model, x, y, colors.primary(), selectionMask);
+  renderCanvas();
+}
+function endShape() {
+  if (!shapeState) return;
+  const { before, after } = diffFromSnapshot(model, shapeState.snapshot);
+  if (before.length) history.commit({ type: 'pixelEdit', before, after });
+  shapeState = null;
+}
+
+// --- Per-panel dispatch (focus-based control scheme, todo/control.md) ---
+// Each function owns the whole keyboard while `focusedPanel` points at it.
+
+function dispatchCanvas(e) {
+  // Read-only group grid (§ project panel group select): the canvas isn't
+  // showing the active file's own pixel space, so every paint/select/shape
+  // keyboard tool below would edit a file the user can't even see. Zoom and
+  // the two backdrop-cycle keys still work here — they only change how the
+  // grid displays, not any file's actual pixels. Pan
+  // (Ctrl+Space+arrows) is handled in arrowTick, not here. (Escape exits
+  // the group view — handled globally, above, regardless of focus.)
+  if (activeGroupId) {
+    if (e.key === '+' && !e.repeat) { groupZoomStep(1); return; }
+    if (e.key === '-' && !e.repeat) { groupZoomTo(1); return; }
+    if (e.key === '=' && !e.repeat) {
+      const rect = canvas.getBoundingClientRect();
+      groupZoomTo(maxZoomScale(groupLayoutModel(), rect.width, rect.height));
+      return;
+    }
+    if (e.key === '_' && !e.repeat) { groupZoomStep(-1); return; }
+    if (e.key === 'U' && e.shiftKey) { cycleGroupAppBg(); return; }
+    // Registers the arrow key so arrowTick's Ctrl+Space+arrows pan branch
+    // can fire — everything else arrowTick does is gated on !activeGroupId.
+    if (e.key.startsWith('Arrow')) {
+      e.preventDefault();
+      if (!heldArrows.has(e.key)) { heldArrows.add(e.key); arrowRepeater.start(); }
+      return;
+    }
+    return;
+  }
+  // Q/W/A/S shape tools resizing take priority over everything else arrows
+  // do — 1px-precise, not stepped by brush size.
+  if (shapeState && e.key.startsWith('Arrow')) {
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    zoomTo(maxZoomScale(rect.width, rect.height));
-  } else if (e.key === 'End') {
+    const [dx, dy] = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    moveCursorBy(dx, dy);
+    updateShapePreview();
+    return;
+  }
+  if (e.key.startsWith('Arrow')) {
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    zoomTo(minZoomScale(model, rect.width, rect.height));
-  } else if (e.key === 'g' && !e.shiftKey) {
-    showGrid = !showGrid;
-    draw();
-  } else if (e.key === 'G' && e.shiftKey) {
-    showRuler = !showRuler;
-    draw();
-  } else if (!e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
-    paletteReveal.togglePin();
-  } else if (e.key === 'Tab' && e.shiftKey) {
+    if (!heldArrows.has(e.key)) { heldArrows.add(e.key); arrowRepeater.start(); } // start() fires the first tick itself
+    return;
+  }
+  if (e.key === ' ' && !e.repeat) {
     e.preventDefault();
-    toggleHideAllPanels();
-  } else if (e.key === 'Tab') {
+    if (held.shift) { // Shift+Space: magic wand at cursor
+      const c = currentCursor();
+      selectionApi.set(maskFromWand(model, c.x, c.y));
+      draw();
+      return;
+    }
+    held.space = true;
+    stampCurrentTool(currentCursor().x, currentCursor().y);
+    stampRepeater.start();
+    return;
+  }
+  if ((e.key === 'c' || e.key === 'C') && e.shiftKey && !e.repeat) { // Shift+C: select same color under cursor
+    const c = currentCursor();
+    const hex = getPixel(model, c.x, c.y);
+    if (hex) { selectionApi.set(maskFromColor(model, hex)); draw(); }
+    return;
+  }
+  if (e.key in DIGIT_INDEX) { palette.setPrimaryByIndex(DIGIT_INDEX[e.key]); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && !e.repeat) { deleteSelectionOrHover(); return; }
+  if (e.ctrlKey && e.key === 'Enter' && !e.repeat) {
     e.preventDefault();
-    projectReveal.togglePin();
-  } else if (e.key === 'l' || e.key === 'L') {
-    layersReveal.togglePin();
-  } else if (layersReveal.isFocused() && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    const c = currentCursor();
+    fillCurrentTool(c.x, c.y);
+    return;
+  }
+  if (SHAPE_KEYS[e.key.toLowerCase()] && !e.repeat) { beginShape(SHAPE_KEYS[e.key.toLowerCase()]); return; }
+  if (e.key === '[' || e.key === ']') {
+    const growing = e.key === ']';
+    brushSize = Math.max(1, Math.min(maxBrushSize(), brushSize + (growing ? 1 : -1)));
+    return;
+  }
+  if (e.key === '{' || e.key === '}') {
+    const growing = e.key === '}';
+    brushSize = growing ? Math.min(maxBrushSize(), brushSize * 2) : Math.max(1, Math.floor(brushSize / 2));
+    return;
+  }
+  if (e.key === 'i' && !e.shiftKey && !e.repeat) { invertColors(); return; } // i: invert selection, or just the hovered pixel
+  if (e.key === 'I' && e.shiftKey && !e.repeat) {
+    const c = currentCursor();
+    const hex = getPixel(model, c.x, c.y);
+    if (hex) palette.pickColor(hex);
+    setHeldD(true); // arms hold-Shift+I+click to add any color under the mouse, anywhere in the viewport
+    return;
+  }
+  if (e.key === 'f' && !e.shiftKey) { doFlip('horizontal'); return; }
+  if (e.key === 'F' && e.shiftKey) { doFlip('vertical'); return; }
+  if ((e.key === 'r' || e.key === 'R') && !e.repeat) { beginRotate(e.shiftKey ? 15 : 1); return; }
+  if (e.key === 'z' && !e.repeat) { held.z = true; return; }
+  if (e.key === '+' && !e.repeat) { zoomStep(1); return; }
+  if (e.key === '-' && !e.repeat) { zoomTo(1); return; }
+  if (e.key === '=' && !e.repeat) { zoomTo(maxZoomScale(model, canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height)); return; }
+  if (e.key === '_' && !e.repeat) { zoomStep(-1); return; }
+  if (e.key === 'g' && !e.shiftKey) { showGrid = !showGrid; uiPrefs.showGrid = showGrid; saveUiPrefs(uiPrefs); draw(); return; }
+  if (e.key === 'G' && e.shiftKey) { showRuler = !showRuler; uiPrefs.showRuler = showRuler; saveUiPrefs(uiPrefs); draw(); return; }
+  if (e.key === 'u' && e.ctrlKey) { e.preventDefault(); cycleBothBg(); return; }
+  if (e.key === 'u' && !e.shiftKey) { cycleCanvasBg(); return; }
+  if (e.key === 'U' && e.shiftKey) { cycleAppBg(); return; }
+}
+
+function dispatchTimeline(e) {
+  const file = getActiveFile(project);
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault();
-    const file = getActiveFile(project);
-    const dir = e.key === 'ArrowUp' ? 1 : -1; // panel lists topmost-first, stack index rises upward
-    const next = file.activeLayerIndex + dir;
-    if (e.shiftKey) reorderLayer(file, file.activeLayerIndex, next);
-    else if (next >= 0 && next < file.layers.length) file.activeLayerIndex = next;
-    bindActiveFile();
-    redrawLayersPanel();
-    draw();
-    autosave();
-  } else if (layersReveal.isFocused() && (e.key === 'Backspace' || e.key === 'Delete')) {
-    const file = getActiveFile(project);
-    deleteLayer(file, file.activeLayerIndex);
-    bindActiveFile();
-    draw();
-    autosave();
-  } else if (e.key === 'e' || e.key === 'E') {
-    openExport();
-  } else if (e.key === 't' || e.key === 'T') {
-    timelineReveal.togglePin();
-  } else if (e.ctrlKey && e.code === 'Space') {
-    e.preventDefault();
-    togglePlayback();
-  } else if (timelineReveal.isFocused() && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-    e.preventDefault();
-    const file = getActiveFile(project);
+    if (e.repeat) return;
     const dir = e.key === 'ArrowRight' ? 1 : -1;
     if (e.shiftKey) {
-      const next = file.activeFrameIndex + dir;
-      reorderFrame(file, file.activeFrameIndex, next);
-      bindActiveFile();
+      // Anchor is the frame you started selecting from — it stays the
+      // active/editing frame throughout; only the far edge moves.
+      if (!frameSelection) frameSelection = { anchor: file.activeFrameIndex, to: file.activeFrameIndex };
+      frameSelection.to = Math.max(0, Math.min(file.frames.length - 1, frameSelection.to + dir));
+      draw();
+    } else if (e.altKey) {
+      if (frameSelection) {
+        const lo = Math.min(frameSelection.anchor, frameSelection.to);
+        const hi = Math.max(frameSelection.anchor, frameSelection.to);
+        const target = dir > 0 ? hi + 1 : lo - 1;
+        if (target >= 0 && target < file.frames.length) {
+          reorderFrame(file, target, dir > 0 ? lo : hi);
+          frameSelection.anchor += dir; frameSelection.to += dir;
+          bindActiveFile(); draw(); autosave();
+        }
+      } else {
+        reorderFrame(file, file.activeFrameIndex, file.activeFrameIndex + dir); bindActiveFile(); draw(); autosave();
+      }
     } else {
+      frameSelection = null;
       stepFrame(dir);
     }
-    draw();
-    autosave();
-  } else if (timelineReveal.isFocused() && e.key === '+') {
-    const file = getActiveFile(project);
-    if (e.ctrlKey) duplicateFrame(file, file.activeFrameIndex);
-    else addFrame(file);
-    bindActiveFile();
-    draw();
-    autosave();
-  } else if (timelineReveal.isFocused() && (e.key === 'Backspace' || e.key === 'Delete')) {
-    const file = getActiveFile(project);
-    deleteFrame(file, file.activeFrameIndex);
-    bindActiveFile();
-    draw();
-    autosave();
-  } else if (e.key in DIGIT_INDEX) {
-    if (e.altKey) palette.setSecondaryByIndex(DIGIT_INDEX[e.key]);
-    else palette.setPrimaryByIndex(DIGIT_INDEX[e.key]);
-  } else if (e.ctrlKey && e.key === 'a') {
+    return;
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { // FPS, accelerating hold
     e.preventDefault();
-    selectionApi.set(fullMask(model));
-    draw();
-  } else if (e.key === 'Escape') {
-    selectionApi.clear();
-    draw();
-  } else if (e.key === 'Backspace') {
-    // Delete is no longer an instant-delete synonym — holding it arms the
-    // eraser tool (input.js), requiring an actual click/drag (on request).
-    deleteSelectionOrHover();
-  } else if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
+    if (!e.repeat) {
+      const dir = e.key === 'ArrowUp' ? 1 : -1;
+      fpsRepeater = createHoldRepeater(() => {
+        playback.fps = Math.max(1, Math.min(60, playback.fps + dir));
+        if (playback.playing) startPlayback();
+        redrawTimelinePanel();
+      });
+      fpsRepeater.start();
+    }
+    return;
+  }
+  if (e.key === '+' && !e.repeat) { addFrame(file); bindActiveFile(); draw(); autosave(); return; }
+  if (e.key === '=' && !e.repeat) { duplicateFrame(file, file.activeFrameIndex); bindActiveFile(); draw(); autosave(); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && !e.repeat) {
+    if (frameSelection) {
+      const lo = Math.min(frameSelection.anchor, frameSelection.to);
+      const hi = Math.max(frameSelection.anchor, frameSelection.to);
+      for (let i = hi; i >= lo; i--) deleteFrame(file, i); // high-to-low so earlier deletes don't shift later indices
+      frameSelection = null;
+    } else {
+      deleteFrame(file, file.activeFrameIndex);
+    }
+    bindActiveFile(); draw(); autosave();
+    return;
+  }
+  if (e.key === '\\' && !e.repeat) { playback.onionSkin = !playback.onionSkin; draw(); return; }
+  if (e.key === ' ' && !e.repeat) { togglePlayback(); return; }
+}
+
+function dispatchLayers(e) {
+  const file = getActiveFile(project);
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     e.preventDefault();
-    if (undoCmd(getActiveFile(project), model)) { draw(); autosave(); }
-  } else if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+    if (e.repeat) return;
+    const dir = e.key === 'ArrowUp' ? -1 : 1; // ascending order = top-to-bottom
+    const fullList = visibleOrder(layerOrder(file));
+    if (!fullList.length) return;
+    if (held.rightShift && !held.leftShift) { // r-shift+arrows: navigate groups only
+      const headers = fullList.filter((entry) => entry.isHeader);
+      if (!headers.length) return;
+      let hi = headers.findIndex((entry) => entry.pos === (fullList[backslashFocusPos] || {}).pos);
+      hi = Math.max(0, Math.min(headers.length - 1, hi + dir));
+      backslashFocusPos = fullList.indexOf(headers[hi]);
+      layerSelection = null;
+      redrawLayersPanel();
+      return;
+    }
+    if (e.shiftKey) {
+      if (backslashFocusPos === null || backslashFocusPos >= fullList.length) {
+        const active = file.layers[file.activeLayerIndex];
+        backslashFocusPos = Math.max(0, fullList.findIndex((entry) => entry.item === active));
+      }
+      if (!layerSelection) layerSelection = { anchor: backslashFocusPos, to: backslashFocusPos };
+      layerSelection.to = Math.max(0, Math.min(fullList.length - 1, layerSelection.to + dir));
+      backslashFocusPos = layerSelection.to;
+      redrawLayersPanel();
+      return;
+    }
+    if (e.altKey) {
+      if (layerSelection) {
+        const lo = Math.min(layerSelection.anchor, layerSelection.to);
+        const hi = Math.max(layerSelection.anchor, layerSelection.to);
+        const target = dir > 0 ? hi + 1 : lo - 1;
+        if (target >= 0 && target < fullList.length) {
+          commitLayerChange(file, () => moveLayerItem(file, target, dir > 0 ? lo : hi));
+          layerSelection.anchor += dir; layerSelection.to += dir; backslashFocusPos += dir;
+          redrawLayersPanel();
+        }
+      } else if (backslashFocusPos !== null) {
+        const toPos = Math.max(0, Math.min(fullList.length - 1, backslashFocusPos + dir));
+        if (toPos !== backslashFocusPos) {
+          commitLayerChange(file, () => moveLayerItem(file, backslashFocusPos, toPos));
+          backslashFocusPos = toPos;
+        }
+      }
+      return;
+    }
+    layerSelection = null;
+    if (backslashFocusPos === null || backslashFocusPos >= fullList.length) {
+      const active = file.layers[file.activeLayerIndex];
+      backslashFocusPos = Math.max(0, fullList.findIndex((entry) => entry.item === active));
+    }
+    backslashFocusPos = Math.max(0, Math.min(fullList.length - 1, backslashFocusPos + dir));
+    const focused = fullList[backslashFocusPos];
+    if (!focused.isHeader) file.activeLayerIndex = file.layers.indexOf(focused.item);
+    bindActiveFile(); redrawLayersPanel(); draw(); autosave();
+    return;
+  }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault();
-    if (redoCmd(getActiveFile(project), model)) { draw(); autosave(); }
-  } else if (e.ctrlKey && e.key === 'c') {
-    doCopy();
-  } else if (e.ctrlKey && e.key === 'x') {
+    if (!e.repeat) opacityStep(e.key === 'ArrowRight' ? 1 : -1, e.shiftKey ? 10 : 1);
+    return;
+  }
+  const focusedGroup = focusedGroupId() && file.layerGroups.find((g) => g.id === focusedGroupId());
+  if ((e.key === 'Backspace' || e.key === 'Delete') && !e.repeat) {
+    if (layerSelection) {
+      const list = visibleOrder(layerOrder(file));
+      const lo = Math.min(layerSelection.anchor, layerSelection.to);
+      const hi = Math.max(layerSelection.anchor, layerSelection.to);
+      const entries = list.slice(lo, hi + 1);
+      commitLayerChange(file, () => {
+        for (const entry of entries) {
+          if (entry.isHeader) deleteLayerGroup(file, entry.item.id);
+          else { const idx = file.layers.indexOf(entry.item); if (idx >= 0) deleteLayer(file, idx); }
+        }
+      });
+      layerSelection = null; backslashFocusPos = null;
+      redrawLayersPanel(); draw(); autosave();
+    } else {
+      commitLayerChange(file, () => deleteLayer(file, file.activeLayerIndex));
+    }
+    return;
+  }
+  if (e.key === '+' && !e.repeat) { commitLayerChange(file, () => addLayer(file, undefined, focusedGroupId())); return; }
+  if (e.key === '=' && !e.repeat) {
+    // New group, positioned right above whatever's currently focused — so
+    // if that's a layer, it becomes the group's first member.
+    const before = visibleOrder(layerOrder(file));
+    const focusedEntry = backslashFocusPos !== null ? before[backslashFocusPos] : null;
+    commitLayerChange(file, () => {
+      addLayerGroup(file);
+      if (focusedEntry && !focusedEntry.isHeader) moveLayerItem(file, layerOrder(file).length - 1, focusedEntry.pos);
+    });
+    redrawLayersPanel(); draw(); autosave();
+    return;
+  }
+  if (e.key === ' ' && !e.repeat) {
+    if (focusedGroup) { focusedGroup.collapsed = !focusedGroup.collapsed; redrawLayersPanel(); autosave(); }
+    return;
+  }
+  if (e.key === 'Enter' && !e.repeat) {
+    if (focusedGroup) renameInline(`[data-group-id="${focusedGroup.id}"] .layer-label`, () => focusedGroup.name, (v) => { focusedGroup.name = v; }, redrawLayersPanel);
+    else renameActiveLayer();
+    return;
+  }
+  if (e.key === '\\' && !e.repeat) {
+    const layer = file.layers[file.activeLayerIndex];
+    layer.visible = !layer.visible;
+    draw(); autosave();
+    return;
+  }
+}
+
+// Colors panel's own `\` preset menu and `Return` chip editor need their own
+// small keydown listeners on the popup they open (Up/Down/Enter/Escape) —
+// stopPropagation keeps those keys from also reaching this dispatcher.
+function dispatchColors(e) {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    if (!e.repeat) palette.cyclePrimary(e.key === 'ArrowRight' ? 1 : -1);
+    return;
+  }
+  if (e.key === '+' && !e.repeat) { palette.addChip(); return; }
+  if (e.key === '-' && !e.repeat) { palette.removePrimary(); return; }
+  if (e.key === '\\' && !e.repeat) {
+    const hamburger = paletteBar.querySelector('.palette-hamburger');
+    if (!hamburger) return;
+    const panel = palette.openPresetMenu(hamburger);
+    const buttons = panel && Array.from(panel.querySelectorAll('button'));
+    if (!buttons || !buttons.length) return;
+    let idx = 0;
+    buttons[idx].focus();
+    const onKey = (ke) => {
+      if (!panel.isConnected) { cleanup(); return; } // closed via an outside click — stop intercepting
+      if (ke.key === 'ArrowDown') { ke.preventDefault(); ke.stopPropagation(); idx = (idx + 1) % buttons.length; buttons[idx].focus(); }
+      else if (ke.key === 'ArrowUp') { ke.preventDefault(); ke.stopPropagation(); idx = (idx - 1 + buttons.length) % buttons.length; buttons[idx].focus(); }
+      else if (ke.key === 'Enter') { ke.preventDefault(); ke.stopPropagation(); buttons[idx].click(); cleanup(); }
+      else if (ke.key === 'Escape') { ke.preventDefault(); ke.stopPropagation(); panel.remove(); cleanup(); }
+    };
+    function cleanup() { window.removeEventListener('keydown', onKey, true); }
+    window.addEventListener('keydown', onKey, true);
+    return;
+  }
+  if (e.key === 'Enter' && !e.repeat) { palette.editPrimaryChip(); return; }
+}
+
+function dispatchProjects(e) {
+  if (pickingFileSize !== null) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); stepPickFileSize(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); stepPickFileSize(1); return; }
+    if (e.key === 'Enter') { commitPickFileSize(); return; }
+    if (e.key === 'Escape') { pickingFileSize = null; draw(); return; }
+    return; // swallow other keys while the size picker is up
+  }
+  if (e.key === '+' && e.altKey && !e.repeat) { newProject(); return; }
+  if (e.key === '+' && !e.repeat) { beginPickFileSize(); return; }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     e.preventDefault();
-    doCut();
-  } else if (e.ctrlKey && e.key === 'v') {
-    doPaste();
-  } else if (e.key === 'f' && !e.shiftKey) {
-    doFlip('horizontal');
-  } else if (e.key === 'F' && e.shiftKey) {
-    doFlip('vertical');
-  } else if ((e.key === 'r' || e.key === 'R') && !e.repeat) {
-    beginRotate();
-  } else if (e.shiftKey && e.ctrlKey && e.key.startsWith('Arrow')) {
+    if (!e.repeat) {
+      const dir = e.key === 'ArrowUp' ? -1 : 1;
+      const list = visibleOrder(projectOrder(project));
+      if (list.length) {
+        if (tabFocusPos === null || tabFocusPos >= list.length) {
+          const active = project.files[project.activeFileIndex];
+          tabFocusPos = Math.max(0, list.findIndex((entry) => entry.item === active));
+        }
+        tabFocusPos = Math.max(0, Math.min(list.length - 1, tabFocusPos + dir));
+        const focused = list[tabFocusPos];
+        if (focused.isHeader) {
+          // Landing on a collection header shows it as the read-only group
+          // grid, same as clicking it — mirrors landing on a file below
+          // making that file active.
+          setActiveGroup(focused.item.id); // restores (or resets) that collection's own zoom/pan
+        } else {
+          project.activeFileIndex = project.files.indexOf(focused.item);
+          setActiveGroup(null);
+          bindActiveFile(); selectionApi.clear(); // keep the current zoom/pan — only switching which file it applies to
+        }
+        redrawProjectPanel(); draw();
+      }
+    }
+    return;
+  }
+  const focusId = focusedCollectionId();
+  const focusedHeader = focusId && project.collections.find((c) => c.id === focusId);
+  if (e.key === '_' && !e.repeat) { // Shift+-: remove selected file/collection
+    if (focusedHeader) deleteCollection(project, focusedHeader.id);
+    else deleteFile(project, project.activeFileIndex);
+    bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw(); autosave();
+    return;
+  }
+  if (e.key === '=' && !e.repeat) { addCollection(project); redrawProjectPanel(); autosave(); return; }
+  if (e.key === ' ' && !e.repeat) {
+    if (focusedHeader) { focusedHeader.collapsed = !focusedHeader.collapsed; redrawProjectPanel(); autosave(); }
+    return;
+  }
+  if (e.key === 'Enter' && !e.repeat) {
+    if (e.shiftKey) renameProject();
+    else if (focusedHeader) renameInline(`[data-collection-id="${focusId}"] .file-row-name`, () => focusedHeader.name, (v) => { focusedHeader.name = v; }, redrawProjectPanel);
+    else renameActiveFile();
+    return;
+  }
+  if (e.key === 'e' && !e.repeat) { toggleExportForActiveFile(); return; }
+  if (e.key === 'E' && !e.repeat) { exportProjectSprite(project); return; }
+  if (e.key === '\\' && !e.repeat) { openProjectPicker(document.querySelector('.project-name') || projectPanel); return; }
+}
+
+// --- Main keydown/keyup dispatch ---
+let leftCtrlDown = false;
+let leftCtrlUsed = false; // any other key pressed while left-Ctrl was held — a clean tap-alone returns focus to canvas
+window.addEventListener('keydown', (e) => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
+  if (keybindHelp.isOpen()) {
+    if (e.key === '?' || e.key === 'Escape') { e.preventDefault(); keybindHelp.close(); }
+    return;
+  }
+  if (exportErrorOverlay) {
+    if (e.key === 'Escape') { e.preventDefault(); closeExportErrorModal(); }
+    return;
+  }
+
+  // Modifier tracking (live state, read by arrowTick/dispatch* below).
+  if (e.key === 'Shift') {
+    held.shift = true;
+    if (e.code === 'ShiftLeft') held.leftShift = true;
+    if (e.code === 'ShiftRight') held.rightShift = true;
+    if (!e.repeat && focusedPanel === 'canvas') arrowAnchor = { ...currentCursor() };
+  }
+  if (e.key === 'Control') {
+    held.ctrl = true;
+    if (e.code === 'ControlLeft' && !leftCtrlDown) { leftCtrlDown = true; leftCtrlUsed = false; }
+  }
+  if (e.key === 'Alt') held.alt = true;
+  // Self-healing latch: every non-Shift key event carries the browser's own
+  // truth about whether Shift is down right now, so a stale latch is caught
+  // on the very next keypress instead of persisting. Shift's own keyup is
+  // not a reliable clearing point — a remapped Shift (or an xkb layout
+  // switch bound to it) can report a keyup whose e.key is not 'Shift' at
+  // all, which never reaches the release branch below and leaves the latch
+  // stuck, rectangle-selecting on every later arrow press.
+  if (e.key !== 'Shift' && !e.shiftKey && held.shift) {
+    held.shift = held.leftShift = held.rightShift = false;
+    arrowAnchor = null;
+    rectSelecting = false;
+  }
+  if (leftCtrlDown && e.key !== 'Control') leftCtrlUsed = true;
+
+  if (e.key === '?') { keybindHelp.toggle(); return; }
+
+  // --- Global bindings (every focus) ---
+  if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); doCopy(); return; }
+  if (e.ctrlKey && (e.key === 'x' || e.key === 'X')) { e.preventDefault(); doCut(); return; }
+  if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); doPaste(); return; }
+  if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); selectionApi.set(fullMask(model)); draw(); return; }
+  if (e.ctrlKey && (e.key === 'd' || e.key === 'D')) {
     e.preventDefault();
-    const [dx, dy] = arrowDelta(e.key);
-    moveSelection(dx, dy, true);
-  } else if (e.shiftKey && e.key.startsWith('Arrow')) {
+    selectionApi.clear(); frameSelection = null; layerSelection = null;
+    fileSelection = null; multiLayerSelection = null;
+    redrawProjectPanel(); draw();
+    return;
+  }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
     e.preventDefault();
-    const [dx, dy] = arrowDelta(e.key);
-    moveSelection(dx, dy, false);
+    if (undoCmd(getActiveFile(project), model)) { bindActiveFile(); draw(); autosave(); }
+    return;
+  }
+  if (e.ctrlKey && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault();
+    if (redoCmd(getActiveFile(project), model)) { bindActiveFile(); draw(); autosave(); }
+    return;
+  }
+  if (e.key === 'Escape') {
+    setActiveGroup(null); // also exits the read-only group grid, if showing one
+    selectionApi.clear(); frameSelection = null; layerSelection = null;
+    setFocus('canvas'); // give the keyboard back to the canvas, same as clicking off any panel
+    redrawProjectPanel(); draw();
+    return;
+  }
+  // Ctrl+Space (tap) toggles playback; Ctrl+Space+arrows pans instead — see
+  // ctrlSpaceArmed/arrowTick, resolved on Space's own keyup below.
+  if (e.key === ' ' && e.ctrlKey && !e.repeat) { e.preventDefault(); ctrlSpaceArmed = true; held.space = true; return; }
+  if (leftCtrlDown && e.key.startsWith('Arrow') && !e.repeat) {
+    e.preventDefault();
+    // Colors/Layers/Timeline aren't reachable while viewing a group.
+    const target = { ArrowUp: 'timeline', ArrowRight: 'layers', ArrowDown: 'colors', ArrowLeft: 'projects' }[e.key];
+    if (target && (target === 'projects' || !activeGroupId)) setFocus(target);
+    return;
+  }
+  if (e.key === 'Tab' && !e.repeat) {
+    e.preventDefault();
+    if (e.shiftKey) { toggleHideAllPanels(); return; }
+    // Colors/Layers/Timeline aren't reachable while viewing a group — only
+    // Projects is left to cycle to.
+    const cycle = activeGroupId ? ['projects'] : PANEL_CYCLE;
+    const from = focusedPanel === 'canvas' ? -1 : cycle.indexOf(focusedPanel);
+    setFocus(cycle[(from + 1) % cycle.length]);
+    return;
+  }
+  if (e.key === '~') { toggleTagsHidden(); return; }
+  if (e.key === '`' && !e.repeat) { heldBacktick = true; versionNavIndex = 0; updateVersionNavHighlight(); }
+  if (heldBacktick && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    versionNavIndex = (versionNavIndex + dir + versionNavItems.length) % versionNavItems.length;
+    updateVersionNavHighlight();
+    return;
+  }
+  if (heldBacktick && e.key === 'Enter' && !e.repeat) { versionNavItems[versionNavIndex].click(); return; }
+
+  // --- Per-panel dispatch ---
+  if (focusedPanel === 'projects') { dispatchProjects(e); return; }
+  if (focusedPanel === 'colors') { dispatchColors(e); return; }
+  if (focusedPanel === 'layers') { dispatchLayers(e); return; }
+  if (focusedPanel === 'timeline') { dispatchTimeline(e); return; }
+  dispatchCanvas(e);
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.key.startsWith('Arrow')) {
+    heldArrows.delete(e.key);
+    if (heldArrows.size === 0) {
+      arrowRepeater.stop();
+      if (contentMoveActive) { selectionApi.commitContentMove(); contentMoveActive = false; }
+    }
+    return;
+  }
+  if (e.key === 'Shift') {
+    if (e.code === 'ShiftLeft') held.leftShift = false;
+    if (e.code === 'ShiftRight') held.rightShift = false;
+    // Only finalize once BOTH shift keys are up — checked via the browser's
+    // own modifier state (e.getModifierState), not just our own
+    // leftShift/rightShift bookkeeping. Relying solely on matching every
+    // keydown's e.code to a later keyup's e.code is exactly the kind of
+    // thing that can desync on a real keyboard/OS combo (one side's keyup
+    // reporting a code that doesn't match what its keydown set) and leave
+    // held.shift stuck true forever — every arrow press after that keeps
+    // rectangle-selecting with no key actually held, un-fixable by Escape
+    // since nothing ever clears held.shift itself. Trusting the browser's
+    // own answer for "is Shift still down right now" sidesteps that class
+    // of bug entirely.
+    // Two independent signals, and each one can lie on its own: our per-code
+    // bookkeeping desyncs when a keyup reports a different e.code than its
+    // keydown, and e.getModifierState still reports Shift down during
+    // Shift's own keyup on some platforms (X11/Wayland sample the modifier
+    // bitmask before applying the release). Trusting either one alone
+    // leaves held.shift stuck true forever, and every later arrow press
+    // keeps rectangle-selecting with no key held. Stay held only while BOTH
+    // agree it is down; either one saying "up" releases.
+    const modState = e.getModifierState ? e.getModifierState('Shift') : true;
+    const stillHeld = (held.leftShift || held.rightShift) && modState;
+    if (stillHeld) return;
+    held.shift = false;
+    held.leftShift = false;
+    held.rightShift = false;
+    if (rectSelecting && focusedPanel === 'canvas' && arrowAnchor && !held.ctrl && !held.alt) {
+      const c = currentCursor();
+      selectionApi.set(maskFromRect(model, arrowAnchor.x, arrowAnchor.y, c.x, c.y));
+      draw();
+    }
+    arrowAnchor = null;
+    rectSelecting = false;
+    return;
+  }
+  if (e.key === 'Control') {
+    held.ctrl = false;
+    if (e.code === 'ControlLeft') {
+      leftCtrlDown = false;
+      if (!leftCtrlUsed) setFocus('canvas');
+    }
+    return;
+  }
+  if (e.key === 'Alt') { held.alt = false; return; }
+  if (e.key === ' ') {
+    held.space = false;
+    if (ctrlSpaceArmed) {
+      if (!panningKeyboard) togglePlayback();
+      ctrlSpaceArmed = false; panningKeyboard = false;
+      return;
+    }
+    stampRepeater.stop();
+    return;
+  }
+  if (e.key === 'z') { held.z = false; return; }
+  if (e.key === 'r' || e.key === 'R') { endRotate(); return; }
+  if (SHAPE_KEYS[e.key.toLowerCase()]) { endShape(); return; }
+  if (e.key === 'i' || e.key === 'I') { setHeldD(false); return; }
+  if (e.key === '`') { heldBacktick = false; updateVersionNavHighlight(); return; }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (focusedPanel === 'timeline' && fpsRepeater) { fpsRepeater.stop(); fpsRepeater = null; }
   }
 });
 
-function arrowDelta(key) {
-  return { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[key] || [0, 0];
+// The browser only delivers a keyup while this page has focus — alt-tabbing,
+// switching browser tabs, or a native dialog stealing focus while a
+// modifier is held all leave it stuck "down" forever otherwise (e.g. Shift
+// stuck true keeps arrowTick() rectangle-selecting on every arrow press,
+// with no key actually held). Reset every held-key/gesture flag whenever
+// the page stops being the active one, same cleanup each key's own keyup
+// would have done.
+function resetHeldKeys() {
+  held.alt = held.ctrl = held.shift = held.leftShift = held.rightShift = held.space = held.z = false;
+  arrowAnchor = null;
+  rectSelecting = false;
+  heldArrows.clear();
+  arrowRepeater.stop();
+  stampRepeater.stop();
+  if (contentMoveActive) { selectionApi.commitContentMove(); contentMoveActive = false; }
+  ctrlSpaceArmed = false;
+  panningKeyboard = false;
+  leftCtrlDown = false;
+  leftCtrlUsed = false;
+  heldBacktick = false;
+  updateVersionNavHighlight();
+  if (fpsRepeater) { fpsRepeater.stop(); fpsRepeater = null; }
+  if (rotating) endRotate();
+  if (shapeState) endShape();
+  setHeldD(false);
 }
+window.addEventListener('blur', resetHeldKeys);
+document.addEventListener('visibilitychange', () => { if (document.hidden) resetHeldKeys(); });
 
-window.addEventListener('keyup', (e) => {
-  if (e.key === 'r' || e.key === 'R') endRotate();
-  if (e.key === 'i' || e.key === 'I') setEyedropperActive(false);
-});
-
-// Eyedropper ("I" hold, §8): samples a color from anywhere in the
-// viewport — canvas pixels, the transparent backdrop, palette chips, any
-// UI surface — not just the canvas. Adds the sampled color as a new chip
-// if the palette doesn't already have it.
-function setEyedropperActive(active) {
-  if (eyedropperActive === active) return;
-  eyedropperActive = active;
+// Hold I + left-click: samples a color from anywhere in the viewport —
+// canvas pixels, the transparent backdrop, palette chips, any UI surface —
+// not just the canvas. Adds the sampled color as a new chip if the palette
+// doesn't already have it. (Tapping I alone instead adds whatever's under
+// the keyboard cursor, handled in dispatchCanvas above.)
+function setHeldD(active) {
+  if (heldD === active) return;
+  heldD = active;
   document.body.style.cursor = active ? 'crosshair' : '';
-  if (!active && eyedropperPreview) { eyedropperPreview.remove(); eyedropperPreview = null; }
+  if (!active && dPickPreview) { dPickPreview.remove(); dPickPreview = null; }
 }
-
-window.addEventListener('keydown', (e) => {
-  const tag = document.activeElement && document.activeElement.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if ((e.key === 'i' || e.key === 'I') && !e.repeat) setEyedropperActive(true);
-});
-window.addEventListener('blur', () => setEyedropperActive(false));
 
 function rgbStringToHex(rgbStr) {
   const m = rgbStr && rgbStr.match(/[\d.]+/g);
@@ -744,7 +2470,7 @@ function sampleColorAt(clientX, clientY) {
     if (px.x >= 0 && px.y >= 0 && px.x < model.width && px.y < model.height) {
       const composite = compositeFrame(file);
       const color = composite[px.y * model.width + px.x];
-      if (color) return color;
+      if (color) return packedToHex(color);
     }
     return '#CFCFCF'; // sampled the transparent backdrop/checkerboard
   }
@@ -765,30 +2491,53 @@ function sampleColorAt(clientX, clientY) {
 }
 
 document.addEventListener('pointerdown', (e) => {
-  if (!eyedropperActive) return;
+  if (!heldD) return;
   e.preventDefault();
   e.stopPropagation();
   const hex = sampleColorAt(e.clientX, e.clientY);
-  if (hex) palette.pickColor(hex, e.button === 2);
+  if (hex) palette.pickColor(hex);
 }, true);
 
+// Clicking anywhere outside the currently focused panel gives the keyboard
+// back to the canvas, same as Escape — but not a click inside a slide-out
+// menu the panel itself opened (§ slide-out.js), which floats as its own
+// <body>-level node outside the panel's DOM but still belongs to it.
+document.addEventListener('pointerdown', (e) => {
+  if (focusedPanel === 'canvas') return;
+  const panelEl = PANEL_EL[focusedPanel];
+  if (panelEl && !panelEl.contains(e.target) && !e.target.closest('.slide-out-bar')) setFocus('canvas');
+});
+
 document.addEventListener('pointermove', (e) => {
-  if (!eyedropperActive) return;
+  if (!heldD) return;
   const hex = sampleColorAt(e.clientX, e.clientY);
-  if (!eyedropperPreview) {
-    eyedropperPreview = document.createElement('div');
-    eyedropperPreview.className = 'eyedropper-preview';
-    document.body.append(eyedropperPreview);
+  if (!dPickPreview) {
+    dPickPreview = document.createElement('div');
+    dPickPreview.className = 'd-pick-preview';
+    document.body.append(dPickPreview);
   }
-  eyedropperPreview.style.background = hex || 'transparent';
+  dPickPreview.style.background = hex || 'transparent';
   // Offset up-right of the actual cursor/sample point so the preview
   // itself never covers what's being sampled.
-  eyedropperPreview.style.left = e.clientX + 14 + 'px';
-  eyedropperPreview.style.top = e.clientY - 14 - 16 + 'px';
+  dPickPreview.style.left = e.clientX + 14 + 'px';
+  dPickPreview.style.top = e.clientY - 14 - 16 + 'px';
 }, true);
 
 document.addEventListener('contextmenu', (e) => {
-  if (eyedropperActive) e.preventDefault();
+  if (heldD) e.preventDefault();
 }, true);
 
 resize();
+
+// TEMPORARY diagnostic hook — remove once the stuck-Shift selection bug is
+// pinned down. Exposes the live modifier/selection state so a reproduction
+// on real hardware can be inspected from the console.
+window.__spriteDebug = () => ({
+  held: { ...held },
+  arrowAnchor,
+  rectSelecting,
+  focusedPanel,
+  heldArrows: [...heldArrows],
+  shapeActive: !!shapeState,
+  hasSelection: !!selectionMask,
+});

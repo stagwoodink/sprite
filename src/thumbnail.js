@@ -17,15 +17,16 @@ export function paintThumbnail(canvasEl, file, pixels, heightPx, { dim } = {}) {
   ctx.fillRect(0, 0, w / 2, heightPx / 2);
   ctx.fillRect(w / 2, heightPx / 2, w / 2, heightPx / 2);
 
-  const scaleX = w / file.visibleWidth, scaleY = heightPx / file.visibleHeight;
-  for (let y = 0; y < file.visibleHeight; y++) {
-    for (let x = 0; x < file.visibleWidth; x++) {
-      const c = pixels[y * file.canvasWidth + x];
-      if (!c) continue;
-      ctx.fillStyle = c;
-      ctx.fillRect(x * scaleX, y * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
-    }
-  }
+  // `pixels` is a packed-RGBA visible-size buffer (sprite-file.js
+  // composites): one bulk copy + one scaled blit, not a fillRect per pixel.
+  const src = document.createElement('canvas');
+  src.width = file.visibleWidth;
+  src.height = file.visibleHeight;
+  const img = new ImageData(file.visibleWidth, file.visibleHeight);
+  new Uint32Array(img.data.buffer).set(pixels);
+  src.getContext('2d').putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(src, 0, 0, w, heightPx);
 
   if (dim) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
