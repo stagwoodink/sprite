@@ -686,7 +686,7 @@ function computeOnionFrames(file) {
     const ghosts = [];
     for (let i = lo; i <= hi; i++) {
       if (i === file.activeFrameIndex) continue;
-      ghosts.push({ side: i < file.activeFrameIndex ? 'before' : 'after', distance: Math.abs(i - file.activeFrameIndex), pixels: ghostSource(file, i, playback.onionLayerOnly) });
+      ghosts.push({ side: i < file.activeFrameIndex ? 'before' : 'after', distance: Math.abs(i - file.activeFrameIndex), ...ghostSource(file, i, playback.onionLayerOnly) });
     }
     return ghosts;
   }
@@ -694,10 +694,10 @@ function computeOnionFrames(file) {
   const ghosts = [];
   for (let d = 1; d <= ONION_RANGE; d++) {
     if (file.activeFrameIndex - d >= 0) {
-      ghosts.push({ side: 'before', distance: d, pixels: ghostSource(file, file.activeFrameIndex - d, playback.onionLayerOnly) });
+      ghosts.push({ side: 'before', distance: d, ...ghostSource(file, file.activeFrameIndex - d, playback.onionLayerOnly) });
     }
     if (file.activeFrameIndex + d < file.frames.length) {
-      ghosts.push({ side: 'after', distance: d, pixels: ghostSource(file, file.activeFrameIndex + d, playback.onionLayerOnly) });
+      ghosts.push({ side: 'after', distance: d, ...ghostSource(file, file.activeFrameIndex + d, playback.onionLayerOnly) });
     }
   }
   return ghosts;

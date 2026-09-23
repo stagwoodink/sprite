@@ -195,9 +195,8 @@ export function compositeLayerAt(file, layerIndex, frameIndex) {
 
 // Crops a full-stride (canvasWidth x canvasHeight) index buffer down to the
 // visible window as packed pixels, matching compositeFrame's output shape.
-function cropToVisible(file, fullPixels) {
+function cropToVisible(file, fullPixels, out = new Uint32Array(file.visibleWidth * file.visibleHeight)) {
   const w = file.visibleWidth, h = file.visibleHeight;
-  const out = new Uint32Array(w * h);
   const table = packedTable(file.colors);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) out[y * w + x] = table[fullPixels[y * file.canvasWidth + x]];
@@ -206,12 +205,27 @@ function cropToVisible(file, fullPixels) {
 }
 
 // Onion-skin ghost source for one frame (§12.3): either the full composite
-// or just the active layer, toggleable.
+// or just the active layer, toggleable. Returns an identity (`key`) and a
+// change counter (`rev`) so the renderer can keep the tinted result between
+// frames, plus `pixels()`, which only runs on a cache miss — layer-only mode
+// crops into one shared scratch buffer the caller must consume immediately.
+let cropScratch = null;
 export function ghostSource(file, frameIndex, activeLayerOnly) {
   if (activeLayerOnly) {
-    return cropToVisible(file, file.frames[frameIndex].layerPixels[file.activeLayerIndex]);
+    const buf = file.frames[frameIndex].layerPixels[file.activeLayerIndex];
+    const size = file.visibleWidth * file.visibleHeight;
+    return {
+      key: buf,
+      // A resize changes the crop without touching the buffer's version.
+      rev: `${buf.v | 0}:${file.visibleWidth}x${file.visibleHeight}x${file.canvasWidth}`,
+      pixels() {
+        if (!cropScratch || cropScratch.length !== size) cropScratch = new Uint32Array(size);
+        return cropToVisible(file, buf, cropScratch);
+      },
+    };
   }
-  return compositeFrameAt(file, frameIndex);
+  const out = compositeFrameAt(file, frameIndex);
+  return { key: out, rev: out.rev, pixels: () => out };
 }
 
 // A new layer must land INSIDE some group (every Layer belongs to a Group

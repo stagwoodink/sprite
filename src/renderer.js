@@ -58,8 +58,10 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
     ctx.fillRect(ox, oy, w, h);
   }
 
-  if (onionFrames) {
-    for (const ghost of onionFrames) drawGhost(ctx, model, ghost, scale, ox, oy);
+  if (onionFrames || ghostCache.size) {
+    const nextCache = new Map();
+    for (const ghost of onionFrames || []) drawGhost(ctx, model, ghost, scale, ox, oy, nextCache);
+    ghostCache = nextCache;
   }
 
   if (references) drawReferences(ctx, references, scale, ox, oy, w, h);
@@ -324,31 +326,44 @@ function fillCheckerboard(ctx, scale, ox, oy, destX, destY, destW, destH, cellPx
 // Onion skinning (§12.3): ghost frames tint toward red (before) or blue
 // (after) with opacity falling off by distance, fixed range 2 in each
 // direction — no range control exists in the UI.
-function drawGhost(ctx, model, ghost, scale, ox, oy) {
-  const tint = hexToRgb(ghost.side === 'before' ? ONION_BEFORE_TINT : ONION_AFTER_TINT);
-  const alpha = ghost.distance === 1 ? 0.35 : 0.18;
-  // Tint every pixel halfway toward the ghost color in one bulk pass over an
-  // ImageData, then one scaled blit — not a fillRect per pixel, which at
-  // 512x512 was a quarter-million draw calls per frame.
-  const img = new ImageData(model.width, model.height);
-  const out = new Uint32Array(img.data.buffer);
-  for (let i = 0; i < out.length; i++) {
-    const p = ghost.pixels[i];
-    if (!p) continue;
-    const r = ((p & 255) + tint.r) >> 1, g = (((p >> 8) & 255) + tint.g) >> 1, b = (((p >> 16) & 255) + tint.b) >> 1;
-    out[i] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+// The tinted canvas is cached per source (`ghost.key`) until its `rev`, side
+// or the model size changes, so a ghost costs a blit per frame and a rebuild
+// per edit. Distance only sets the blit's alpha, so it isn't part of the
+// stamp. The map is rebuilt every render from just the ghosts on screen, so
+// a long timeline can't grow it without bound.
+let ghostCache = new Map(); // ghost.key -> { stamp, canvas }
+function drawGhost(ctx, model, ghost, scale, ox, oy, nextCache) {
+  const stamp = `${ghost.rev}|${ghost.side}|${model.width}x${model.height}`;
+  let entry = ghostCache.get(ghost.key);
+  if (!entry || entry.stamp !== stamp) {
+    const tint = hexToRgb(ghost.side === 'before' ? ONION_BEFORE_TINT : ONION_AFTER_TINT);
+    // Tint every pixel halfway toward the ghost color in one bulk pass over
+    // an ImageData, then one scaled blit — not a fillRect per pixel, which
+    // at 512x512 was a quarter-million draw calls per frame.
+    const source = ghost.pixels();
+    const img = new ImageData(model.width, model.height);
+    const out = new Uint32Array(img.data.buffer);
+    for (let i = 0; i < out.length; i++) {
+      const p = source[i];
+      if (!p) continue;
+      const r = ((p & 255) + tint.r) >> 1, g = (((p >> 8) & 255) + tint.g) >> 1, b = (((p >> 16) & 255) + tint.b) >> 1;
+      out[i] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    }
+    const canvas = entry ? entry.canvas : document.createElement('canvas');
+    if (canvas.width !== model.width || canvas.height !== model.height) {
+      canvas.width = model.width;
+      canvas.height = model.height;
+    }
+    canvas.getContext('2d').putImageData(img, 0, 0);
+    entry = { stamp, canvas };
   }
-  ghostBuffer ||= document.createElement('canvas');
-  ghostBuffer.width = model.width;
-  ghostBuffer.height = model.height;
-  ghostBuffer.getContext('2d').putImageData(img, 0, 0);
+  nextCache.set(ghost.key, entry);
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(ghostBuffer, ox, oy, model.width * scale, model.height * scale);
+  ctx.globalAlpha = ghost.distance === 1 ? 0.35 : 0.18;
+  ctx.drawImage(entry.canvas, ox, oy, model.width * scale, model.height * scale);
   ctx.restore();
 }
-let ghostBuffer = null;
 
 // Marching ants. Two dash passes exactly one dash-length out of phase —
 // black filling one set of gaps, white the other — so the boundary reads
