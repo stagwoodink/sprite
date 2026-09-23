@@ -1,30 +1,39 @@
-import { NEW_FILE_SIZES } from './project.js';
-import { openSlideOut } from './slide-out.js';
+import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder } from './project.js';
+import { visibleOrder } from './ordering.js';
+import { openSlideOut, openCustomSlideOut, closeSlideOut } from './slide-out.js';
+import { button, makeReorderable, startInlineEdit } from './ui.js';
 
 // Project panel (ui-design-system §7, design-doc §13). `state` is the
 // { project } holder in main.js; callbacks mutate it and call onChange to
-// re-render + re-bind the active file.
-export function renderProjectPanel(container, project, callbacks) {
+// re-render + re-bind the active file. File/collection order and grouping
+// are drag-and-drop only now — a file becomes a collection's member by
+// being positioned directly beneath its header (§ ordering.js), the same
+// way dragging it back out above the header (or past the collection's last
+// member) ungroups it. No separate "move to collection" control.
+export function renderProjectPanel(container, project, callbacks, focusedCollectionId, activeGroupId, fileSelection) {
   container.innerHTML = '';
 
   const header = document.createElement('div');
-  header.className = 'project-header';
+  header.className = 'project-header tile-bar reveal-on-hover';
 
   const nameEl = document.createElement('div');
   nameEl.className = 'project-name';
   nameEl.textContent = project.name;
-  nameEl.title = 'Click to rename';
   nameEl.addEventListener('click', () => startInlineEdit(nameEl, project.name, (v) => {
-    project.name = v || project.name;
+    if (!v) return;
+    project.name = v;
+    // A single-file project reads as one thing to the user — its one
+    // .sprite file should track the project's own name.
+    if (project.files.length === 1) project.files[0].name = v;
     callbacks.onChange();
   }));
 
-  // Multi-project switching isn't wired yet (Phase 7 gap: one Project per
-  // session for now) — both buttons are honest placeholders until then.
-  const newBtn = chunkyIconButton('+', 'New project (not yet implemented)', () => {});
-  const openBtn = chunkyIconButton('□', 'Open project (not yet implemented)', () => {});
+  // Same glyph, same `.btn--reveal` hover treatment as every other row's
+  // "⋯" menu button (file, collection) — one menu-trigger look everywhere,
+  // not a bespoke always-visible one just for this row.
+  const openBtn = button({ glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Select project', onClick: () => callbacks.onOpenProject(openBtn) });
 
-  header.append(nameEl, newBtn, openBtn);
+  header.append(nameEl, openBtn);
 
   const fileList = document.createElement('div');
   fileList.className = 'file-list';
@@ -34,112 +43,206 @@ export function renderProjectPanel(container, project, callbacks) {
   const fileStack = document.createElement('div');
   fileStack.className = 'file-stack';
 
-  const addFileBtn = chunkyTextButton('+', () => openSizePopup(addFileBtn, (w, h) => {
-    callbacks.onAddFile(w, h);
-  }));
-  addFileBtn.classList.add('panel-add-btn');
-
-  project.files.forEach((file, i) => {
+  function buildFileRow(file, fileIndex, pos, nested) {
     const row = document.createElement('div');
-    row.className = 'file-row' + (i === project.activeFileIndex ? ' active' : '');
-    row.addEventListener('click', () => {
-      project.activeFileIndex = i;
-      callbacks.onChange();
+    const multiSelected = !!(fileSelection && fileSelection.has(fileIndex));
+    const selected = !activeGroupId && (multiSelected || fileIndex === project.activeFileIndex);
+    row.className = 'file-row tile reveal-on-hover' + (nested ? ' file-row--nested' : '') + (selected ? ' selected' : '');
+    row.dataset.fileIndex = fileIndex; // § multi-select menu anchor lookup
+    row.addEventListener('click', (e) => {
+      // Shift/Alt-click build a multi-file selection instead of switching
+      // the active file — see onShiftSelectFile/onAltSelectFile.
+      if (e.shiftKey) { callbacks.onShiftSelectFile(fileIndex); return; }
+      if (e.altKey) { callbacks.onAltSelectFile(fileIndex); return; }
+      // No-op guard: onChange fully re-renders this panel (innerHTML=''),
+      // which was destroying nameEl mid-gesture — re-selecting the file
+      // that's already active isn't a real change, and rebuilding on
+      // every click of a double-click was exactly what broke rename.
+      if (fileIndex === project.activeFileIndex && !activeGroupId && !fileSelection) return;
+      callbacks.onSelectFile(fileIndex);
     });
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
-    handle.textContent = '⠿';
-    handle.title = 'Drag to reorder';
-    row.draggable = true;
-    row.addEventListener('dragstart', (e) => {
-      if (!e.target.closest('.drag-handle')) { e.preventDefault(); return; }
-      e.dataTransfer.setData('text/plain', String(i));
-    });
-    row.addEventListener('dragover', (e) => e.preventDefault());
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      callbacks.onReorderFile(Number(e.dataTransfer.getData('text/plain')), i);
+    handle.textContent = '⋮';
+    makeReorderable(handle, row, pos, {
+      listEl: fileStack,
+      boundsEl: container,
+      onReorder: (from, to) => callbacks.onReorder(from, to),
+      onRemove: () => callbacks.onRemoveFile(fileIndex),
     });
 
     const nameEl = document.createElement('div');
     nameEl.className = 'file-row-name';
     nameEl.textContent = file.name;
-    nameEl.title = 'Double-click to rename';
     nameEl.addEventListener('dblclick', (e) => {
       e.stopPropagation();
-      startInlineEdit(nameEl, file.name, (v) => { if (v) { file.name = v; callbacks.onChange(); } });
+      startInlineEdit(nameEl, file.name, (v) => { if (v) { file.name = v; callbacks.onChange({ scrollToFileIndex: fileIndex }); } });
     });
 
-    const resizeBtn = document.createElement('div');
-    resizeBtn.className = 'file-resize-btn';
-    resizeBtn.title = 'Resize canvas';
-    resizeBtn.textContent = '⤡'; // diagonal-arrows resize glyph
-    resizeBtn.addEventListener('click', (e) => {
+    // Every per-file action folds into one menu instead of its own
+    // always-reserved button slot.
+    const menuBtn = button({
+      glyph: '⋯', icon: true, className: 'btn--reveal', title: 'File menu',
+      onClick: (e) => {
+        e.stopPropagation();
+        const items = [
+          { label: 'Resize canvas', onClick: () => openSizePopup(menuBtn, (w, h) => callbacks.onResizeFile(file, w, h)) },
+        ];
+        // The last file can't be removed (project.js: deleteFile is a no-op
+        // then anyway) — a project always has at least one file.
+        if (project.files.length > 1) items.push({ label: 'Remove', onClick: () => callbacks.onRemoveFile(fileIndex) });
+        items.push({ label: 'Export', onClick: () => callbacks.onExportFile && callbacks.onExportFile(file, fileIndex) });
+        openSlideOut(menuBtn, items);
+      },
+    });
+
+    row.append(handle, nameEl, menuBtn);
+    return row;
+  }
+
+  function buildCollectionHeader(collection, pos) {
+    const row = document.createElement('div');
+    const selected = collection.id === focusedCollectionId || collection.id === activeGroupId;
+    row.className = 'collection-header tile reveal-on-hover' + (selected ? ' selected' : '');
+    row.dataset.collectionId = collection.id;
+    // Same no-op guard as a file row's click — selecting the already-active
+    // group is not a real change.
+    row.addEventListener('click', () => {
+      if (collection.id === activeGroupId) return;
+      callbacks.onSelectGroup(collection.id);
+    });
+
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle';
+    handle.textContent = '⋮';
+    makeReorderable(handle, row, pos, {
+      listEl: fileStack,
+      boundsEl: container,
+      onReorder: (from, to) => callbacks.onReorder(from, to),
+    });
+
+    const arrow = document.createElement('span');
+    arrow.className = 'fold-arrow';
+    arrow.textContent = collection.collapsed ? '▸' : '▾';
+    arrow.addEventListener('click', (e) => {
       e.stopPropagation();
-      openSizePopup(resizeBtn, (w, h) => callbacks.onResizeFile(file, w, h));
+      collection.collapsed = !collection.collapsed;
+      callbacks.onChange();
     });
 
-    row.append(handle, nameEl, resizeBtn);
-    fileStack.append(row);
-  });
+    const nameEl = document.createElement('div');
+    nameEl.className = 'file-row-name';
+    nameEl.textContent = collection.name;
+    nameEl.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startInlineEdit(nameEl, collection.name, (v) => { if (v) { collection.name = v; callbacks.onChange({ scrollToCollectionId: collection.id }); } });
+    });
 
-  fileStack.append(addFileBtn);
+    // Every per-collection action folds into one menu instead of its own
+    // always-reserved button slot.
+    const menuItems = [];
+    // The last collection can't be deleted (project.js: deleteCollection is
+    // a no-op then anyway) — there's nowhere left for its files to go. A
+    // project always starts with exactly one, so this is the common case,
+    // not an edge case — the menu button itself disables rather than
+    // opening onto nothing.
+    menuItems.push({ label: 'Columns', onClick: () => openGridsetPopup(menuBtn, collection, callbacks.onSetGridset) });
+    menuItems.push({ label: 'Export', onClick: () => callbacks.onExportCollection(collection) });
+    if (project.collections.length > 1) menuItems.push({ label: 'Delete collection', onClick: () => callbacks.onDeleteCollection(collection.id) });
+    const menuBtn = button({
+      glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Collection menu',
+      disabled: menuItems.length === 0,
+      onClick: (e) => { e.stopPropagation(); openSlideOut(menuBtn, menuItems); },
+    });
+
+    row.append(handle, arrow, nameEl, menuBtn);
+    return row;
+  }
+
+  // `pos` is the item's index into the *full* combined order (matching
+  // what onReorder/moveProjectItem expect) — collapsed members are simply
+  // not rendered, not renumbered, so drag positions stay meaningful even
+  // with hidden gaps.
+  for (const entry of visibleOrder(projectOrder(project))) {
+    if (entry.isHeader) {
+      fileStack.append(buildCollectionHeader(entry.item, entry.pos));
+    } else {
+      const fileIndex = project.files.indexOf(entry.item);
+      fileStack.append(buildFileRow(entry.item, fileIndex, entry.pos, entry.item.groupId != null));
+    }
+  }
+
+  const addRow = document.createElement('div');
+  addRow.className = 'tile-bar';
+  // Left click: new file (opens the size picker). Double click: match
+  // whatever's most recently been worked on nearby (§ onAddFileCurrent).
+  // Right click: new collection, straight away — single-purpose gestures on
+  // one button instead of a menu in between.
+  const addFileBtn = button({
+    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New file (dblclick: match current · right-click: new collection)',
+    onClick: () => openSizePopup(addFileBtn, (w, h, preset) => callbacks.onAddFile(w, h, preset)),
+    onContextMenu: (e) => { e.preventDefault(); callbacks.onAddCollection(); },
+  });
+  addFileBtn.addEventListener('dblclick', () => { closeSlideOut(); callbacks.onAddFileCurrent(); });
+  addRow.append(addFileBtn);
   fileList.append(fileStack);
 
-  const footer = document.createElement('div');
-  footer.className = 'project-footer';
-  const importBtn = chunkyTextButton('Import', () => {});
-  const exportBtn = chunkyTextButton('Export', () => callbacks.onExport && callbacks.onExport());
-  footer.append(importBtn, exportBtn);
-
-  container.append(fileList, header, footer);
-}
-
-function chunkyIconButton(glyph, title, onClick) {
-  const btn = document.createElement('button');
-  btn.className = 'panel-header-btn';
-  btn.textContent = glyph;
-  btn.title = title;
-  btn.addEventListener('click', onClick);
-  return btn;
-}
-
-function chunkyTextButton(label, onClick) {
-  const btn = document.createElement('button');
-  btn.className = 'btn footer-btn';
-  const face = document.createElement('div');
-  face.className = 'btn-face';
-  face.textContent = label;
-  const shadow = document.createElement('div');
-  shadow.className = 'btn-shadow';
-  btn.append(face, shadow);
-  btn.addEventListener('click', onClick);
-  return btn;
-}
-
-function startInlineEdit(el, initial, onCommit) {
-  const input = document.createElement('input');
-  input.className = 'inline-edit';
-  input.value = initial;
-  el.replaceWith(input);
-  input.focus();
-  input.select();
-  const commit = () => {
-    onCommit(input.value.trim());
-  };
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { commit(); }
-    if (e.key === 'Escape') { input.replaceWith(el); }
-  });
-  input.addEventListener('blur', commit, { once: true });
+  // `addRow` is a sibling of the scrollable `fileList`, not a child of its
+  // stack, so it stays anchored above the panel footer instead of scrolling
+  // away with a long file list.
+  container.append(fileList, addRow, header);
 }
 
 // Slide-out button stack (§13.2's "non-modal popup" — the rest of the UI
-// stays interactive around it), one button per size preset.
-function openSizePopup(anchor, onPick) {
-  openSlideOut(anchor, NEW_FILE_SIZES.map(({ label, w, h }) => ({
-    label,
-    onClick: () => onPick(w, h),
-  })));
+// stays interactive around it), one button per size preset — largest at
+// the top down to smallest at the bottom (reverse of NEW_FILE_SIZES' own
+// ascending order), so the picker's bottom-to-top reading is small-to-large
+// working up from the anchor it slides out of. The bottom row is a custom
+// W x H pair. `onPick(w, h, preset)` — `preset` is null for a custom size.
+export function openSizePopup(anchor, onPick, { onDismiss } = {}) {
+  return openCustomSlideOut(anchor, (bar, close) => {
+    for (const preset of [...NEW_FILE_SIZES].reverse()) {
+      bar.append(button({ label: preset.label, fill: true, onClick: () => { onPick(preset.w, preset.h, preset); close(); } }));
+    }
+    bar.append(customSizeRow((w, h) => { onPick(w, h, null); close(); }));
+  }, { side: 'up', className: 'size-popup', onDismiss });
+}
+
+// Two number fields (Tab between them) and Enter to commit. H mirrors W
+// until it's been edited by hand, so a square stays one keystroke.
+function customSizeRow(onSubmit) {
+  const row = document.createElement('div');
+  row.className = 'size-row';
+  const field = (title) => {
+    const el = document.createElement('input');
+    el.type = 'number';
+    el.min = MIN_CANVAS;
+    el.max = MAX_CANVAS;
+    el.title = title;
+    el.placeholder = title;
+    return el;
+  };
+  const w = field('W'), h = field('H');
+  let hEdited = false;
+  h.addEventListener('input', () => { hEdited = true; });
+  w.addEventListener('input', () => { if (!hEdited) h.value = w.value; });
+  const submit = (e) => {
+    if (e.key !== 'Enter') return;
+    onSubmit(clampCanvasSize(w.value), clampCanvasSize(h.value || w.value));
+  };
+  w.addEventListener('keydown', submit);
+  h.addEventListener('keydown', submit);
+  row.append(w, h);
+  return row;
+}
+
+// Collection header menu's "Columns" — how many artboards the group
+// grid wraps after before starting a new row (§ renderer.js's
+// computeArtboardLayout `gridset`). 'Auto' clears it back to the default
+// square-ish layout.
+function openGridsetPopup(anchor, collection, onSetGridset) {
+  const items = [1, 2, 3, 4, 5, 6].map((n) => ({ label: String(n), onClick: () => onSetGridset(collection, n) }));
+  items.push({ label: 'Auto', onClick: () => onSetGridset(collection, null) });
+  openSlideOut(anchor, items);
 }

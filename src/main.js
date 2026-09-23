@@ -18,7 +18,7 @@ import {
   addFrame, deleteFrame, duplicateFrame, reorderFrame, ghostSource,
   addLayerGroup, deleteLayerGroup, layerOrder, moveLayerItem,
 } from './sprite-file.js';
-import { renderProjectPanel } from './project-panel.js';
+import { renderProjectPanel, openSizePopup } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
 import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, debounce } from './persistence.js';
@@ -870,10 +870,11 @@ function currentCollectionId() {
 
 // Shared by the size picker's fixed presets and its Current option — both
 // just resolve a (w, h) differently, then land the new File the same way.
-function commitNewFile(w, h) {
+function commitNewFile(w, h, preset) {
   const collectionId = currentCollectionId(); // read before exiting group view below
   setActiveGroup(null); // a new file takes over the canvas even if a collection grid was open
   addFile(project, `sprite${project.files.length + 1}`, w, h, collectionId);
+  if (preset && preset.palette) palette.loadPreset(preset.palette); // console sizes bring their palette
   bindActiveFile();
   resetView();
   redrawProjectPanel();
@@ -913,7 +914,7 @@ function redrawProjectPanel() {
       draw();
       autosave();
     },
-    onAddFile: (w, h) => commitNewFile(w, h),
+    onAddFile: (w, h, preset) => commitNewFile(w, h, preset),
     // "Current" (bottom of the New File size picker): same size as
     // whichever File was most recently worked on in the collection this
     // new one is about to land in — falls back to the new-project default
@@ -1010,18 +1011,14 @@ function openFileSelectionMenu(lastAddedIndex) {
 }
 
 function openMultiResizePopup(anchor, files) {
-  const items = [...NEW_FILE_SIZES].reverse().map(({ label, w, h }) => ({
-    label,
-    onClick: () => {
-      for (const file of files) {
-        resizeCanvas(file, w, h);
-        file.updatedAt = Date.now(); // § project.js's mostRecentFileIn
-      }
-      fileSelection = null;
-      bindActiveFile(); resetView(); redrawProjectPanel(); draw(); autosave();
-    },
-  }));
-  openSlideOut(anchor, items, { side: 'up', onDismiss: dismissFileSelection });
+  openSizePopup(anchor, (w, h) => {
+    for (const file of files) {
+      resizeCanvas(file, w, h);
+      file.updatedAt = Date.now(); // § project.js's mostRecentFileIn
+    }
+    fileSelection = null;
+    bindActiveFile(); resetView(); redrawProjectPanel(); draw(); autosave();
+  }, { onDismiss: dismissFileSelection });
 }
 
 // One PNG download per selected file (the same default 'e' itself exports
@@ -1808,8 +1805,9 @@ let pickingFileSize = null;
 function beginPickFileSize() { pickingFileSize = 0; }
 function stepPickFileSize(dir) { pickingFileSize = (pickingFileSize + dir + NEW_FILE_SIZES.length) % NEW_FILE_SIZES.length; draw(); }
 function commitPickFileSize() {
-  const { w, h } = NEW_FILE_SIZES[pickingFileSize];
+  const { w, h, palette: presetPalette } = NEW_FILE_SIZES[pickingFileSize];
   addFile(project, `sprite${project.files.length + 1}`, w, h, focusedCollectionId());
+  if (presetPalette) palette.loadPreset(presetPalette);
   bindActiveFile(); resetView(); redrawProjectPanel(); draw(); autosave();
   pickingFileSize = null;
   requestAnimationFrame(renameActiveFile); // panel needs one redraw for the new row to exist
