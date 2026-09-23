@@ -57,8 +57,11 @@ export async function loadProject(backend, projectId) {
     // for v3, the single sidecar for v2, nothing for v1.
     const chunks = new Map();
     if (raw.version === FORMAT_VERSION) {
-      for (const id of raw.frames) chunks.set(`frame:${id}`, await backend.readBytes([projectId, frameChunkName(fileName, id)]));
-      chunks.set('undo', await backend.readBytes([projectId, fileName + UNDO_SUFFIX]));
+      // `fileName` is the JSON's stored name ("x.sprite"); chunks are named
+      // after the File ("x"), see writeFile.
+      const base = fileName.replace(/\.sprite$/, '');
+      for (const id of raw.frames) chunks.set(`frame:${id}`, await backend.readBytes([projectId, frameChunkName(base, id)]));
+      chunks.set('undo', await backend.readBytes([projectId, base + UNDO_SUFFIX]));
     } else if (raw.version === 2) {
       chunks.set('bin', await backend.readBytes([projectId, fileName + '.bin']));
     }

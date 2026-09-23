@@ -33,6 +33,7 @@ await saveProject(backend, project);
 assert.deepEqual(writes.filter((w) => w.startsWith('p/')), ['p/b.sprite'], 'metadata-only change skips every chunk');
 
 const back = await loadProject(backend, 'p');
+assert.notEqual(back.files[0].frames[0].layerPixels[0][0], 0, 'pixels survive a save and reload'); // the edited cell at 0,0
 writes.length = 0;
 await saveProject(backend, back);
 assert.equal(writes.filter((w) => w.startsWith('p/')).length, 1, 'reloaded project rewrites only project.json');
