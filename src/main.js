@@ -21,7 +21,7 @@ import {
 import { renderProjectPanel, openSizePopup } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
-import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, debounce } from './persistence.js';
+import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, debounce, autosaveDelay } from './persistence.js';
 import { createRevealablePanel } from './panel-reveal.js';
 import { createKeybindHelp } from './keybind-help.js';
 import { renderExportPanel } from './export-panel.js';
@@ -490,7 +490,10 @@ try {
 }
 uiPrefs.lastProjectId = project.id;
 saveUiPrefs(uiPrefs);
-const autosave = debounce(() => saveProject(backend, project).catch((err) => console.error('Autosave failed:', err)));
+const autosave = debounce(() => saveProject(backend, project).catch((err) => console.error('Autosave failed:', err)), () => {
+  const file = getActiveFile(project);
+  return autosaveDelay(file.canvasWidth * file.canvasHeight);
+});
 autosave();
 
 // `model` is a stable view object; switching files/layers/frames re-points

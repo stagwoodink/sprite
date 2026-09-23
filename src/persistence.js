@@ -4,12 +4,23 @@ import { encodeFile, parseFile, FORMAT_VERSION } from './sprite-format.js';
 // Debounced write — autosave fires after every committed EditCommand, but
 // batched against rapid-fire commits (e.g. end-of-stroke) rather than
 // writing mid-stroke (§18).
+// `ms` may be a function, re-read on every call, for a delay that depends
+// on current state (see autosaveDelay).
 export function debounce(fn, ms = 400) {
   let timer;
   return (...args) => {
     clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), ms);
+    timer = setTimeout(() => fn(...args), typeof ms === 'function' ? ms() : ms);
   };
+}
+
+// Serializing a file costs roughly its canvas area, so a big canvas waits
+// longer to batch more edits per write: a flat 400ms up to 64x64, stretching
+// linearly to 5s at 512x512.
+export function autosaveDelay(area) {
+  const SMALL = 64 * 64, LARGE = 512 * 512;
+  const t = Math.min(1, Math.max(0, (area - SMALL) / (LARGE - SMALL)));
+  return 400 + t * 4600;
 }
 
 export async function chooseBackend() {
