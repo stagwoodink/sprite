@@ -276,7 +276,9 @@ export async function deleteStoredFile(backend, projectId, fileName) {
   await Promise.all(names.map((n) => backend.delete([projectId, n])));
 }
 
-export async function saveProject(backend, project) {
+// `files` narrows the write to Files known to have changed (project.json is
+// always checked); omitted, every File is checked.
+export async function saveProject(backend, project, files = project.files) {
   const projectJson = {
     name: project.name,
     palette: project.palette,
@@ -291,6 +293,6 @@ export async function saveProject(backend, project) {
     lastProjectJson.set(project, serialized);
     wrote = true;
   }
-  const results = await Promise.all(project.files.map((file) => writeFile(backend, project.id, file)));
+  const results = await Promise.all(files.map((file) => writeFile(backend, project.id, file)));
   if (wrote || results.includes(true)) await touchRegistry(backend, project);
 }

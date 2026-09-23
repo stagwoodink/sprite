@@ -121,4 +121,15 @@ assert.equal(store.has('q/old.sprite.undo'), false, 'undo chunk deleted');
 assert.equal([...store.keys()].filter((k) => k.startsWith('q/old.sprite.frame-fx-')).length, 2, 'one chunk per layer written');
 const again = await loadProject(backend, 'q');
 assert.deepEqual(again.files[0].frames[0].layerPixels.map((b) => Array.from(b)), [[1, 0, 0, 2], [0, 1, 1, 0]], 'and reload as v4');
+
+// a narrowed save touches only the Files it names; the next full save catches the rest
+await saveProject(backend, project);
+project.files[1].layers[0].visible = true; // an edit to b that the narrowed save is not told about
+setPixel({ width: 4, height: 4, stride: 4, pixels: project.files[0].frames[0].layerPixels[0], colors: project.files[0].colors }, 3, 0, '#FF00FF');
+writes.length = 0;
+await saveProject(backend, project, [project.files[0]]);
+assert.equal(writes.some((w) => w.startsWith('p/b.')), false, 'a file not named is not written');
+assert.equal(writes.some((w) => w.startsWith('p/a.sprite.frame-')), true, 'the named file is');
+await saveProject(backend, project);
+assert.equal(writes.some((w) => w === 'p/b.sprite'), true, 'the next full save picks up the unnamed change');
 console.log('persistence-skip ok');

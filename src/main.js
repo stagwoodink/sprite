@@ -507,10 +507,25 @@ try {
 }
 uiPrefs.lastProjectId = project.id;
 saveUiPrefs(uiPrefs);
-const autosave = debounce(() => saveProject(backend, project).catch((err) => console.error('Autosave failed:', err)), () => {
+// A call naming the File it edited saves just that File; a bare call (every
+// rarer path: renames, moves, panel edits) sweeps them all, so a path that
+// forgets to name its File costs time, never data.
+const pendingFiles = new Set();
+let sweepAll = true;
+const flushAutosave = debounce(() => {
+  const only = sweepAll ? undefined : [...pendingFiles];
+  pendingFiles.clear();
+  sweepAll = false;
+  saveProject(backend, project, only).catch((err) => console.error('Autosave failed:', err));
+}, () => {
   const file = getActiveFile(project);
   return autosaveDelay(file.canvasWidth * file.canvasHeight);
 });
+function autosave(file) {
+  if (file) pendingFiles.add(file);
+  else sweepAll = true;
+  flushAutosave();
+}
 autosave();
 
 // Memory follows what's open: a File nobody has used for a minute (and that
@@ -745,7 +760,7 @@ const history = {
   // Full refresh (thumbnails included) once per committed edit — not per
   // animation frame or per pointermove, which is what made this laggy
   // before (see the animateCursor comment further down).
-  commit: (cmd) => { commitCommand(getActiveFile(project), cmd); autosave(); draw(); },
+  commit: (cmd) => { const file = getActiveFile(project); commitCommand(file, cmd); autosave(file); draw(); },
 };
 
 // Layer structural edits (add/delete/reorder) go through undo too, as a
