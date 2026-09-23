@@ -2,7 +2,12 @@ import { getPixel, setPixel, inBounds } from './canvas-model.js';
 
 // Acting on a selection (§9.2): flip, rotate, move, copy/cut/paste. All of
 // these work on the selection's bounding box within the active layer.
+// A mask is never edited after it is built (every change makes a new one),
+// so its bounding box is computed once per mask. shiftMask seeds the entry
+// for the mask it returns, so a run of arrow-key nudges never rescans.
+const boundsCache = new WeakMap(); // mask -> bounds | null
 export function maskBounds(model, mask) {
+  if (boundsCache.has(mask)) return boundsCache.get(mask);
   let minX = model.width, minY = model.height, maxX = -1, maxY = -1;
   for (let y = 0; y < model.height; y++) {
     for (let x = 0; x < model.width; x++) {
@@ -13,8 +18,9 @@ export function maskBounds(model, mask) {
       if (y > maxY) maxY = y;
     }
   }
-  if (maxX < 0) return null;
-  return { minX, minY, maxX, maxY, w: maxX - minX + 1, h: maxY - minY + 1 };
+  const bounds = maxX < 0 ? null : { minX, minY, maxX, maxY, w: maxX - minX + 1, h: maxY - minY + 1 };
+  boundsCache.set(mask, bounds);
+  return bounds;
 }
 
 // Extracts (mask-shaped) content into a clipboard-style {w, h, cells} where
@@ -66,12 +72,18 @@ export function flip(model, mask, axis) {
 // Moves the mask itself (Shift+Arrows) without touching pixel content.
 export function shiftMask(model, mask, dx, dy) {
   const next = new Uint8Array(mask.length);
-  for (let y = 0; y < model.height; y++) {
-    for (let x = 0; x < model.width; x++) {
+  const b = maskBounds(model, mask);
+  if (!b) return next;
+  for (let y = b.minY; y <= b.maxY; y++) {
+    for (let x = b.minX; x <= b.maxX; x++) {
       if (!mask[y * model.width + x]) continue;
       const nx = x + dx, ny = y + dy;
       if (inBounds(model, nx, ny)) next[ny * model.width + nx] = 1;
     }
+  }
+  // Only exact while nothing was clipped; otherwise the box is rescanned lazily.
+  if (b.minX + dx >= 0 && b.minY + dy >= 0 && b.maxX + dx < model.width && b.maxY + dy < model.height) {
+    boundsCache.set(next, { ...b, minX: b.minX + dx, maxX: b.maxX + dx, minY: b.minY + dy, maxY: b.maxY + dy });
   }
   return next;
 }
