@@ -22,17 +22,27 @@ export function maskFromRect(model, x0, y0, x1, y1) {
 // Magic wand (Shift+Alt): contiguous same-color region from the clicked pixel.
 export function maskFromWand(model, startX, startY) {
   const mask = emptyMask(model);
-  const target = getPixel(model, startX, startY);
-  const matches = (x, y) => inBounds(model, x, y) && getPixel(model, x, y) === target;
-  const visited = new Set();
-  const stack = [[startX, startY]];
-  while (stack.length) {
-    const [x, y] = stack.pop();
-    const key = x + ',' + y;
-    if (visited.has(key) || !matches(x, y)) continue;
-    visited.add(key);
-    mask[y * model.width + x] = 1;
-    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  if (!inBounds(model, startX, startY)) return mask;
+  const w = model.width, h = model.height, stride = model.stride || w;
+  // Compared by colour-table index (the table is interned, so equal index
+  // means equal colour) with a flat stack; the mask doubles as the visited
+  // set, and marking on push bounds the stack at w*h.
+  const target = model.pixels[startY * stride + startX];
+  const stack = new Int32Array(w * h);
+  let sp = 0;
+  const push = (x, y) => {
+    const i = y * w + x;
+    if (mask[i] || model.pixels[y * stride + x] !== target) return;
+    mask[i] = 1;
+    stack[sp++] = i;
+  };
+  push(startX, startY);
+  while (sp) {
+    const i = stack[--sp], x = i % w, y = (i / w) | 0;
+    if (x + 1 < w) push(x + 1, y);
+    if (x > 0) push(x - 1, y);
+    if (y + 1 < h) push(x, y + 1);
+    if (y > 0) push(x, y - 1);
   }
   return mask;
 }
