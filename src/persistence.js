@@ -1,5 +1,5 @@
 import { resumeFolder, createDefaultBackend } from './storage.js';
-import { encodeFile, parseFile, bufferSignature, FORMAT_VERSION } from './sprite-format.js';
+import { encodeFile, parseFile, FORMAT_VERSION } from './sprite-format.js';
 
 // Debounced write — autosave fires after every committed EditCommand, but
 // batched against rapid-fire commits (e.g. end-of-stroke) rather than
@@ -53,11 +53,22 @@ export async function loadProject(backend, projectId) {
   for (const fileName of meta.fileNames) {
     const raw = await backend.read([projectId, fileName]);
     if (!raw) continue;
-    const bytes = raw.version === FORMAT_VERSION ? await backend.readBytes([projectId, fileName + BIN_SUFFIX]) : null;
-    const file = parseFile(raw, bytes);
-    // A v1 file is rewritten as v2 right away, so the old shape doesn't
+    // Chunks are read up front (parseFile is synchronous): every Frame's
+    // for v3, the single sidecar for v2, nothing for v1.
+    const chunks = new Map();
+    if (raw.version === FORMAT_VERSION) {
+      for (const id of raw.frames) chunks.set(`frame:${id}`, await backend.readBytes([projectId, frameChunkName(fileName, id)]));
+      chunks.set('undo', await backend.readBytes([projectId, fileName + UNDO_SUFFIX]));
+    } else if (raw.version === 2) {
+      chunks.set('bin', await backend.readBytes([projectId, fileName + '.bin']));
+    }
+    const file = parseFile(raw, (kind, id) => chunks.get(id === undefined ? kind : `${kind}:${id}`) ?? null);
+    // An older file is rewritten as v3 right away, so the old shape doesn't
     // linger in storage until this file happens to be edited.
-    if (raw.version !== FORMAT_VERSION) await writeFile(backend, projectId, file);
+    if (raw.version !== FORMAT_VERSION) {
+      await writeFile(backend, projectId, file);
+      if (raw.version === 2) await backend.delete([projectId, fileName + '.bin']);
+    }
     files.push(file);
   }
   if (!files.length) return null;
@@ -80,8 +91,7 @@ export async function loadProject(backend, projectId) {
   // What's on disk now is what was just read, so the first autosave of a
   // freshly opened project needn't rewrite every File.
   files.forEach((file) => {
-    const { meta } = encodeFile(file, { withBytes: false });
-    lastWritten.set(file, { path: `${projectId}/${file.name}`, sig: bufferSignature(file), json: JSON.stringify(meta) });
+    if (!lastWritten.has(file)) lastWritten.set(file, snapshotOf(projectId, file, encodeFile(file)));
   });
   return { id: projectId, name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex, collections, files };
 }
@@ -98,39 +108,66 @@ export async function deleteProject(backend, projectId) {
   await backend.write(REGISTRY_PATH, registry.filter((entry) => entry.id !== projectId));
 }
 
-// A File's pixel buffers live in a binary sidecar beside its JSON (see
-// sprite-format.js). The sidecar goes first so a v2 JSON never points at
-// buffers that aren't there yet.
-const BIN_SUFFIX = '.bin';
+// A File's pixels live in binary chunks beside its JSON — one per Frame,
+// one for undo (see sprite-format.js). Chunks are written before the JSON,
+// so a saved JSON never points at chunks that aren't there yet.
+const frameChunkName = (fileName, id) => `${fileName}.sprite.frame-${id}`;
+const UNDO_SUFFIX = '.sprite.undo';
 
 // What each File / project.json last wrote, so an autosave rewrites only
-// what changed: drawing one pixel in a 10-File project used to re-serialize
-// all ten. The binary sidecar is the expensive part, gated on the cheap
-// bufferSignature; the small JSON is compared as text, which also catches
-// edits that touch no pixels (layer visibility, renames). Not persisted, so
-// a cold start (or a rename, which changes the path) just writes once.
-const lastWritten = new WeakMap(); // File -> { path, sig, json }
+// what changed: drawing one pixel in one Frame of a 10-File project used to
+// re-serialize all ten Files, and now rewrites just that Frame's chunk. The
+// chunks are gated on their cheap change signatures; the small JSON is
+// compared as text, which also catches edits that touch no pixels (layer
+// visibility, renames). Not persisted, so a cold start (or a rename, which
+// changes the path) just writes once.
+const lastWritten = new WeakMap(); // File -> { path, json, frameSigs: Map<id, sig>, undoSig }
 const lastProjectJson = new WeakMap(); // project -> string
+
+const snapshotOf = (projectId, file, enc) => ({
+  path: `${projectId}/${file.name}`,
+  json: JSON.stringify(enc.meta),
+  frameSigs: new Map(enc.frames.map((f) => [f.id, f.sig])),
+  undoSig: enc.undo.sig,
+});
 
 // Returns whether anything was written.
 async function writeFile(backend, projectId, file) {
-  const path = `${projectId}/${file.name}`;
+  const enc = encodeFile(file);
+  const now = snapshotOf(projectId, file, enc);
   const last = lastWritten.get(file);
-  const sig = bufferSignature(file);
-  const sameBuffers = last && last.path === path && last.sig === sig;
-  const { meta, bytes } = encodeFile(file, { withBytes: !sameBuffers });
-  const json = JSON.stringify(meta);
-  if (sameBuffers && last.json === json) return false;
-  if (!sameBuffers) await backend.write([projectId, file.name + '.sprite' + BIN_SUFFIX], bytes);
-  await backend.write([projectId, file.name + '.sprite'], meta);
-  lastWritten.set(file, { path, sig, json });
-  return true;
+  const same = last && last.path === now.path;
+  let wrote = false;
+  for (const frame of enc.frames) {
+    if (same && last.frameSigs.get(frame.id) === frame.sig) continue;
+    await backend.write([projectId, frameChunkName(file.name, frame.id)], frame.bytes());
+    wrote = true;
+  }
+  if (!same || last.undoSig !== now.undoSig) {
+    await backend.write([projectId, file.name + UNDO_SUFFIX], enc.undo.bytes());
+    wrote = true;
+  }
+  if (!same || last.json !== now.json) {
+    await backend.write([projectId, file.name + '.sprite'], enc.meta);
+    wrote = true;
+  }
+  // Chunks of Frames deleted since the last write are now unreferenced.
+  if (same) {
+    for (const id of last.frameSigs.keys()) {
+      if (!now.frameSigs.has(id)) await backend.delete([projectId, frameChunkName(file.name, id)]);
+    }
+  }
+  lastWritten.set(file, now);
+  return wrote;
 }
 
-// Drops a File's stored JSON and binary sidecar (it moved to another
-// Project, or was deleted).
+// Drops a File's stored JSON and every chunk (it moved to another Project,
+// or was deleted). Found by listing rather than by the File's frame ids, so
+// leftovers from earlier saves go too.
 export async function deleteStoredFile(backend, projectId, fileName) {
-  await Promise.all([fileName + '.sprite', fileName + '.sprite' + BIN_SUFFIX].map((n) => backend.delete([projectId, n])));
+  const prefix = fileName + '.sprite';
+  const names = (await backend.list([projectId])).filter((n) => n === prefix || n.startsWith(prefix + '.'));
+  await Promise.all(names.map((n) => backend.delete([projectId, n])));
 }
 
 export async function saveProject(backend, project) {

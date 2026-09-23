@@ -1193,7 +1193,7 @@ async function importProjectFile(file) {
       const meta = decode('project.json');
       data = {
         name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex,
-        collections: meta.collections, files: meta.fileNames.map((name) => parseFile(decode(`${name}.sprite`), entries[`${name}.sprite.bin`])),
+        collections: meta.collections, files: meta.fileNames.map((name) => parseFile(decode(`${name}.sprite`), (kind, id) => entries[kind === 'frame' ? `${name}.sprite.frame-${id}` : kind === 'undo' ? `${name}.sprite.undo` : `${name}.sprite.bin`] ?? null)),
       };
     } else {
       data = JSON.parse(new TextDecoder().decode(bytes));

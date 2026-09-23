@@ -3,6 +3,9 @@ import { createSpriteFile, addLayer, addFrame, compositeFrameAt } from '../src/s
 import { setPixel, getPixel, blendPixel, packedToHex } from '../src/canvas-model.js';
 import { encodeFile, parseFile } from '../src/sprite-format.js';
 
+// In-memory stand-in for the chunk store: read(kind, id) over an encoded file.
+const readerFor = (enc) => (kind, id) => (kind === 'frame' ? enc.frames.find((fr) => fr.id === id).bytes() : kind === 'undo' ? enc.undo.bytes() : null);
+
 // v1 file: plain arrays of hex/null.
 const v1 = {
   name: 'old', layers: [{ name: 'L', visible: true, opacity: 1, order: 2000 }], layerGroups: [], activeLayerIndex: 0, activeFrameIndex: 0,
@@ -22,10 +25,11 @@ addLayer(f); addFrame(f);
 const v = { width: 4, height: 3, stride: 4, pixels: f.frames[1].layerPixels[1], colors: f.colors };
 setPixel(v, 1, 1, '#123456');
 blendPixel(v, 1, 1, '#FFFFFF', 0.5);
-const { meta, bytes } = encodeFile(f);
-const back = parseFile(JSON.parse(JSON.stringify(meta)), bytes);
-assert.equal(meta.version, 2);
+const enc = encodeFile(f);
+const back = parseFile(JSON.parse(JSON.stringify(enc.meta)), readerFor(enc));
+assert.equal(enc.meta.version, 3);
 assert.deepEqual(back.colors, f.colors);
+assert.deepEqual(back.frames.map((fr) => fr.id), f.frames.map((fr) => fr.id), 'frame ids survive');
 back.frames.forEach((fr, i) => fr.layerPixels.forEach((buf, li) => assert.deepEqual(Array.from(buf), Array.from(f.frames[i].layerPixels[li]))));
 assert.equal(packedToHex(compositeFrameAt(back, 1)[4 + 1]).toUpperCase(), getPixel(v, 1, 1));
 console.log('sprite-format ok');
@@ -37,8 +41,15 @@ const uv = { width: 4, height: 4, stride: 4, pixels: u.frames[0].layerPixels[0],
 const snap = uv.pixels.slice();
 setPixel(uv, 2, 1, '#ABCDEF');
 u.undoStack.push({ type: 'pixelEdit', ...diffFromSnapshot(uv, snap) });
-const ub = parseFile(JSON.parse(JSON.stringify(encodeFile(u).meta)), encodeFile(u).bytes);
+const uenc = encodeFile(u);
+const ub = parseFile(JSON.parse(JSON.stringify(uenc.meta)), readerFor(uenc));
 assert.equal(ub.undoStack.length, 1);
 applyDiff({ ...uv, pixels: ub.frames[0].layerPixels[0], colors: ub.colors }, ub.undoStack[0].before);
 assert.equal(ub.frames[0].layerPixels[0][6], 0, 'undo diff clears the pixel');
 console.log('undo diff ok');
+
+// v2 (single sidecar) files still load
+const v2meta = { version: 2, name: 'v2', layers: [{ name: 'L', visible: true, opacity: 1, order: 2000 }], layerGroups: [], activeLayerIndex: 0, activeFrameIndex: 0, canvasWidth: 2, canvasHeight: 2, visibleWidth: 2, visibleHeight: 2, colors: [null, '#111111', '#222222'], frameCount: 1, undoStack: [], redoStack: [] };
+const v2 = parseFile(v2meta, (kind) => (kind === 'bin' ? new Uint8Array(new Uint16Array([1, 0, 0, 2]).buffer) : null));
+assert.deepEqual(Array.from(v2.frames[0].layerPixels[0]), [1, 0, 0, 2]);
+console.log('v2 compat ok');
