@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createSpriteFile, addFrame, addLayer, deleteLayer } from '../src/sprite-file.js';
 import { setPixel } from '../src/canvas-model.js';
-import { saveProject, loadProject, ensureLoaded, unloadIdle } from '../src/persistence.js';
+import { saveProject, loadProject, ensureLoaded, unloadIdle, deleteStoredFile } from '../src/persistence.js';
 
 const store = new Map(), writes = [];
 const backend = {
@@ -132,4 +132,16 @@ assert.equal(writes.some((w) => w.startsWith('p/b.')), false, 'a file not named 
 assert.equal(writes.some((w) => w.startsWith('p/a.sprite.frame-')), true, 'the named file is');
 await saveProject(backend, project);
 assert.equal(writes.some((w) => w === 'p/b.sprite'), true, 'the next full save picks up the unnamed change');
+
+// deleting a stored file removes its meta and chunks by name, without listing the store
+const listed = [];
+const listing = backend.list;
+backend.list = async (...a) => { listed.push(a); return listing(...a); };
+const victim = project.files[0];
+const victimKeys = [...store.keys()].filter((k) => k.startsWith('p/a.sprite'));
+assert.ok(victimKeys.length > 2, 'the file has meta plus several chunks stored');
+await deleteStoredFile(backend, 'p', victim);
+assert.equal([...store.keys()].some((k) => k.startsWith('p/a.sprite')), false, 'meta and every chunk removed');
+assert.equal(listed.length, 0, 'no store scan for a file this session wrote');
+backend.list = listing;
 console.log('persistence-skip ok');

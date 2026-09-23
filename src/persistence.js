@@ -268,11 +268,15 @@ async function writeFile(backend, projectId, file) {
 }
 
 // Drops a File's stored JSON and every chunk (it moved to another Project,
-// or was deleted). Found by listing rather than by the File's frame ids, so
-// leftovers from earlier saves go too.
-export async function deleteStoredFile(backend, projectId, fileName) {
-  const prefix = fileName + '.sprite';
-  const names = (await backend.list([projectId])).filter((n) => n === prefix || n.startsWith(prefix + '.'));
+// or was deleted). The chunks are named from what its last write recorded, so
+// nothing scans the whole store; a File with no record (never written by this
+// session) falls back to listing the Project for its prefix.
+export async function deleteStoredFile(backend, projectId, file) {
+  const base = `${file.name}.sprite`;
+  const last = lastWritten.get(file);
+  const names = last
+    ? [base, ...[...last.chunkSigs.keys()].map((name) => `${base}.${name}`)]
+    : (await backend.list([projectId])).filter((n) => n === base || n.startsWith(base + '.'));
   await Promise.all(names.map((n) => backend.delete([projectId, n])));
 }
 

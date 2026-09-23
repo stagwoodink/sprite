@@ -1238,7 +1238,7 @@ async function splitProject() {
   setActiveGroup(null); // read collections before splitByCollection empties them
   const { parts, moved } = splitByCollection(project);
   for (const part of parts) await saveProject(backend, part);
-  await Promise.all(moved.map((file) => deleteStoredFile(backend, project.id, file.name)));
+  await Promise.all(moved.map((file) => deleteStoredFile(backend, project.id, file)));
   bindActiveFile();
   resetView();
   selectionApi.clear();
