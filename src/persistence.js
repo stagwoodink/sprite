@@ -1,4 +1,5 @@
 import { resumeFolder, createDefaultBackend } from './storage.js';
+import { releaseReferences } from './references.js';
 import { encodeFile, encodeStubMeta, stubFile, parseFile, chunkName, FORMAT_VERSION } from './sprite-format.js';
 
 // Debounced write — autosave fires after every committed EditCommand, but
@@ -184,6 +185,7 @@ function becomeStub(backend, projectId, file, raw) {
   file.frames = stub.frames;
   file.undoStack = [];
   file.redoStack = [];
+  releaseReferences(file);
   file._stub = true;
   delete file._release;
   file._load = () => loadStub(backend, projectId, `${file.name}.sprite`, raw, file);

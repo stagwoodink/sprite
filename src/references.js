@@ -40,6 +40,26 @@ export function removeReference(file, id) {
 
 export const isResolved = (ref) => bitmaps.has(ref.id);
 
+// Frees a File's decoded bitmaps when it unloads. Only linked references:
+// they re-decode from their stored handle on demand (resolveReference),
+// while a session-only one has nothing to re-decode from and must stay.
+export function releaseReferences(file) {
+  for (const ref of referencesOf(file)) {
+    if (!ref.linked) continue;
+    bitmaps.get(ref.id)?.close();
+    bitmaps.delete(ref.id);
+  }
+}
+
+// Decoded size (RGBA) of a File's loaded reference bitmaps, for the capacity
+// meter — approximate, that meter is advisory.
+export function referenceBytes(file) {
+  return referencesOf(file).reduce((sum, ref) => {
+    const bitmap = bitmaps.get(ref.id);
+    return bitmap ? sum + bitmap.width * bitmap.height * 4 : sum;
+  }, 0);
+}
+
 // Loads the bitmap for a linked reference from its handle. Without an
 // active permission grant this stays unresolved (`interactive` = called from
 // a click, so the browser may prompt). A moved/renamed/deleted source just
