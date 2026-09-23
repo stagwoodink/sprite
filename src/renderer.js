@@ -125,7 +125,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
     ctx.beginPath();
     ctx.rect(ox, oy, w, h);
     ctx.clip();
-    drawBrushCursor(ctx, cursorPos, brushCursor, scale, ox, oy);
+    drawBrushCursor(ctx, cursorPos, brushCursor, scale, ox, oy, cursorLuma(model, cursorPos, canvasBg));
     ctx.restore();
   }
   return marching;
@@ -217,13 +217,25 @@ export function hitTestArtboardGrid(viewW, viewH, artboards, { scale = 1, panX =
 const CURSOR_MID_LO = 96;
 const CURSOR_MID_HI = 160;
 
-function sampleLuma(ctx, sx, sy) {
-  try {
-    const d = ctx.getImageData(Math.round(sx), Math.round(sy), 1, 1).data;
-    return 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2];
-  } catch {
-    return null; // e.g. a tainted canvas — fall back to plain difference blend
-  }
+const lumaOf = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+const hexLuma = (hex) => { const { r, g, b } = hexToRgb(hex); return lumaOf(r, g, b); };
+// Two checker shades average to a single constant: close enough for a
+// contrast decision, and the cursor only cares about the midrange band.
+const BACKDROP_LUMA = {
+  checker: (hexLuma(CHECKER_LIGHT) + hexLuma(CHECKER_DARK)) / 2,
+  ...Object.fromEntries(Object.entries(BG_SOLID).map(([key, hex]) => [key, hexLuma(hex)])),
+};
+
+// Brightness under the cursor, from the composite in memory rather than a
+// getImageData readback (which stalls the GPU pipeline every frame). The
+// eased trail can sit outside the sprite, hence the bounds check.
+function cursorLuma(model, pos, canvasBg) {
+  const backdrop = BACKDROP_LUMA[canvasBg];
+  const x = Math.round(pos.x), y = Math.round(pos.y);
+  if (x < 0 || y < 0 || x >= model.width || y >= model.height) return backdrop;
+  const p = model.pixels[y * model.width + x];
+  const alpha = (p >>> 24) / 255;
+  return lumaOf(p & 255, (p >> 8) & 255, (p >> 16) & 255) * alpha + backdrop * (1 - alpha);
 }
 
 // Always-visible brush cursor: painted with a "difference" blend so it
@@ -232,7 +244,7 @@ function sampleLuma(ctx, sx, sy) {
 // eased/trailing display position, not necessarily the exact hovered
 // pixel) — main.js's animation loop owns that easing, this just draws
 // wherever it's told.
-function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy) {
+function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy, luma) {
   if (mode !== 'place' && mode !== 'paint') return;
   const cx = ox + (pos.x + 0.5) * scale;
   const cy = oy + (pos.y + 0.5) * scale;
@@ -248,10 +260,6 @@ function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy) {
     }
   };
 
-  // Sampled before the fill below touches this pixel — it needs to read
-  // whatever's actually underneath, not its own already-blended result.
-  const luma = sampleLuma(ctx, cx, cy);
-
   ctx.save();
   ctx.globalCompositeOperation = 'difference';
   ctx.fillStyle = '#FFFFFF';
@@ -259,7 +267,7 @@ function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy) {
   ctx.fill();
   ctx.restore();
 
-  if (luma !== null && luma >= CURSOR_MID_LO && luma <= CURSOR_MID_HI) {
+  if (luma >= CURSOR_MID_LO && luma <= CURSOR_MID_HI) {
     // Midrange boost: an unblended outline, pushed toward whichever extreme
     // contrasts more against this specific background, layered on top of
     // the (here, weak) difference fill.
