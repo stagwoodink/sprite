@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createSpriteFile, addFrame } from '../src/sprite-file.js';
 import { setPixel } from '../src/canvas-model.js';
-import { saveProject, loadProject } from '../src/persistence.js';
+import { saveProject, loadProject, ensureLoaded } from '../src/persistence.js';
 
 const store = new Map(), writes = [];
 const backend = {
@@ -52,4 +52,23 @@ const doomed = many.frames[0].id;
 many.frames.splice(0, 1);
 await saveProject(backend, project);
 assert.equal([...store.keys()].some((k) => k.endsWith('frame-' + doomed)), false, 'orphaned chunk deleted');
+
+// lazy loading: only the active file's pixels are read; the rest is a stub
+// that fails loudly until loaded, and saves cost only its small JSON
+const lazy = await loadProject(backend, 'p');
+const [act, stub] = lazy.files;
+assert.equal(!!act._stub, false);
+assert.equal(!!stub._stub, true);
+assert.throws(() => stub.frames[0].layerPixels, /isn't loaded yet/, 'touching an unloaded file throws by name');
+await saveProject(backend, lazy); // first save of this project object writes project.json
+writes.length = 0;
+stub.order = 12345; // e.g. a reorder in the project panel
+await saveProject(backend, lazy);
+assert.deepEqual(writes.filter((w) => w.startsWith('p/')), ['p/b.sprite'], 'a stub is saved as JSON only');
+await Promise.all([ensureLoaded(stub), ensureLoaded(stub)]);
+assert.equal(stub.frames[0].layerPixels[0].length, 16, 'loaded in place');
+assert.equal(!!stub._stub, false);
+writes.length = 0;
+await saveProject(backend, lazy);
+assert.deepEqual(writes.filter((w) => w.startsWith('p/')), [], 'a freshly loaded file is not rewritten');
 console.log('persistence-skip ok');

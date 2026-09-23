@@ -22,7 +22,7 @@ import {
 import { renderProjectPanel, openSizePopup } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
-import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, deleteStoredFile, debounce, autosaveDelay } from './persistence.js';
+import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, deleteStoredFile, ensureLoaded, debounce, autosaveDelay } from './persistence.js';
 import { createRevealablePanel } from './panel-reveal.js';
 import { createKeybindHelp } from './keybind-help.js';
 import { renderExportPanel } from './export-panel.js';
@@ -523,8 +523,18 @@ function bindActiveFile() {
   model.width = file.visibleWidth;
   model.height = file.visibleHeight;
   model.stride = file.canvasWidth;
-  model.pixels = activePixels(file);
   model.colors = file.colors;
+  if (file._stub) {
+    // Not loaded yet (persistence.js lazy loading): a blank stand-in until
+    // the pixels arrive, then bind for real and refresh everything.
+    model.pixels = new Uint16Array(file.canvasWidth * file.canvasHeight);
+    ensureLoaded(file).then(() => {
+      if (getActiveFile(project) !== file) return;
+      bindActiveFile(); redrawProjectPanel(); draw();
+    });
+    return;
+  }
+  model.pixels = activePixels(file);
   // Linked references reload lazily from their file handles; each finishing
   // decode just asks for a fresh canvas frame.
   for (const ref of referencesOf(file)) resolveReference(ref).then((loaded) => { if (loaded) draw(); });
@@ -756,6 +766,7 @@ function renderCanvas() {
   // (§11), while `model` (the active layer's own raw buffer) is what
   // painting/selection/undo actually mutate.
   const file = getActiveFile(project);
+  if (file._stub) return; // still loading — bindActiveFile redraws when it lands
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
   const brushCursor = { mode: (inputController && inputController.getMode()) || 'place', size: brushSize };
@@ -780,7 +791,10 @@ function groupArtboards(groupId = activeGroupId) {
     // purely so double-clicking an artboard (§ canvas dblclick, below) can
     // jump straight to the right File without a fragile lookup by name.
     const fileIndex = project.files.indexOf(f);
-    artboards.push({ name: f.name, width: f.visibleWidth, height: f.visibleHeight, pixels: compositeFrame(f), fileIndex });
+    // A File not loaded yet shows blank and fills in when it arrives (load
+    // on view).
+    if (f._stub) ensureLoaded(f).then(() => { if (activeGroupId) renderCanvas(); });
+    artboards.push({ name: f.name, width: f.visibleWidth, height: f.visibleHeight, pixels: f._stub ? new Uint32Array(f.visibleWidth * f.visibleHeight) : compositeFrame(f), fileIndex });
   });
   return artboards;
 }
@@ -949,7 +963,8 @@ function redrawProjectPanel() {
       const ref = targetId && mostRecentFileIn(project, targetId);
       commitNewFile(ref ? ref.visibleWidth : 9, ref ? ref.visibleHeight : 9);
     },
-    onResizeFile: (file, w, h) => {
+    onResizeFile: async (file, w, h) => {
+      await ensureLoaded(file);
       resizeCanvas(file, w, h);
       file.updatedAt = Date.now(); // § project.js's mostRecentFileIn — resize isn't routed through commitCommand
       if (file === getActiveFile(project)) { bindActiveFile(); resetView(); }
@@ -963,7 +978,8 @@ function redrawProjectPanel() {
       bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw();
       openExport({ kind: 'file', file, fps: playback.fps });
     },
-    onExportCollection: (collection) => {
+    onExportCollection: async (collection) => {
+      await Promise.all(projectOrder(project).filter((e) => !e.isHeader && e.item.groupId === collection.id).map((e) => ensureLoaded(e.item)));
       openExport({ kind: 'collection', name: collection.name, artboards: groupArtboards(collection.id), gridset: collection.gridset });
     },
     onReorder: (from, to) => { moveProjectItem(project, from, to); redrawProjectPanel(); autosave(); },
@@ -1036,7 +1052,8 @@ function openFileSelectionMenu(lastAddedIndex) {
 }
 
 function openMultiResizePopup(anchor, files) {
-  openSizePopup(anchor, (w, h) => {
+  openSizePopup(anchor, async (w, h) => {
+    await Promise.all(files.map(ensureLoaded));
     for (const file of files) {
       resizeCanvas(file, w, h);
       file.updatedAt = Date.now(); // § project.js's mostRecentFileIn
@@ -1330,6 +1347,7 @@ function openProjectPicker(anchor) {
 
 function redrawLayersPanel() {
   const file = getActiveFile(project);
+  if (file._stub) return; // still loading
   renderLayersPanel(layersPanel, file, {
     onAddLayer: () => commitLayerChange(file, () => addLayer(file)),
     onSelect: (i) => { file.activeLayerIndex = i; multiLayerSelection = null; bindActiveFile(); redrawLayersPanel(); },
@@ -1489,6 +1507,7 @@ function focusedGroupId() {
 
 function redrawTimelinePanel() {
   const file = getActiveFile(project);
+  if (file._stub) return; // still loading
   renderTimelinePanel(timelineBar, file, playback, {
     onSetFps: (fps) => { playback.fps = fps; if (playback.playing) startPlayback(); },
     onImportSheet: (anchor) => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor })),

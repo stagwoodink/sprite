@@ -26,13 +26,23 @@ const keptUndo = (file) => file.undoStack.slice(file.undoStack.findLastIndex((c)
 // cheap change signature and a `bytes()` thunk, so a caller that already
 // knows a chunk is unchanged never pays to encode it. Redo is session-only
 // (§10); session-only references (no file handle to relink by) aren't saved.
+// The JSON half of a File, shared by a loaded File and a stub (below) so
+// their saved shape can never drift apart. Strips the in-memory-only fields.
+function buildMeta(file, frameIds, commands) {
+  const { frames, undoStack, _stub, _load, _loading, _undoMeta, ...rest } = file;
+  const references = (file.references || []).filter((r) => r.linked);
+  return { ...rest, references, version: FORMAT_VERSION, frames: frameIds, undoStack: commands, redoStack: [] };
+}
+
+// Meta for a File whose pixels aren't loaded (see stubFile).
+export const encodeStubMeta = (file) => buildMeta(file, file.frames.map((f) => f.id), file._undoMeta);
+
 export function encodeFile(file) {
-  const { frames, undoStack, ...rest } = file;
+  const { frames } = file;
   const cells = file.canvasWidth * file.canvasHeight;
   const kept = keptUndo(file);
   const commands = kept.map(({ before, after, uid, ...cmd }) => ({ ...cmd, n: before.length }));
-  const references = (file.references || []).filter((r) => r.linked);
-  const meta = { ...rest, references, version: FORMAT_VERSION, frames: frames.map(frameId), undoStack: commands, redoStack: [] };
+  const meta = buildMeta(file, frames.map(frameId), commands);
 
   const frameChunks = frames.map((frame) => ({
     id: frameId(frame),
@@ -83,6 +93,23 @@ function reader(bytes) {
     offset += size;
     return out;
   };
+}
+
+// A File that has its metadata (layers, size, order, palette-free fields)
+// but not its pixels or undo history, for lazy loading. Frames are
+// placeholders that know their id and *throw* if their pixels are touched,
+// so a code path that forgot to load the File fails loudly and by name
+// instead of reading garbage. `load()` (set by the caller) fills it in
+// place, keeping the object's identity.
+export function stubFile(meta) {
+  const { frames: ids, undoStack, ...rest } = meta;
+  const file = { ...rest, undoStack: [], _undoMeta: undoStack, _stub: true };
+  delete file.version;
+  file.frames = ids.map((id) => ({
+    id,
+    get layerPixels() { throw new Error(`File "${file.name}" isn't loaded yet`); },
+  }));
+  return file;
 }
 
 function decodeUndo(commands, bytes) {

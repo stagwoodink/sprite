@@ -1,6 +1,7 @@
 import { compositeFrame, compositeFrameAt, compositeLayerAt } from './sprite-file.js';
 import { packedToHex } from './canvas-model.js';
 import { encodeFile } from './sprite-format.js';
+import { ensureLoaded } from './persistence.js';
 import { computeArtboardLayout } from './renderer.js';
 import { zipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
@@ -224,6 +225,7 @@ export function exportFile(file, opts) {
 }
 
 async function exportFileImpl(file, { format, scale = 1, mode = 'canvas', fps = 8 } = {}, onProgress) {
+  await ensureLoaded(file);
   if (format === 'gif') return exportFileGif(file, scale, fps, onProgress);
 
   const toBlob = async (pixels, w, h) => {
@@ -383,14 +385,15 @@ async function exportProjectSpriteImpl(project, onProgress) {
       collections: project.collections, fileNames: project.files.map((f) => f.name),
     })),
   };
-  project.files.forEach((file, i) => {
+  for (const [i, file] of project.files.entries()) {
+    await ensureLoaded(file);
     const { meta, frames, undo } = encodeFile(file);
     delete meta.references; // reference images never leave the app
     files[`${file.name}.sprite`] = new TextEncoder().encode(JSON.stringify(meta));
     for (const frame of frames) files[`${file.name}.sprite.frame-${frame.id}`] = frame.bytes();
     files[`${file.name}.sprite.undo`] = undo.bytes();
     onProgress((i + 1) / project.files.length * 0.5);
-  });
+  }
   onProgress(0.7);
   const zipped = zipSync(files, { level: 6 });
   const blob = new Blob([zipped], { type: 'application/octet-stream' });

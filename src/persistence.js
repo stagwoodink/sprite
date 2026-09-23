@@ -1,5 +1,5 @@
 import { resumeFolder, createDefaultBackend } from './storage.js';
-import { encodeFile, parseFile, FORMAT_VERSION } from './sprite-format.js';
+import { encodeFile, encodeStubMeta, stubFile, parseFile, FORMAT_VERSION } from './sprite-format.js';
 
 // Debounced write — autosave fires after every committed EditCommand, but
 // batched against rapid-fire commits (e.g. end-of-stroke) rather than
@@ -53,19 +53,18 @@ export async function loadProject(backend, projectId) {
   for (const fileName of meta.fileNames) {
     const raw = await backend.read([projectId, fileName]);
     if (!raw) continue;
-    // Chunks are read up front (parseFile is synchronous): every Frame's
-    // for v3, the single sidecar for v2, nothing for v1.
-    const chunks = new Map();
-    if (raw.version === FORMAT_VERSION) {
-      // `fileName` is the JSON's stored name ("x.sprite"); chunks are named
-      // after the File ("x"), see writeFile.
-      const base = fileName.replace(/\.sprite$/, '');
-      for (const id of raw.frames) chunks.set(`frame:${id}`, await backend.readBytes([projectId, frameChunkName(base, id)]));
-      chunks.set('undo', await backend.readBytes([projectId, base + UNDO_SUFFIX]));
-    } else if (raw.version === 2) {
-      chunks.set('bin', await backend.readBytes([projectId, fileName + '.bin']));
+    // Only the active File's pixels are read now. Every other v3 File is a
+    // stub (sprite-format.js stubFile) that loads on first use, so opening a
+    // big project stops costing memory and time for Files never touched.
+    // Older formats are read in full: they need rewriting as v3 anyway.
+    const lazy = raw.version === FORMAT_VERSION && files.length !== meta.activeFileIndex;
+    if (lazy) {
+      const stub = stubFile(raw);
+      stub._load = () => loadStub(backend, projectId, fileName, raw, stub);
+      files.push(stub);
+      continue;
     }
-    const file = parseFile(raw, (kind, id) => chunks.get(id === undefined ? kind : `${kind}:${id}`) ?? null);
+    const file = await readFile(backend, projectId, fileName, raw);
     // An older file is rewritten as v3 right away, so the old shape doesn't
     // linger in storage until this file happens to be edited.
     if (raw.version !== FORMAT_VERSION) {
@@ -94,9 +93,51 @@ export async function loadProject(backend, projectId) {
   // What's on disk now is what was just read, so the first autosave of a
   // freshly opened project needn't rewrite every File.
   files.forEach((file) => {
-    if (!lastWritten.has(file)) lastWritten.set(file, snapshotOf(projectId, file, encodeFile(file)));
+    if (file._stub) lastWritten.set(file, { path: `${projectId}/${file.name}`, json: JSON.stringify(encodeStubMeta(file)), frameSigs: new Map(), undoSig: '' });
+    else if (!lastWritten.has(file)) lastWritten.set(file, snapshotOf(projectId, file, encodeFile(file)));
   });
   return { id: projectId, name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex, collections, files };
+}
+
+// Reads a File's chunks (every Frame's for v3, the single sidecar for v2,
+// nothing for v1) and decodes them. Chunks are fetched up front because
+// parseFile is synchronous.
+async function readFile(backend, projectId, fileName, raw) {
+  const chunks = new Map();
+  if (raw.version === FORMAT_VERSION) {
+    // `fileName` is the JSON's stored name ("x.sprite"); chunks are named
+    // after the File ("x"), see writeFile.
+    const base = fileName.replace(/\.sprite$/, '');
+    for (const id of raw.frames) chunks.set(`frame:${id}`, await backend.readBytes([projectId, frameChunkName(base, id)]));
+    chunks.set('undo', await backend.readBytes([projectId, base + UNDO_SUFFIX]));
+    for (const [key, bytes] of chunks) {
+      if (!bytes && key !== 'undo') console.error(`Missing pixel data (${key}) for "${base}" — it will open blank`);
+    }
+  } else if (raw.version === 2) {
+    chunks.set('bin', await backend.readBytes([projectId, fileName + '.bin']));
+  }
+  return parseFile(raw, (kind, id) => chunks.get(id === undefined ? kind : `${kind}:${id}`) ?? null);
+}
+
+// Fills a stub in place from storage, once (concurrent callers share the
+// same promise). Only the pixels and undo history come from disk — the
+// stub's own fields (e.g. an `order` changed since opening) are newer.
+async function loadStub(backend, projectId, fileName, raw, stub) {
+  const full = await readFile(backend, projectId, fileName, raw);
+  stub.frames = full.frames;
+  stub.undoStack = full.undoStack;
+  delete stub._stub;
+  delete stub._undoMeta;
+  delete stub._load;
+  lastWritten.set(stub, snapshotOf(projectId, stub, encodeFile(stub)));
+}
+
+// Resolves once `file`'s pixels are in memory (immediately if they already
+// are). Anything about to read a File that may not be the active one —
+// export, resize, the collection grid — awaits this first.
+export function ensureLoaded(file) {
+  if (!file._stub) return Promise.resolve();
+  return file._loading ||= file._load().finally(() => { delete file._loading; });
 }
 
 // Deletes every file a project owns (its subtree is flat — project.json
@@ -136,6 +177,21 @@ const snapshotOf = (projectId, file, enc) => ({
 
 // Returns whether anything was written.
 async function writeFile(backend, projectId, file) {
+  if (file._stub) {
+    const path = `${projectId}/${file.name}`;
+    const last = lastWritten.get(file);
+    if (last && last.path === path) {
+      // Untouched pixels: at most the small JSON changed (e.g. its `order`).
+      const json = JSON.stringify(encodeStubMeta(file));
+      if (json === last.json) return false;
+      await backend.write([projectId, file.name + '.sprite'], JSON.parse(json));
+      last.json = json;
+      return true;
+    }
+    // Moved to another Project or renamed: it must be written under the new
+    // path, which needs its pixels.
+    await ensureLoaded(file);
+  }
   const enc = encodeFile(file);
   const now = snapshotOf(projectId, file, enc);
   const last = lastWritten.get(file);
