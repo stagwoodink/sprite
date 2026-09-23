@@ -336,10 +336,8 @@ export function resizeCanvas(file, newVisibleW, newVisibleH) {
     frame.layerPixels = frame.layerPixels.map((oldPixels) => {
       const next = new Uint16Array(newCanvasW * newCanvasH);
       for (let y = 0; y < file.canvasHeight; y++) {
-        for (let x = 0; x < file.canvasWidth; x++) {
-          const v = oldPixels[y * file.canvasWidth + x];
-          if (v) next[(y + offsetY) * newCanvasW + (x + offsetX)] = v;
-        }
+        const from = y * file.canvasWidth;
+        next.set(oldPixels.subarray(from, from + file.canvasWidth), (y + offsetY) * newCanvasW + offsetX);
       }
       return next;
     });
