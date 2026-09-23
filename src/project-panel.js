@@ -1,7 +1,7 @@
 import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder, projectLoad, projectLoadBreakdown } from './project.js';
 import { visibleOrder } from './ordering.js';
 import { openSlideOut, openCustomSlideOut, closeSlideOut } from './slide-out.js';
-import { button, makeReorderable, startInlineEdit } from './ui.js';
+import { button, hoverTip, makeReorderable, startInlineEdit } from './ui.js';
 
 // Project panel (ui-design-system §7, design-doc §13). `state` is the
 // { project } holder in main.js; callbacks mutate it and call onChange to
@@ -202,8 +202,8 @@ function buildCapacityMeter(project, callbacks) {
   const meter = document.createElement('div');
   meter.className = 'capacity-meter';
   const { pixelBytes, referenceBytes } = projectLoadBreakdown(project);
-  const mb = (n) => (n / 1048576).toFixed(1) + 'MB';
-  meter.title = `Project capacity: ${Math.round(load * 100)}% (${mb(pixelBytes)} pixels, ${mb(referenceBytes)} references)`;
+  const mb = Math.round((pixelBytes + referenceBytes) / 1048576);
+  hoverTip(meter, `Capacity ${Math.round(load * 100)}% · ${mb}MB`);
   const fill = document.createElement('div');
   fill.className = 'capacity-fill';
   fill.style.width = Math.min(100, load * 100) + '%';

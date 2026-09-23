@@ -448,8 +448,11 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .tool-tag-label--divider { padding-left: 0; border-right: 1px solid var(--hairline); }
 .tool-tag-swatch {
   width: var(--block);
-  height: var(--block);
   border-left: 1px solid var(--hairline);
+  /* The tag's top highlight is an inset box-shadow, which paints beneath
+     children — a solid swatch would cover it. Start 1px down; the flex row
+     stretches it to the rest of the tag's height. */
+  margin-top: 1px;
 }
 /* Export progress (main.js's onExportProgress) — takes the tool label's
    own slot while an export is running, same padding so nothing shifts. A

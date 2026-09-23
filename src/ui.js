@@ -5,6 +5,13 @@
 let hoverTipListener = null;
 export function onHoverTip(fn) { hoverTipListener = fn; }
 
+// Wires any element to the tool tag's tip slot (what button() does for its
+// `title`). Tips must be terse: that slot is a few words wide.
+export function hoverTip(el, text) {
+  el.addEventListener('mouseenter', () => hoverTipListener && hoverTipListener(text));
+  el.addEventListener('mouseleave', () => hoverTipListener && hoverTipListener(null));
+}
+
 // A native file-picker dialog, no custom UI (same as the project import).
 export function pickFile(accept, onFile) {
   const input = document.createElement('input');
