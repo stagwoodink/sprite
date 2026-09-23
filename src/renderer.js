@@ -506,6 +506,7 @@ function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX 
 // integer, which read as a phantom grid even with the real grid off.
 let pixelBuffer = null;
 let pixelBufferCtx = null;
+let pixelBufferSource = null; // { pixels, rev } the buffer currently holds, so an unchanged composite isn't re-uploaded every frame
 
 // Rebuilds the shared offscreen buffer with `model`'s own pixels — split out
 // from the blit below so a caller (the artboard grid's glow effect) can blit
@@ -517,12 +518,17 @@ function buildPixelBuffer(model) {
     pixelBuffer.width = model.width;
     pixelBuffer.height = model.height;
     pixelBufferCtx = pixelBuffer.getContext('2d');
+    pixelBufferSource = null;
   }
   // `model.pixels` is already packed RGBA words (canvas-model.js
   // hexToPacked), so this is one bulk copy over the ImageData's own buffer.
+  if (pixelBufferSource && pixelBufferSource.pixels === model.pixels && pixelBufferSource.rev === model.pixels.rev) {
+    return { width: model.width, height: model.height };
+  }
   const imageData = pixelBufferCtx.createImageData(model.width, model.height);
   new Uint32Array(imageData.data.buffer).set(model.pixels);
   pixelBufferCtx.putImageData(imageData, 0, 0);
+  pixelBufferSource = { pixels: model.pixels, rev: model.pixels.rev };
   return { width: model.width, height: model.height };
 }
 

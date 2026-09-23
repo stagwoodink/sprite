@@ -16,3 +16,16 @@ f.layers[1].visible = true;
 setPixel(view(0), 1, 1, '#00FF00');
 assert.equal(compositeFrameAt(f, 0)[5] & 255, 255, 'top layer red wins over lower green');
 console.log('composite-cache ok');
+
+// dirty-rect path: a second edit must patch the cached buffer, not stale-read it
+const g = createSpriteFile('d', 8, 8);
+const gv = { width: 8, height: 8, stride: 8, pixels: g.frames[0].layerPixels[0], colors: g.colors };
+setPixel(gv, 0, 0, '#111111');
+const first = compositeFrameAt(g, 0);
+setPixel(gv, 7, 7, '#222222');
+setPixel(gv, 0, 0, null);
+const second = compositeFrameAt(g, 0);
+assert.equal(second[0], 0, 'erased pixel cleared inside dirty rect');
+assert.notEqual(second[63], 0, 'new pixel painted');
+assert.equal(second, first, 'patched in place');
+console.log('dirty-rect ok');

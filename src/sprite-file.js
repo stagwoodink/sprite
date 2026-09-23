@@ -103,13 +103,27 @@ export function compositeFrameAt(file, frameIndex) {
   const cached = compositeCache.get(frame);
   if (cached && cached.structKey === structKey && cached.versions.every((v, i) => v === versions[i])) return cached.out;
 
-  const out = new Uint32Array(w * h);
+  // Same structure, different buffer contents: only the union of the changed
+  // buffers' dirty rectangles needs re-walking. Each buffer belongs to one
+  // frame, so this cache entry is the sole consumer of its dirty state.
+  let x0 = 0, y0 = 0, x1 = w - 1, y1 = h - 1, out = new Uint32Array(w * h);
+  if (cached && cached.structKey === structKey) {
+    const rects = bufs.filter((buf, i) => (buf.v | 0) !== cached.versions[i]).map((buf) => buf.dirty);
+    if (rects.every(Array.isArray)) {
+      out = cached.out;
+      x0 = Math.max(0, Math.min(...rects.map((d) => d[0])));
+      y0 = Math.max(0, Math.min(...rects.map((d) => d[1])));
+      x1 = Math.min(w - 1, Math.max(...rects.map((d) => d[2])));
+      y1 = Math.min(h - 1, Math.max(...rects.map((d) => d[3])));
+      for (let y = y0; y <= y1; y++) out.fill(0, y * w + x0, y * w + x1 + 1);
+    }
+  }
   const table = packedTable(file.colors);
   file.layers.forEach((layer, li) => {
     if (!shown[li]) return;
     const src = bufs[li];
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
         const idx = src[y * file.canvasWidth + x];
         if (!idx) continue;
         const i = y * w + x;
@@ -117,6 +131,8 @@ export function compositeFrameAt(file, frameIndex) {
       }
     }
   });
+  out.rev = (out.rev | 0) + 1; // lets the renderer skip re-uploading an unchanged composite
+  for (const buf of bufs) buf.dirty = null;
   compositeCache.set(frame, { structKey, versions, out });
   return out;
 }
