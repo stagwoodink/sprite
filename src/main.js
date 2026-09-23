@@ -305,11 +305,11 @@ exportReveal = createRevealablePanel(exportPanel, exportPanel, { onVisibility: u
 // only by the Project panel's "Open" menu item (openProjectListPanel(), below).
 openProjectReveal = createRevealablePanel(openProjectPanel, openProjectPanel, { onVisibility: updatePushes });
 layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'), {
-  initiallyPinned: uiPrefs.layers, onVisibility: updatePushes,
+  initiallyPinned: uiPrefs.layers, onVisibility: (visible) => { updatePushes(); if (visible && layersStale) redrawLayersPanel(); },
   onPinChange: (v) => { uiPrefs.layers = v; saveUiPrefs(uiPrefs); },
 });
 timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'), {
-  initiallyPinned: uiPrefs.timeline, onVisibility: updatePushes,
+  initiallyPinned: uiPrefs.timeline, onVisibility: (visible) => { updatePushes(); if (visible && timelineStale) redrawTimelinePanel(); },
   onPinChange: (v) => { uiPrefs.timeline = v; saveUiPrefs(uiPrefs); },
 });
 paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), {
@@ -1390,9 +1390,14 @@ function openProjectPicker(anchor) {
   openSlideOut(anchor, options);
 }
 
-function redrawLayersPanel() {
+// A shut slide-out can't be seen, so its rebuild (thumbnails and all) waits
+// until it opens; these mark it as owing one.
+let layersStale = true, timelineStale = true;
+function redrawLayersPanel(force = false) {
   const file = getActiveFile(project);
   if (file._stub) return; // still loading
+  if (!force && !(layersReveal && layersReveal.isFocused())) { layersStale = true; return; }
+  layersStale = false;
   renderLayersPanel(layersPanel, file, {
     onAddLayer: () => commitLayerChange(file, () => addLayer(file)),
     onSelect: (i) => { file.activeLayerIndex = i; multiLayerSelection = null; bindActiveFile(); redrawLayersPanel(); },
@@ -1530,7 +1535,7 @@ function removeSelectedLayers() {
 // 'left' (not the default 'right', which would run the menu off-screen) —
 // same side its own "Add layer or group" menu already uses.
 function openLayerSelectionMenu(lastAddedIndex) {
-  redrawLayersPanel();
+  redrawLayersPanel(true); // the menu anchors on a row, so it must exist
   const anchor = layersPanel.querySelector(`[data-layer-index="${lastAddedIndex}"]`);
   if (!anchor || !multiLayerSelection) return;
   openSlideOut(anchor, [
@@ -1553,6 +1558,8 @@ function focusedGroupId() {
 function redrawTimelinePanel() {
   const file = getActiveFile(project);
   if (file._stub) return; // still loading
+  if (!(timelineReveal && timelineReveal.isFocused())) { timelineStale = true; return; }
+  timelineStale = false;
   renderTimelinePanel(timelineBar, file, playback, {
     onSetFps: (fps) => { playback.fps = fps; if (playback.playing) startPlayback(); },
     onImportSheet: (anchor) => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor })),
