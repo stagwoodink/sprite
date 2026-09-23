@@ -2,7 +2,7 @@ import { setPixel, getPixel, touch, paintAt, floodFill, snapshotPixels, diffFrom
 import { parseFile } from './sprite-format.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
-import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale } from './viewport.js';
+import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView } from './viewport.js';
 import { viewState, resetView, groupViewState, resetGroupView } from './view-state.js';
 import { createPalette } from './palette.js';
 import { maskFromRect, maskFromWand, maskFromColor, fullMask, toRenderSelection } from './selection.js';
@@ -1458,6 +1458,15 @@ function zoomTo(nextScale) {
   draw();
 }
 
+// `=`: fit the selection if there is one, otherwise the whole canvas.
+function fitView() {
+  const rect = canvas.getBoundingClientRect();
+  const bounds = selectionMask && maskBounds(model, selectionMask);
+  if (bounds) Object.assign(viewState, regionView(model, rect.width, rect.height, bounds));
+  else { viewState.panX = 0; viewState.panY = 0; zoomTo(fitScale(model, rect.width, rect.height)); return; }
+  draw();
+}
+
 // Inertial zoom step: a notched mouse wheel reports the same |deltaY| on
 // every tick, so speed has to come from the *cadence* between events, not
 // the event's own magnitude. Ticks arriving close together (a fast flick)
@@ -1950,7 +1959,7 @@ function dispatchCanvas(e) {
   if (e.key === 'z' && !e.repeat) { held.z = true; return; }
   if (e.key === '+' && !e.repeat) { zoomStep(1); return; }
   if (e.key === '-' && !e.repeat) { zoomTo(1); return; }
-  if (e.key === '=' && !e.repeat) { zoomTo(maxZoomScale(model, canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height)); return; }
+  if (e.key === '=' && !e.repeat) { fitView(); return; }
   if (e.key === '_' && !e.repeat) { zoomStep(-1); return; }
   if (e.key === 'g' && !e.shiftKey) { showGrid = !showGrid; uiPrefs.showGrid = showGrid; saveUiPrefs(uiPrefs); draw(); return; }
   if (e.key === 'G' && e.shiftKey) { showRuler = !showRuler; uiPrefs.showRuler = showRuler; saveUiPrefs(uiPrefs); draw(); return; }

@@ -9,10 +9,15 @@ export function fitScale(model, viewW, viewH) {
 
 // Zoom in until at least MIN_VISIBLE_PX canvas pixels still span the
 // shorter viewport dimension — past that, scrolling/panning stops being
-// useful (nothing left to navigate to within view).
+// useful (nothing left to navigate to within view). Never below the scale
+// that fills the viewport in at least one direction, though — for a small
+// canvas that scale can exceed this cap outright, and the user must always
+// be able to zoom in that far.
 const MIN_VISIBLE_PX = 16;
-export function maxZoomScale(viewW, viewH) {
-  return Math.max(1, Math.min(viewW, viewH) / MIN_VISIBLE_PX);
+export function maxZoomScale(model, viewW, viewH) {
+  const capScale = Math.max(1, Math.min(viewW, viewH) / MIN_VISIBLE_PX);
+  const fillScale = Math.min(viewW / model.width, viewH / model.height);
+  return Math.max(capScale, fillScale);
 }
 
 // How far out the user can manually zoom (wheel, End) — further than plain
@@ -28,15 +33,30 @@ export function minZoomScale(model, viewW, viewH) {
   return Math.min(rawFit, targetScale, 1);
 }
 
-export function computeViewport(model, viewW, viewH) {
+// Zoom/pan that centers the pixel-space box `b` ({minX, minY, w, h}) and
+// scales it to just fill the viewport, clamped to the usual zoom range.
+// Continuous scale, not integer-snapped (§1.3).
+export function regionView(model, viewW, viewH, b) {
+  const zoom = Math.max(
+    minZoomScale(model, viewW, viewH),
+    Math.min(maxZoomScale(model, viewW, viewH), viewW / b.w, viewH / b.h),
+  );
+  const cx = b.minX + b.w / 2, cy = b.minY + b.h / 2;
+  return { zoom, panX: (model.width / 2 - cx) * zoom, panY: (model.height / 2 - cy) * zoom };
+}
+
+// `state` defaults to the single-file canvas's own pan/zoom, but takes any
+// { zoom, panX, panY } shape — the read-only group grid (main.js) reuses
+// this same fit/pan math for its own camera over `groupViewState` instead.
+export function computeViewport(model, viewW, viewH, state = viewState) {
   const fit = fitScale(model, viewW, viewH);
-  const scale = viewState.zoom || fit;
+  const scale = state.zoom || fit;
   const w = model.width * scale;
   const h = model.height * scale;
   return {
     scale,
-    ox: Math.floor((viewW - w) / 2) + viewState.panX,
-    oy: Math.floor((viewH - h) / 2) + viewState.panY,
+    ox: Math.floor((viewW - w) / 2) + state.panX,
+    oy: Math.floor((viewH - h) / 2) + state.panY,
     fit,
   };
 }
