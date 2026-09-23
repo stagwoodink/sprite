@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createSpriteFile, addFrame } from '../src/sprite-file.js';
+import { createSpriteFile, addFrame, addLayer, deleteLayer } from '../src/sprite-file.js';
 import { setPixel } from '../src/canvas-model.js';
 import { saveProject, loadProject, ensureLoaded, unloadIdle } from '../src/persistence.js';
 
@@ -83,14 +83,42 @@ assert.throws(() => pixelsOf(stub), /isn't loaded yet/);
 await ensureLoaded(stub);
 assert.deepEqual(pixelsOf(stub), before, 'edits made before unloading survive it');
 
-// undo history is not persisted: nothing writes an undo chunk, and the one an
-// older build left behind is removed when the file is read
-store.set('p/a.sprite.undo', new Uint8Array(8));
+// undo history is not persisted: no undo chunk is ever written
 const reopened = await loadProject(backend, 'p');
-assert.equal(store.has('p/a.sprite.undo'), false, 'stale undo chunk deleted on load');
-setPixel({ width: 4, height: 4, stride: 4, pixels: reopened.files[0].frames[0].layerPixels[0], colors: reopened.files[0].colors }, 2, 2, '#FFFF00');
 reopened.files[0].undoStack.push({ type: 'pixelEdit', before: new Uint32Array(2), after: new Uint32Array(2) });
+setPixel({ width: 4, height: 4, stride: 4, pixels: reopened.files[0].frames[0].layerPixels[0], colors: reopened.files[0].colors }, 2, 2, '#FFFF00');
 writes.length = 0;
 await saveProject(backend, reopened);
 assert.equal(writes.some((w) => w.endsWith('.undo')), false, 'no undo chunk is written');
+
+// one chunk per layer buffer: editing one layer of twenty writes one chunk
+const wide = createSpriteFile('wide', 4, 4);
+while (wide.layers.length < 20) addLayer(wide, 'L' + wide.layers.length, wide.layerGroups[0].id);
+project.files.push(wide);
+await saveProject(backend, project);
+writes.length = 0;
+setPixel({ width: 4, height: 4, stride: 4, pixels: wide.frames[0].layerPixels[7], colors: wide.colors }, 0, 0, '#ABCDEF');
+await saveProject(backend, project);
+assert.equal(writes.filter((w) => w.includes('wide.sprite.frame-')).length, 1, 'one layer of twenty edited, one chunk written');
+// deleting a layer removes its chunk
+const gone = wide.frames[0].layerPixels[3].cid;
+deleteLayer(wide, 3);
+await saveProject(backend, project);
+assert.equal([...store.keys()].some((k) => k.endsWith('-' + gone)), false, 'deleted layer\'s chunk removed');
+
+// a v3 project (one combined chunk per frame, plus an undo chunk) migrates to
+// v4 on load: pixels intact, old chunks gone, per-layer chunks written
+const v3meta = { version: 3, name: 'old', layers: [{ name: 'A', visible: true, opacity: 1, order: 2000 }, { name: 'B', visible: true, opacity: 1, order: 3000 }], layerGroups: [], activeLayerIndex: 0, activeFrameIndex: 0, canvasWidth: 2, canvasHeight: 2, visibleWidth: 2, visibleHeight: 2, colors: [null, '#111111', '#222222'], frames: ['fx'], undoStack: [], redoStack: [] };
+store.set('q/project.json', { name: 'Q', palette: { chips: ['#000000'], primary: '#000000' }, activeFileIndex: 0, collections: [], fileNames: ['old.sprite'] });
+store.set('q/old.sprite', v3meta);
+store.set('q/old.sprite.frame-fx', new Uint8Array(new Uint16Array([1, 0, 0, 2, 0, 1, 1, 0]).buffer));
+store.set('q/old.sprite.undo', new Uint8Array(8));
+const migrated = await loadProject(backend, 'q');
+assert.deepEqual(migrated.files[0].frames[0].layerPixels.map((b) => Array.from(b)), [[1, 0, 0, 2], [0, 1, 1, 0]], 'v3 pixels survive migration');
+assert.equal(store.get('q/old.sprite').version, 4, 'meta rewritten as v4');
+assert.equal(store.has('q/old.sprite.frame-fx'), false, 'combined chunk deleted');
+assert.equal(store.has('q/old.sprite.undo'), false, 'undo chunk deleted');
+assert.equal([...store.keys()].filter((k) => k.startsWith('q/old.sprite.frame-fx-')).length, 2, 'one chunk per layer written');
+const again = await loadProject(backend, 'q');
+assert.deepEqual(again.files[0].frames[0].layerPixels.map((b) => Array.from(b)), [[1, 0, 0, 2], [0, 1, 1, 0]], 'and reload as v4');
 console.log('persistence-skip ok');

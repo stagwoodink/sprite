@@ -1,61 +1,76 @@
 import { createColorTable, colorIndex, bufferId } from './canvas-model.js';
 
-// .sprite v3: the File's JSON `meta` (everything except pixels) plus binary
+// .sprite v4: the File's JSON `meta` (everything except pixels) plus binary
 // chunks, each written independently so an autosave rewrites only what
 // changed:
-//   one chunk per Frame — its layers' buffers back to back, each
-//     canvasWidth*canvasHeight Uint16 indices into `meta.colors` — named by
-//     the Frame's stable id, listed in order in `meta.frames`.
-// Undo history is session-only and never saved (older files carried an undo
-// chunk; it is ignored on read and `undoStack` is always written empty).
+//   one chunk per layer buffer — canvasWidth*canvasHeight Uint16 indices
+//     into `meta.colors` — named `frame-<frameId>-<bufferChunkId>`, both ids
+//     stable across saves; `meta.frames` lists each frame's id and its
+//     buffers' chunk ids in layer order.
+// Undo history is session-only and never saved (`undoStack` is written
+// empty; the undo chunk older builds kept is ignored).
 // Binary rather than base64-in-JSON: base64 is a third larger, and
 // JSON.stringify over a huge string blocks the main thread on every autosave.
-// v2 kept every Frame in one sidecar (`read('bin')`); a file with no
-// `version` is v1 (pixels as plain arrays of hex/null). Both still load.
-export const FORMAT_VERSION = 3;
+// v3 packed every layer of a Frame into one chunk (`read('frame', id)`), v2
+// kept every Frame in one sidecar (`read('bin')`); a file with no `version`
+// is v1 (pixels as plain arrays of hex/null). All still load, and are
+// rewritten as v4 by persistence.js.
+export const FORMAT_VERSION = 4;
 
 let frameIdCounter = 0;
 const frameId = (frame) => frame.id ??= `f${Date.now().toString(36)}${(frameIdCounter++).toString(36)}`;
+// Unlike bufferId (a per-session counter), this names the buffer's chunk on
+// disk, so it is generated once, saved in the meta and restored on load.
+const chunkId = (buf) => buf.cid ??= `b${Date.now().toString(36)}${(frameIdCounter++).toString(36)}`;
+export const chunkName = (frameId, cid) => `frame-${frameId}-${cid}`;
 
-// In-memory File -> { meta, frames }. `frames[i]` carries a cheap change
-// signature and a `bytes()` thunk, so a caller that already knows a chunk is
-// unchanged never pays to encode it. Undo and redo are session-only (§10);
-// session-only references (no file handle to relink by) aren't saved.
+// In-memory File -> { meta, chunks }. Each `chunks[i]` is one layer buffer:
+// its stored `name`, a cheap change signature and a `bytes()` thunk, so a
+// caller that already knows a chunk is unchanged never pays to encode it.
+// Undo and redo are session-only (§10); session-only references (no file
+// handle to relink by) aren't saved.
 // The JSON half of a File, shared by a loaded File and a stub (below) so
 // their saved shape can never drift apart. Strips the in-memory-only fields.
-function buildMeta(file, frameIds) {
-  const { frames, undoStack, _stub, _load, _loading, ...rest } = file;
+function buildMeta(file, frames) {
+  const { frames: _frames, undoStack, _stub, _load, _loading, ...rest } = file;
   const references = (file.references || []).filter((r) => r.linked);
-  return { ...rest, references, version: FORMAT_VERSION, frames: frameIds, undoStack: [], redoStack: [] };
+  return { ...rest, references, version: FORMAT_VERSION, frames, undoStack: [], redoStack: [] };
 }
 
-// Meta for a File whose pixels aren't loaded (see stubFile).
-export const encodeStubMeta = (file) => buildMeta(file, file.frames.map((f) => f.id));
+// Meta for a File whose pixels aren't loaded (see stubFile): its frames
+// already know their buffers' chunk ids.
+export const encodeStubMeta = (file) => buildMeta(file, file.frames.map(({ id, buffers }) => ({ id, buffers })));
 
 export function encodeFile(file) {
-  const { frames } = file;
   const cells = file.canvasWidth * file.canvasHeight;
-  const meta = buildMeta(file, frames.map(frameId));
-
-  const frameChunks = frames.map((frame) => ({
-    id: frameId(frame),
-    sig: frame.layerPixels.map((buf) => `${bufferId(buf)}.${buf.v | 0}`).join(','),
-    bytes() {
-      const bytes = new Uint8Array(frame.layerPixels.length * cells * 2);
-      frame.layerPixels.forEach((buf, i) => new Uint16Array(bytes.buffer, i * cells * 2, cells).set(buf));
-      return bytes;
-    },
-  }));
-
-  return { meta, frames: frameChunks };
+  const chunks = [];
+  const frames = file.frames.map((frame) => {
+    const id = frameId(frame);
+    const buffers = frame.layerPixels.map((buf) => {
+      const cid = chunkId(buf);
+      chunks.push({
+        name: chunkName(id, cid),
+        sig: `${bufferId(buf)}.${buf.v | 0}`,
+        bytes() {
+          const bytes = new Uint8Array(cells * 2);
+          new Uint16Array(bytes.buffer).set(buf);
+          return bytes;
+        },
+      });
+      return cid;
+    });
+    return { id, buffers };
+  });
+  return { meta: buildMeta(file, frames), chunks };
 }
 
 // Persisted meta (or a bare v1 file object) -> the in-memory File.
-// `read(kind, id)` returns a chunk's bytes or null: ('frame', id), or
-// ('bin') for a v2 file's single sidecar. Older files come back in the
-// current shape with an empty undo stack.
+// `read(kind, id)` returns a chunk's bytes or null: ('chunk', name) for v4,
+// ('frame', id) for v3, or ('bin') for a v2 file's single sidecar. Older
+// files come back in the current shape with an empty undo stack.
 export function parseFile(meta, read = () => null) {
-  if (meta.version === FORMAT_VERSION) return decodeV3(meta, read);
+  if (meta.version === FORMAT_VERSION) return decodeV4(meta, read);
+  if (meta.version === 3) return decodeV3(meta, read);
   if (meta.version === 2) return decodeV2(meta, read('bin'));
   return migrateV1(meta);
 }
@@ -80,14 +95,31 @@ function reader(bytes) {
 // instead of reading garbage. `load()` (set by the caller) fills it in
 // place, keeping the object's identity.
 export function stubFile(meta) {
-  const { frames: ids, ...rest } = meta;
+  const { frames: saved, ...rest } = meta;
   const file = { ...rest, undoStack: [], _stub: true };
   delete file.version;
-  file.frames = ids.map((id) => ({
+  file.frames = saved.map(({ id, buffers }) => ({
     id,
+    buffers,
     get layerPixels() { throw new Error(`File "${file.name}" isn't loaded yet`); },
   }));
   return file;
+}
+
+function decodeV4({ frames: saved, ...meta }, read) {
+  const cells = meta.canvasWidth * meta.canvasHeight;
+  const frames = saved.map(({ id, buffers }) => ({
+    id,
+    layerPixels: buffers.map((cid) => {
+      const bytes = read('chunk', chunkName(id, cid));
+      // A missing chunk reads as blank, not a failed load
+      const buf = bytes ? new Uint16Array(bytes.slice().buffer) : new Uint16Array(cells);
+      buf.cid = cid;
+      return buf;
+    }),
+  }));
+  delete meta.version;
+  return { ...meta, frames, undoStack: [] };
 }
 
 function decodeV3({ frames: ids, ...meta }, read) {

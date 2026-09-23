@@ -4,7 +4,7 @@ import { setPixel, getPixel, blendPixel, packedToHex } from '../src/canvas-model
 import { encodeFile, parseFile } from '../src/sprite-format.js';
 
 // In-memory stand-in for the chunk store: read(kind, id) over an encoded file.
-const readerFor = (enc) => (kind, id) => (kind === 'frame' ? enc.frames.find((fr) => fr.id === id).bytes() : null);
+const readerFor = (enc) => (kind, id) => (kind === 'chunk' ? enc.chunks.find((c) => c.name === id).bytes() : null);
 
 // v1 file: plain arrays of hex/null.
 const v1 = {
@@ -27,9 +27,11 @@ setPixel(v, 1, 1, '#123456');
 blendPixel(v, 1, 1, '#FFFFFF', 0.5);
 const enc = encodeFile(f);
 const back = parseFile(JSON.parse(JSON.stringify(enc.meta)), readerFor(enc));
-assert.equal(enc.meta.version, 3);
+assert.equal(enc.meta.version, 4);
 assert.deepEqual(back.colors, f.colors);
 assert.deepEqual(back.frames.map((fr) => fr.id), f.frames.map((fr) => fr.id), 'frame ids survive');
+assert.equal(enc.chunks.length, 4, 'one chunk per layer buffer: 2 frames x 2 layers');
+assert.deepEqual(back.frames.map((fr) => fr.layerPixels.map((b) => b.cid)), f.frames.map((fr) => fr.layerPixels.map((b) => b.cid)), 'chunk ids survive');
 back.frames.forEach((fr, i) => fr.layerPixels.forEach((buf, li) => assert.deepEqual(Array.from(buf), Array.from(f.frames[i].layerPixels[li]))));
 assert.equal(packedToHex(compositeFrameAt(back, 1)[4 + 1]).toUpperCase(), getPixel(v, 1, 1));
 console.log('sprite-format ok');
@@ -43,7 +45,6 @@ setPixel(uv, 2, 1, '#ABCDEF');
 u.undoStack.push({ type: 'pixelEdit', ...diffFromSnapshot(uv, snap) });
 const uenc = encodeFile(u);
 assert.deepEqual(uenc.meta.undoStack, [], 'no undo commands in the saved meta');
-assert.equal(uenc.undo, undefined, 'no undo chunk is encoded');
 const ub = parseFile(JSON.parse(JSON.stringify(uenc.meta)), readerFor(uenc));
 assert.equal(ub.undoStack.length, 0);
 assert.notEqual(ub.frames[0].layerPixels[0][6], 0, 'the edit itself is saved');
@@ -57,3 +58,13 @@ const v2meta = { version: 2, name: 'v2', layers: [{ name: 'L', visible: true, op
 const v2 = parseFile(v2meta, (kind) => (kind === 'bin' ? new Uint8Array(new Uint16Array([1, 0, 0, 2]).buffer) : null));
 assert.deepEqual(Array.from(v2.frames[0].layerPixels[0]), [1, 0, 0, 2]);
 console.log('v2 compat ok');
+
+// v3 (one combined chunk per frame) files still load, split into per-layer buffers
+const v3meta = { version: 3, name: 'v3', layers: [{ name: 'A', visible: true, opacity: 1, order: 2000 }, { name: 'B', visible: true, opacity: 1, order: 3000 }], layerGroups: [], activeLayerIndex: 0, activeFrameIndex: 0, canvasWidth: 2, canvasHeight: 2, visibleWidth: 2, visibleHeight: 2, colors: [null, '#111111', '#222222'], frames: ['fa', 'fb'], undoStack: [{ type: 'pixelEdit', n: 1 }], redoStack: [] };
+const v3 = parseFile(v3meta, (kind, id) => (kind === 'frame' ? new Uint8Array(new Uint16Array(id === 'fa' ? [1, 0, 0, 2, 0, 1, 1, 0] : [2, 2, 2, 2, 0, 0, 0, 0]).buffer) : null));
+assert.deepEqual(v3.frames.map((fr) => fr.layerPixels.map((b) => Array.from(b))), [[[1, 0, 0, 2], [0, 1, 1, 0]], [[2, 2, 2, 2], [0, 0, 0, 0]]]);
+assert.equal(v3.undoStack.length, 0, 'v3 undo history is dropped');
+const v3out = encodeFile(v3);
+assert.equal(v3out.meta.version, 4, 'a migrated file re-encodes as v4');
+assert.deepEqual(v3out.meta.frames.map((fr) => fr.buffers.length), [2, 2]);
+console.log('v3 compat ok');
