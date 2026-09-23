@@ -177,6 +177,16 @@ export function projectLoadBreakdown(project) {
   return { pixelBytes, referenceBytes: referenceByteCount };
 }
 
+// The largest unit the size reaches, terse for the tool tag: 512 -> "512B",
+// 9216 -> "9KB", 1.5 * 1024**3 -> "1.5GB". Under a byte it counts bits.
+export function formatBytes(bytes) {
+  if (bytes < 1) return Math.round(bytes * 8) + 'b';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+  return (bytes < 10 && i > 0 ? Math.round(bytes * 10) / 10 : Math.round(bytes)) + units[i];
+}
+
 export function projectLoad(project) {
   const { pixelBytes, referenceBytes: refs } = projectLoadBreakdown(project);
   return (pixelBytes + refs) / BYTE_BUDGET;
