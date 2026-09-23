@@ -1,4 +1,4 @@
-import { blendColors, packedToHex } from './canvas-model.js';
+import { hexToRgb } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
 
 // Shared solid-color set for every backdrop in the app — the app-wide
@@ -314,19 +314,30 @@ function fillCheckerboard(ctx, scale, ox, oy, destX, destY, destW, destH, cellPx
 // (after) with opacity falling off by distance, fixed range 2 in each
 // direction — no range control exists in the UI.
 function drawGhost(ctx, model, ghost, scale, ox, oy) {
-  const tint = ghost.side === 'before' ? ONION_BEFORE_TINT : ONION_AFTER_TINT;
+  const tint = hexToRgb(ghost.side === 'before' ? ONION_BEFORE_TINT : ONION_AFTER_TINT);
   const alpha = ghost.distance === 1 ? 0.35 : 0.18;
-  for (let y = 0; y < model.height; y++) {
-    for (let x = 0; x < model.width; x++) {
-      const color = ghost.pixels[y * model.width + x];
-      if (!color) continue;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = blendColors(packedToHex(color), tint, 0.5);
-      ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
-    }
+  // Tint every pixel halfway toward the ghost color in one bulk pass over an
+  // ImageData, then one scaled blit — not a fillRect per pixel, which at
+  // 512x512 was a quarter-million draw calls per frame.
+  const img = new ImageData(model.width, model.height);
+  const out = new Uint32Array(img.data.buffer);
+  for (let i = 0; i < out.length; i++) {
+    const p = ghost.pixels[i];
+    if (!p) continue;
+    const r = ((p & 255) + tint.r) >> 1, g = (((p >> 8) & 255) + tint.g) >> 1, b = (((p >> 16) & 255) + tint.b) >> 1;
+    out[i] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
   }
-  ctx.globalAlpha = 1;
+  ghostBuffer ||= document.createElement('canvas');
+  ghostBuffer.width = model.width;
+  ghostBuffer.height = model.height;
+  ghostBuffer.getContext('2d').putImageData(img, 0, 0);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(ghostBuffer, ox, oy, model.width * scale, model.height * scale);
+  ctx.restore();
 }
+let ghostBuffer = null;
 
 // Marching ants. Two dash passes exactly one dash-length out of phase —
 // black filling one set of gaps, white the other — so the boundary reads
