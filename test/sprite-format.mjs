@@ -4,7 +4,7 @@ import { setPixel, getPixel, blendPixel, packedToHex } from '../src/canvas-model
 import { encodeFile, parseFile } from '../src/sprite-format.js';
 
 // In-memory stand-in for the chunk store: read(kind, id) over an encoded file.
-const readerFor = (enc) => (kind, id) => (kind === 'frame' ? enc.frames.find((fr) => fr.id === id).bytes() : kind === 'undo' ? enc.undo.bytes() : null);
+const readerFor = (enc) => (kind, id) => (kind === 'frame' ? enc.frames.find((fr) => fr.id === id).bytes() : null);
 
 // v1 file: plain arrays of hex/null.
 const v1 = {
@@ -34,7 +34,7 @@ back.frames.forEach((fr, i) => fr.layerPixels.forEach((buf, li) => assert.deepEq
 assert.equal(packedToHex(compositeFrameAt(back, 1)[4 + 1]).toUpperCase(), getPixel(v, 1, 1));
 console.log('sprite-format ok');
 
-// pixel undo commands survive encode/decode as typed diffs
+// undo history is session-only: a reloaded file starts with an empty stack
 import { diffFromSnapshot, applyDiff } from '../src/canvas-model.js';
 const u = createSpriteFile('u', 4, 4);
 const uv = { width: 4, height: 4, stride: 4, pixels: u.frames[0].layerPixels[0], colors: u.colors };
@@ -42,11 +42,15 @@ const snap = uv.pixels.slice();
 setPixel(uv, 2, 1, '#ABCDEF');
 u.undoStack.push({ type: 'pixelEdit', ...diffFromSnapshot(uv, snap) });
 const uenc = encodeFile(u);
+assert.deepEqual(uenc.meta.undoStack, [], 'no undo commands in the saved meta');
+assert.equal(uenc.undo, undefined, 'no undo chunk is encoded');
 const ub = parseFile(JSON.parse(JSON.stringify(uenc.meta)), readerFor(uenc));
-assert.equal(ub.undoStack.length, 1);
-applyDiff({ ...uv, pixels: ub.frames[0].layerPixels[0], colors: ub.colors }, ub.undoStack[0].before);
-assert.equal(ub.frames[0].layerPixels[0][6], 0, 'undo diff clears the pixel');
-console.log('undo diff ok');
+assert.equal(ub.undoStack.length, 0);
+assert.notEqual(ub.frames[0].layerPixels[0][6], 0, 'the edit itself is saved');
+// in-memory undo still works on the live file
+applyDiff(uv, u.undoStack[0].before);
+assert.equal(uv.pixels[6], 0, 'undo diff clears the pixel');
+console.log('undo is session-only ok');
 
 // v2 (single sidecar) files still load
 const v2meta = { version: 2, name: 'v2', layers: [{ name: 'L', visible: true, opacity: 1, order: 2000 }], layerGroups: [], activeLayerIndex: 0, activeFrameIndex: 0, canvasWidth: 2, canvasHeight: 2, visibleWidth: 2, visibleHeight: 2, colors: [null, '#111111', '#222222'], frameCount: 1, undoStack: [], redoStack: [] };

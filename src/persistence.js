@@ -93,7 +93,7 @@ export async function loadProject(backend, projectId) {
   // What's on disk now is what was just read, so the first autosave of a
   // freshly opened project needn't rewrite every File.
   files.forEach((file) => {
-    if (file._stub) lastWritten.set(file, { path: `${projectId}/${file.name}`, json: JSON.stringify(encodeStubMeta(file)), frameSigs: new Map(), undoSig: '' });
+    if (file._stub) lastWritten.set(file, { path: `${projectId}/${file.name}`, json: JSON.stringify(encodeStubMeta(file)), frameSigs: new Map() });
     else if (!lastWritten.has(file)) lastWritten.set(file, snapshotOf(projectId, file, encodeFile(file)));
   });
   return { id: projectId, name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex, collections, files };
@@ -109,9 +109,10 @@ async function readFile(backend, projectId, fileName, raw) {
     // after the File ("x"), see writeFile.
     const base = fileName.replace(/\.sprite$/, '');
     for (const id of raw.frames) chunks.set(`frame:${id}`, await backend.readBytes([projectId, frameChunkName(base, id)]));
-    chunks.set('undo', await backend.readBytes([projectId, base + UNDO_SUFFIX]));
+    // Undo history is no longer persisted: drop the chunk older builds left.
+    await backend.delete([projectId, base + UNDO_SUFFIX]);
     for (const [key, bytes] of chunks) {
-      if (!bytes && key !== 'undo') console.error(`Missing pixel data (${key}) for "${base}" — it will open blank`);
+      if (!bytes) console.error(`Missing pixel data (${key}) for "${base}" — it will open blank`);
     }
   } else if (raw.version === 2) {
     chunks.set('bin', await backend.readBytes([projectId, fileName + '.bin']));
@@ -120,14 +121,12 @@ async function readFile(backend, projectId, fileName, raw) {
 }
 
 // Fills a stub in place from storage, once (concurrent callers share the
-// same promise). Only the pixels and undo history come from disk — the
-// stub's own fields (e.g. an `order` changed since opening) are newer.
+// same promise). Only the pixels come from disk — the stub's own fields
+// (e.g. an `order` changed since opening) are newer.
 async function loadStub(backend, projectId, fileName, raw, stub) {
   const full = await readFile(backend, projectId, fileName, raw);
   stub.frames = full.frames;
-  stub.undoStack = full.undoStack;
   delete stub._stub;
-  delete stub._undoMeta;
   delete stub._load;
   lastWritten.set(stub, snapshotOf(projectId, stub, encodeFile(stub)));
 }
@@ -144,17 +143,16 @@ export function ensureLoaded(file) {
 const lastUsed = new WeakMap(); // File -> ms timestamp of its last activation/load
 export const markUsed = (file) => lastUsed.set(file, Date.now());
 
-// Turns a saved, loaded File back into a stub (drops its buffers and undo
-// history from memory; both are on disk). `raw` is its current saved meta.
+// Turns a saved, loaded File back into a stub (drops its buffers and its
+// session undo history from memory; the pixels are on disk). `raw` is its current saved meta.
 function becomeStub(backend, projectId, file, raw) {
   const stub = stubFile(raw);
   file.frames = stub.frames;
   file.undoStack = [];
   file.redoStack = [];
-  file._undoMeta = stub._undoMeta;
   file._stub = true;
   file._load = () => loadStub(backend, projectId, `${file.name}.sprite`, raw, file);
-  lastWritten.set(file, { path: `${projectId}/${file.name}`, json: JSON.stringify(encodeStubMeta(file)), frameSigs: new Map(), undoSig: '' });
+  lastWritten.set(file, { path: `${projectId}/${file.name}`, json: JSON.stringify(encodeStubMeta(file)), frameSigs: new Map() });
 }
 
 // Releases the pixels of Files nobody is using, so memory follows what's
@@ -173,7 +171,7 @@ export async function unloadIdle(backend, project, inUse, { keep = 3, idleMs = 6
     if (file._stub || inUse(file)) continue;
     const enc = encodeFile(file);
     const last = lastWritten.get(file);
-    if (enc.frames.some((fr) => last.frameSigs.get(fr.id) !== fr.sig) || last.undoSig !== enc.undo.sig) continue;
+    if (enc.frames.some((fr) => last.frameSigs.get(fr.id) !== fr.sig)) continue;
     becomeStub(backend, project.id, file, JSON.parse(JSON.stringify(enc.meta)));
   }
 }
@@ -190,11 +188,11 @@ export async function deleteProject(backend, projectId) {
   await backend.write(REGISTRY_PATH, registry.filter((entry) => entry.id !== projectId));
 }
 
-// A File's pixels live in binary chunks beside its JSON — one per Frame,
-// one for undo (see sprite-format.js). Chunks are written before the JSON,
+// A File's pixels live in binary chunks beside its JSON — one per Frame (see
+// sprite-format.js). Chunks are written before the JSON,
 // so a saved JSON never points at chunks that aren't there yet.
 const frameChunkName = (fileName, id) => `${fileName}.sprite.frame-${id}`;
-const UNDO_SUFFIX = '.sprite.undo';
+const UNDO_SUFFIX = '.sprite.undo'; // written by older builds; deleted on load
 
 // What each File / project.json last wrote, so an autosave rewrites only
 // what changed: drawing one pixel in one Frame of a 10-File project used to
@@ -203,14 +201,13 @@ const UNDO_SUFFIX = '.sprite.undo';
 // compared as text, which also catches edits that touch no pixels (layer
 // visibility, renames). Not persisted, so a cold start (or a rename, which
 // changes the path) just writes once.
-const lastWritten = new WeakMap(); // File -> { path, json, frameSigs: Map<id, sig>, undoSig }
+const lastWritten = new WeakMap(); // File -> { path, json, frameSigs: Map<id, sig> }
 const lastProjectJson = new WeakMap(); // project -> string
 
 const snapshotOf = (projectId, file, enc) => ({
   path: `${projectId}/${file.name}`,
   json: JSON.stringify(enc.meta),
   frameSigs: new Map(enc.frames.map((f) => [f.id, f.sig])),
-  undoSig: enc.undo.sig,
 });
 
 // Returns whether anything was written.
@@ -238,10 +235,6 @@ async function writeFile(backend, projectId, file) {
   for (const frame of enc.frames) {
     if (same && last.frameSigs.get(frame.id) === frame.sig) continue;
     await backend.write([projectId, frameChunkName(file.name, frame.id)], frame.bytes());
-    wrote = true;
-  }
-  if (!same || last.undoSig !== now.undoSig) {
-    await backend.write([projectId, file.name + UNDO_SUFFIX], enc.undo.bytes());
     wrote = true;
   }
   if (!same || last.json !== now.json) {

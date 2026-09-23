@@ -82,4 +82,15 @@ assert.equal(!!act._stub, false, 'file in use was kept');
 assert.throws(() => pixelsOf(stub), /isn't loaded yet/);
 await ensureLoaded(stub);
 assert.deepEqual(pixelsOf(stub), before, 'edits made before unloading survive it');
+
+// undo history is not persisted: nothing writes an undo chunk, and the one an
+// older build left behind is removed when the file is read
+store.set('p/a.sprite.undo', new Uint8Array(8));
+const reopened = await loadProject(backend, 'p');
+assert.equal(store.has('p/a.sprite.undo'), false, 'stale undo chunk deleted on load');
+setPixel({ width: 4, height: 4, stride: 4, pixels: reopened.files[0].frames[0].layerPixels[0], colors: reopened.files[0].colors }, 2, 2, '#FFFF00');
+reopened.files[0].undoStack.push({ type: 'pixelEdit', before: new Uint32Array(2), after: new Uint32Array(2) });
+writes.length = 0;
+await saveProject(backend, reopened);
+assert.equal(writes.some((w) => w.endsWith('.undo')), false, 'no undo chunk is written');
 console.log('persistence-skip ok');

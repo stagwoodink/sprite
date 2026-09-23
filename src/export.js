@@ -387,11 +387,10 @@ async function exportProjectSpriteImpl(project, onProgress) {
   };
   for (const [i, file] of project.files.entries()) {
     await ensureLoaded(file);
-    const { meta, frames, undo } = encodeFile(file);
+    const { meta, frames } = encodeFile(file);
     delete meta.references; // reference images never leave the app
     files[`${file.name}.sprite`] = new TextEncoder().encode(JSON.stringify(meta));
     for (const frame of frames) files[`${file.name}.sprite.frame-${frame.id}`] = frame.bytes();
-    files[`${file.name}.sprite.undo`] = undo.bytes();
     onProgress((i + 1) / project.files.length * 0.5);
   }
   onProgress(0.7);

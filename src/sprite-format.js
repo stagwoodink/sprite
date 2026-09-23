@@ -1,48 +1,41 @@
 import { createColorTable, colorIndex, bufferId } from './canvas-model.js';
 
-// .sprite v3: the File's JSON `meta` (everything except pixels and undo
-// diffs) plus binary chunks, each written independently so an autosave
-// rewrites only what changed:
+// .sprite v3: the File's JSON `meta` (everything except pixels) plus binary
+// chunks, each written independently so an autosave rewrites only what
+// changed:
 //   one chunk per Frame — its layers' buffers back to back, each
 //     canvasWidth*canvasHeight Uint16 indices into `meta.colors` — named by
-//     the Frame's stable id, listed in order in `meta.frames`;
-//   one undo chunk — every kept command's before/after Uint32 diff.
+//     the Frame's stable id, listed in order in `meta.frames`.
+// Undo history is session-only and never saved (older files carried an undo
+// chunk; it is ignored on read and `undoStack` is always written empty).
 // Binary rather than base64-in-JSON: base64 is a third larger, and
 // JSON.stringify over a huge string blocks the main thread on every autosave.
 // v2 kept every Frame in one sidecar (`read('bin')`); a file with no
 // `version` is v1 (pixels as plain arrays of hex/null). Both still load.
 export const FORMAT_VERSION = 3;
 
-let uidCounter = 0;
 let frameIdCounter = 0;
 const frameId = (frame) => frame.id ??= `f${Date.now().toString(36)}${(frameIdCounter++).toString(36)}`;
 
-// Structural ('layers') undo commands carry whole-stack snapshots, so only
-// the pixel commands after the last one are kept — earlier pixel commands
-// predate that layer shape and could not be replayed against it anyway.
-const keptUndo = (file) => file.undoStack.slice(file.undoStack.findLastIndex((c) => c.type === 'layers') + 1);
-
-// In-memory File -> { meta, frames, undo }. `frames[i]` and `undo` carry a
-// cheap change signature and a `bytes()` thunk, so a caller that already
-// knows a chunk is unchanged never pays to encode it. Redo is session-only
-// (§10); session-only references (no file handle to relink by) aren't saved.
+// In-memory File -> { meta, frames }. `frames[i]` carries a cheap change
+// signature and a `bytes()` thunk, so a caller that already knows a chunk is
+// unchanged never pays to encode it. Undo and redo are session-only (§10);
+// session-only references (no file handle to relink by) aren't saved.
 // The JSON half of a File, shared by a loaded File and a stub (below) so
 // their saved shape can never drift apart. Strips the in-memory-only fields.
-function buildMeta(file, frameIds, commands) {
-  const { frames, undoStack, _stub, _load, _loading, _undoMeta, ...rest } = file;
+function buildMeta(file, frameIds) {
+  const { frames, undoStack, _stub, _load, _loading, ...rest } = file;
   const references = (file.references || []).filter((r) => r.linked);
-  return { ...rest, references, version: FORMAT_VERSION, frames: frameIds, undoStack: commands, redoStack: [] };
+  return { ...rest, references, version: FORMAT_VERSION, frames: frameIds, undoStack: [], redoStack: [] };
 }
 
 // Meta for a File whose pixels aren't loaded (see stubFile).
-export const encodeStubMeta = (file) => buildMeta(file, file.frames.map((f) => f.id), file._undoMeta);
+export const encodeStubMeta = (file) => buildMeta(file, file.frames.map((f) => f.id));
 
 export function encodeFile(file) {
   const { frames } = file;
   const cells = file.canvasWidth * file.canvasHeight;
-  const kept = keptUndo(file);
-  const commands = kept.map(({ before, after, uid, ...cmd }) => ({ ...cmd, n: before.length }));
-  const meta = buildMeta(file, frames.map(frameId), commands);
+  const meta = buildMeta(file, frames.map(frameId));
 
   const frameChunks = frames.map((frame) => ({
     id: frameId(frame),
@@ -54,28 +47,13 @@ export function encodeFile(file) {
     },
   }));
 
-  const undo = {
-    sig: kept.map((c) => c.uid ??= ++uidCounter).join(','),
-    bytes() {
-      const bytes = new Uint8Array(kept.reduce((sum, c) => sum + c.before.byteLength * 2, 0));
-      let offset = 0;
-      for (const { before, after } of kept) {
-        for (const side of [before, after]) {
-          bytes.set(new Uint8Array(side.buffer, side.byteOffset, side.byteLength), offset);
-          offset += side.byteLength;
-        }
-      }
-      return bytes;
-    },
-  };
-  return { meta, frames: frameChunks, undo };
+  return { meta, frames: frameChunks };
 }
 
 // Persisted meta (or a bare v1 file object) -> the in-memory File.
-// `read(kind, id)` returns a chunk's bytes or null: ('frame', id),
-// ('undo'), or ('bin') for a v2 file's single sidecar. v1/v2 files come back
-// in the current shape (v1's undo history is dropped: its [x, y, hex]
-// commands are cheap to lose and undo is already expendable state).
+// `read(kind, id)` returns a chunk's bytes or null: ('frame', id), or
+// ('bin') for a v2 file's single sidecar. Older files come back in the
+// current shape with an empty undo stack.
 export function parseFile(meta, read = () => null) {
   if (meta.version === FORMAT_VERSION) return decodeV3(meta, read);
   if (meta.version === 2) return decodeV2(meta, read('bin'));
@@ -96,25 +74,20 @@ function reader(bytes) {
 }
 
 // A File that has its metadata (layers, size, order, palette-free fields)
-// but not its pixels or undo history, for lazy loading. Frames are
+// but not its pixels, for lazy loading. Frames are
 // placeholders that know their id and *throw* if their pixels are touched,
 // so a code path that forgot to load the File fails loudly and by name
 // instead of reading garbage. `load()` (set by the caller) fills it in
 // place, keeping the object's identity.
 export function stubFile(meta) {
-  const { frames: ids, undoStack, ...rest } = meta;
-  const file = { ...rest, undoStack: [], _undoMeta: undoStack, _stub: true };
+  const { frames: ids, ...rest } = meta;
+  const file = { ...rest, undoStack: [], _stub: true };
   delete file.version;
   file.frames = ids.map((id) => ({
     id,
     get layerPixels() { throw new Error(`File "${file.name}" isn't loaded yet`); },
   }));
   return file;
-}
-
-function decodeUndo(commands, bytes) {
-  const take = reader(bytes || new Uint8Array(0));
-  return commands.map(({ n, ...cmd }) => ({ ...cmd, before: take(Uint32Array, n), after: take(Uint32Array, n) }));
 }
 
 function decodeV3({ frames: ids, ...meta }, read) {
@@ -124,9 +97,8 @@ function decodeV3({ frames: ids, ...meta }, read) {
     const take = reader(bytes);
     return { id, layerPixels: meta.layers.map(() => take(Uint16Array, cells)) };
   });
-  const undoStack = decodeUndo(meta.undoStack, read('undo'));
   delete meta.version;
-  return { ...meta, frames, undoStack };
+  return { ...meta, frames, undoStack: [] };
 }
 
 function decodeV2({ frameCount, ...meta }, bytes) {
@@ -135,9 +107,8 @@ function decodeV2({ frameCount, ...meta }, bytes) {
   const frames = Array.from({ length: frameCount }, () => ({
     layerPixels: meta.layers.map(() => take(Uint16Array, cells)),
   }));
-  const undoStack = meta.undoStack.map(({ n, ...cmd }) => ({ ...cmd, before: take(Uint32Array, n), after: take(Uint32Array, n) }));
   delete meta.version;
-  return { ...meta, frames, undoStack };
+  return { ...meta, frames, undoStack: [] };
 }
 
 function migrateV1(file) {

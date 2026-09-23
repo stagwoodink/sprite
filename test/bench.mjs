@@ -45,7 +45,7 @@ time('floodFill (full canvas)', 5, () => floodFill({ ...view(), pixels: file.fra
 time('maskFromWand (full canvas)', 5, () => maskFromWand({ ...view(), pixels: file.frames[2].layerPixels[0] }, 0, 0));
 time('encodeFile + every chunk bytes()', 3, () => {
   const enc = encodeFile(file);
-  for (const c of [...enc.frames, enc.undo]) c?.bytes();
+  for (const c of enc.frames) c.bytes();
 });
 
 const store = new Map();
