@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createSpriteFile, addFrame, addLayer, deleteLayer } from '../src/sprite-file.js';
 import { setPixel } from '../src/canvas-model.js';
-import { saveProject, loadProject, ensureLoaded, unloadIdle, deleteStoredFile } from '../src/persistence.js';
+import { saveProject, loadProject, ensureLoaded, unloadIdle, deleteStoredFile, loadTemporarily, markUsed } from '../src/persistence.js';
 
 const store = new Map(), writes = [];
 const backend = {
@@ -132,6 +132,24 @@ assert.equal(writes.some((w) => w.startsWith('p/b.')), false, 'a file not named 
 assert.equal(writes.some((w) => w.startsWith('p/a.sprite.frame-')), true, 'the named file is');
 await saveProject(backend, project);
 assert.equal(writes.some((w) => w === 'p/b.sprite'), true, 'the next full save picks up the unnamed change');
+
+// a one-off read (project export) hands back a stub-again function
+const cold = (await loadProject(backend, 'q')).files[0]; // 'q' has one file and it is the active one
+const q3 = await loadProject(backend, 'p');
+const sleepy = q3.files.find((f) => f._stub);
+const giveBack = await loadTemporarily(sleepy);
+assert.equal(!!sleepy._stub, false, 'loaded for the read');
+giveBack();
+assert.equal(!!sleepy._stub, true, 'released again when nobody else used it');
+await ensureLoaded(sleepy);
+assert.ok(sleepy.frames[0].layerPixels[0].length > 0, 'and it reloads intact');
+sleepy._release(); // back to a stub
+const giveBack2 = await loadTemporarily(sleepy);
+await new Promise((r) => setTimeout(r, 3));
+markUsed(sleepy); // the user opened it meanwhile
+giveBack2();
+assert.equal(!!sleepy._stub, false, 'a file someone else used stays loaded');
+assert.equal(!!cold._stub, false);
 
 // deleting a stored file removes its meta and chunks by name, without listing the store
 const listed = [];

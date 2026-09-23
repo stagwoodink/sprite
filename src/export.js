@@ -1,6 +1,6 @@
 import { compositeFrame, compositeFrameAt, compositeLayerAt } from './sprite-file.js';
 import { encodeFile } from './sprite-format.js';
-import { ensureLoaded } from './persistence.js';
+import { ensureLoaded, loadTemporarily } from './persistence.js';
 import { computeArtboardLayout } from './renderer.js';
 import { zipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
@@ -335,12 +335,14 @@ async function exportProjectSpriteImpl(project, onProgress) {
       collections: project.collections, fileNames: project.files.map((f) => f.name),
     })),
   };
+  const encoder = new TextEncoder();
   for (const [i, file] of project.files.entries()) {
-    await ensureLoaded(file);
+    const release = await loadTemporarily(file);
     const { meta, chunks } = encodeFile(file);
     delete meta.references; // reference images never leave the app
-    files[`${file.name}.sprite`] = new TextEncoder().encode(JSON.stringify(meta));
+    files[`${file.name}.sprite`] = encoder.encode(JSON.stringify(meta));
     for (const chunk of chunks) files[`${file.name}.sprite.${chunk.name}`] = chunk.bytes();
+    release();
     onProgress((i + 1) / project.files.length * 0.5);
   }
   onProgress(0.7);

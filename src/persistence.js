@@ -145,6 +145,14 @@ async function loadStub(backend, projectId, fileName, raw, stub) {
   delete stub._stub;
   delete stub._load;
   lastWritten.set(stub, snapshotOf(projectId, stub, encodeFile(stub)));
+  // Puts the File back to a stub, but only while nothing has changed since it
+  // was read (its saved state is then still exactly what's in memory).
+  stub._release = () => {
+    const enc = encodeFile(stub);
+    const last = lastWritten.get(stub);
+    if (JSON.stringify(enc.meta) !== last.json || enc.chunks.some((c) => last.chunkSigs.get(c.name) !== c.sig)) return;
+    becomeStub(backend, projectId, stub, JSON.parse(JSON.stringify(enc.meta)));
+  };
 }
 
 // Resolves once `file`'s pixels are in memory (immediately if they already
@@ -154,6 +162,16 @@ export function ensureLoaded(file) {
   markUsed(file);
   if (!file._stub) return Promise.resolve();
   return file._loading ||= file._load().finally(() => { delete file._loading; });
+}
+
+// Loads `file` for a one-off read (an export) and returns a function that
+// puts it back to a stub if it was one and nobody has used it since, so a
+// whole-project read doesn't leave the whole project resident.
+export async function loadTemporarily(file) {
+  const wasStub = !!file._stub;
+  await ensureLoaded(file);
+  const stamp = lastUsed.get(file);
+  return () => { if (wasStub && lastUsed.get(file) === stamp) file._release?.(); };
 }
 
 const lastUsed = new WeakMap(); // File -> ms timestamp of its last activation/load
@@ -167,6 +185,7 @@ function becomeStub(backend, projectId, file, raw) {
   file.undoStack = [];
   file.redoStack = [];
   file._stub = true;
+  delete file._release;
   file._load = () => loadStub(backend, projectId, `${file.name}.sprite`, raw, file);
   lastWritten.set(file, { path: `${projectId}/${file.name}`, json: JSON.stringify(encodeStubMeta(file)), chunkSigs: new Map() });
 }

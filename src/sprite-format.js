@@ -32,7 +32,7 @@ export const chunkName = (frameId, cid) => `frame-${frameId}-${cid}`;
 // The JSON half of a File, shared by a loaded File and a stub (below) so
 // their saved shape can never drift apart. Strips the in-memory-only fields.
 function buildMeta(file, frames) {
-  const { frames: _frames, undoStack, _stub, _load, _loading, ...rest } = file;
+  const { frames: _frames, undoStack, _stub, _load, _loading, _release, ...rest } = file;
   const references = (file.references || []).filter((r) => r.linked);
   return { ...rest, references, version: FORMAT_VERSION, frames, undoStack: [], redoStack: [] };
 }
