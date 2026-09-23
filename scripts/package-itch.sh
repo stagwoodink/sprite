@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-OUT="dist/pixi.zip"
+OUT="dist/sprite.zip"
 mkdir -p dist
 rm -f "$OUT"
 zip -r "$OUT" index.html src -x '*.DS_Store'

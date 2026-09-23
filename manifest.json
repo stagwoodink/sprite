@@ -1,0 +1,9 @@
+{
+  "name": "Sprite",
+  "short_name": "Sprite",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#1e1e1e",
+  "icons": []
+}
