@@ -750,8 +750,9 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .palette-row { display: flex; }
 
 /* ---- Project capacity meter: plain filled rectangle, no gradient ------ */
-.capacity-meter { height: 4px; background: var(--bg-base); border-top: 1px solid var(--hairline); }
-.capacity-fill { height: 100%; background: var(--accent); }
+.capacity-meter { height: 4px; background: var(--accent-dark); border-top: 1px solid var(--hairline); }
+/* min-width: a sliver is always lit, even at 0% load — purely for looks */
+.capacity-fill { height: 100%; min-width: 3px; background: var(--accent); }
 .capacity-meter.full { cursor: pointer; }
 
 /* ---- New-File size popup: custom W x H row --------------------------- */
