@@ -7,7 +7,7 @@ import { viewState, resetView, groupViewState, resetGroupView } from './view-sta
 import { createPalette } from './palette.js';
 import { maskFromRect, maskFromWand, maskFromColor, fullMask, toRenderSelection } from './selection.js';
 import { extract, stamp, flip, rotate, shiftMask, moveContent, maskBounds } from './selection-ops.js';
-import { commitCommand, undo as undoCmd, redo as redoCmd } from './undo.js';
+import { commitCommand, undo as undoCmd, redo as redoCmd, snapshotLayers } from './undo.js';
 import {
   createProject, activeFile as getActiveFile, addFile, deleteFile,
   addCollection, deleteCollection, NEW_FILE_SIZES, projectOrder, moveProjectItem,
@@ -698,12 +698,12 @@ const history = {
 };
 
 // Layer structural edits (add/delete/reorder) go through undo too, as a
-// whole-state snapshot rather than a pixel diff — snapshot before, run the
+// layer-stack snapshot (buffers by reference) rather than a pixel diff — snapshot before, run the
 // mutation, snapshot after, hand both to history.commit.
 function commitLayerChange(file, mutate) {
-  const before = { layers: structuredClone(file.layers), frames: structuredClone(file.frames), activeLayerIndex: file.activeLayerIndex };
+  const before = snapshotLayers(file);
   mutate();
-  const after = { layers: structuredClone(file.layers), frames: structuredClone(file.frames), activeLayerIndex: file.activeLayerIndex };
+  const after = snapshotLayers(file);
   bindActiveFile();
   history.commit({ type: 'layers', before, after });
 }
