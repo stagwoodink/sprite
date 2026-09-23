@@ -28,6 +28,8 @@ const CROSSHAIR_COLOR = '#FFFFFF';
 const ONION_BEFORE_TINT = '#BE1425';
 const ONION_AFTER_TINT = '#3366FF';
 
+// Returns whether the selection ants are marching, i.e. whether the caller
+// must keep rendering to animate them.
 export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry = 'off', references, selection, onionFrames, brushCursor, cursorPos, canvasBg = 'checker', appBg = 'black' }) {
   const { scale, ox, oy } = computeViewport(model, viewW, viewH);
   const w = model.width * scale;
@@ -112,9 +114,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
     }
   }
 
-  if (selection) {
-    drawSelection(ctx, selection, scale, ox, oy);
-  }
+  const marching = !!selection && drawSelection(ctx, selection, scale, ox, oy);
 
   if (brushCursor && cursorPos) {
     // `cursorPos` is the eased trail, not the raw hover pixel — it can lag
@@ -128,6 +128,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
     drawBrushCursor(ctx, cursorPos, brushCursor, scale, ox, oy);
     ctx.restore();
   }
+  return marching;
 }
 
 // Read-only overview of every File in a Collection (§ project panel group
@@ -383,7 +384,7 @@ function selectionOutlinePath(selection, scale, ox, oy) {
 
 function drawSelection(ctx, selection, scale, ox, oy) {
   const alpha = selectionAlpha(scale);
-  if (alpha <= 0) return;
+  if (alpha <= 0) return false;
   const path = selectionOutlinePath(selection, scale, ox, oy);
   antsPhase = (antsPhase + SELECTION_DASH_SPEED) % (SELECTION_DASH * 2);
 
@@ -399,6 +400,7 @@ function drawSelection(ctx, selection, scale, ox, oy) {
   ctx.strokeStyle = '#FFFFFF';
   ctx.stroke(path);
   ctx.restore();
+  return true;
 }
 
 // Same step progression the grid uses (§6): 1 -> 4 -> 16 -> ... — ticks/

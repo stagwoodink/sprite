@@ -121,7 +121,7 @@ function updateVersionNavHighlight() {
 
 // Tool reference tag — mirrors version-tab on the opposite corner. Left
 // side: current tool + brush size. Right: zoom %, then the primary swatch.
-// Content refreshed every frame from renderCanvas() (cheap: a handful of
+// Content refreshed from renderCanvas() (cheap: a handful of
 // textContent/background writes).
 const toolLabel = document.createElement('div');
 toolLabel.className = 'tool-tag-label';
@@ -768,9 +768,18 @@ function resize() {
 // animation loop rather than dropped frames, so it looks the same at any
 // frame rate and the amount of lag is one number to tune.
 const CURSOR_TRAIL_EASE = 0.35; // 1 = no lag (snaps instantly), lower = laggier/more retro
+const CURSOR_SETTLE = 0.01; // the easing is asymptotic; snap once this close so the loop can go idle
 let displayCursorPos = null;
 
+// The loop below draws only when this is set or something is mid-animation.
+// A blanket input listener (see the end of the loop) sets it, so state
+// changes that never called renderCanvas() themselves still show up.
+let needsRender = true;
+let antsMarching = false;
+const requestRender = () => { needsRender = true; };
+
 function renderCanvas() {
+  antsMarching = false;
   if (activeGroupId) { renderGroupCanvas(); return; }
   // The canvas always shows the composited result of every visible layer
   // (§11), while `model` (the active layer's own raw buffer) is what
@@ -780,7 +789,7 @@ function renderCanvas() {
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
   const brushCursor = { mode: (inputController && inputController.getMode()) || 'place', size: brushSize };
-  render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
+  antsMarching = render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
     showGrid, showRuler, symmetry: paintOptions.symmetry, references: drawableReferences(file), hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos, canvasBg: canvasBgCycler.get(), appBg: appBgCycler.get(),
   });
   updateToolTag();
@@ -879,15 +888,31 @@ function draw() {
   if (!activeGroupId) {
     if (hoverPixel) {
       if (!displayCursorPos) displayCursorPos = { x: hoverPixel.x, y: hoverPixel.y };
-      displayCursorPos.x += (hoverPixel.x - displayCursorPos.x) * CURSOR_TRAIL_EASE;
-      displayCursorPos.y += (hoverPixel.y - displayCursorPos.y) * CURSOR_TRAIL_EASE;
-    } else {
+      const dx = hoverPixel.x - displayCursorPos.x, dy = hoverPixel.y - displayCursorPos.y;
+      if (dx || dy) {
+        const settled = Math.abs(dx) < CURSOR_SETTLE && Math.abs(dy) < CURSOR_SETTLE;
+        displayCursorPos.x = settled ? hoverPixel.x : displayCursorPos.x + dx * CURSOR_TRAIL_EASE;
+        displayCursorPos.y = settled ? hoverPixel.y : displayCursorPos.y + dy * CURSOR_TRAIL_EASE;
+        needsRender = true;
+      }
+    } else if (displayCursorPos) {
       displayCursorPos = null;
+      needsRender = true;
     }
-    renderCanvas();
+    if (needsRender || antsMarching) {
+      needsRender = false;
+      renderCanvas();
+    }
   }
   requestAnimationFrame(animateCursor);
 })();
+
+// Any input can change what the canvas shows (hover, zoom, tool, colour,
+// toggles), and most handlers rely on the loop noticing rather than calling
+// renderCanvas() themselves — so treat every input event as a render request.
+for (const type of ['pointermove', 'pointerdown', 'pointerup', 'keydown', 'keyup', 'wheel', 'input', 'change', 'click']) {
+  window.addEventListener(type, requestRender, { capture: true, passive: true });
+}
 
 // redrawProjectPanel() fully rebuilds the panel's DOM (innerHTML=''),
 // resetting scroll to the top — used after that rebuild to bring a specific
@@ -1605,10 +1630,10 @@ canvas.addEventListener('pointermove', (e) => {
   }
   const viewport = computeViewport(model, rect.width, rect.height);
   hoverPixel = screenToPixel(viewport, e.clientX - rect.left, e.clientY - rect.top);
-  // No render call here — the animateCursor loop already redraws every
-  // frame and picks up the new hoverPixel on its own; forcing a full
-  // draw() per pointermove was the original (expensive) cause of the
-  // cursor lag this replaced.
+  // No render call here — the window-level input listener flags a render
+  // and the animateCursor loop picks up the new hoverPixel on its own;
+  // forcing a full draw() per pointermove was the original (expensive)
+  // cause of the cursor lag this replaced.
 });
 
 canvas.addEventListener('pointerleave', () => {
