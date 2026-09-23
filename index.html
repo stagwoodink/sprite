@@ -36,15 +36,28 @@
   </div>
   <script>
     // A failed startup otherwise leaves a blank page with the reason only in
-    // the console; print the first error on the page (click to dismiss).
+    // the console; print the errors on the page, selectable, with Copy/Close.
     for (const type of ['error', 'unhandledrejection']) {
       window.addEventListener(type, (e) => {
         const reason = e.reason || e.error;
         const text = (reason && reason.stack) || (reason && reason.message) || e.message || String(reason);
-        const box = document.getElementById('startup-error') || document.body.appendChild(Object.assign(document.createElement('pre'), { id: 'startup-error' }));
-        box.style.cssText = 'position:fixed;inset:0 0 auto 0;z-index:99999;margin:0;padding:8px;max-height:50vh;overflow:auto;background:#7A0C18;color:#fff;font:12px monospace;white-space:pre-wrap;cursor:pointer';
-        box.textContent += (box.textContent ? '\n\n' : '') + text;
-        box.onclick = () => box.remove();
+        let box = document.getElementById('startup-error');
+        if (!box) {
+          box = document.body.appendChild(document.createElement('div'));
+          box.id = 'startup-error';
+          box.style.cssText = 'position:fixed;inset:0 0 auto 0;z-index:99999;padding:8px;background:#7A0C18;color:#fff;font:12px monospace';
+          const bar = box.appendChild(document.createElement('div'));
+          for (const [label, act] of [['Copy', () => navigator.clipboard.writeText(box.querySelector('pre').textContent)], ['Close', () => box.remove()]]) {
+            const b = bar.appendChild(document.createElement('button'));
+            b.textContent = label;
+            b.style.cssText = 'margin-right:8px;font:inherit';
+            b.onclick = act;
+          }
+          const pre = box.appendChild(document.createElement('pre'));
+          pre.style.cssText = 'margin:6px 0 0;max-height:50vh;overflow:auto;white-space:pre-wrap;user-select:text';
+        }
+        const pre = box.querySelector('pre');
+        pre.textContent += (pre.textContent ? '\n\n' : '') + text;
       });
     }
   </script>

@@ -244,6 +244,10 @@ function toggleTagsHidden() {
 const SIDE_PANEL_WIDTH = BLOCK * 6; // must match --panel-width in style.css
 const PALETTE_HEIGHT = BLOCK;
 
+// A shut slide-out can't be seen, so its rebuild (thumbnails and all) waits
+// until it opens; these mark it as owing one. Declared before the panels are
+// built: a pinned panel reports itself visible during construction.
+let layersStale = true, timelineStale = true;
 let projectReveal, exportReveal, openProjectReveal, layersReveal, timelineReveal, paletteReveal;
 function updatePushes() {
   const projectOpen = !!(projectReveal && projectReveal.isFocused());
@@ -305,11 +309,11 @@ exportReveal = createRevealablePanel(exportPanel, exportPanel, { onVisibility: u
 // only by the Project panel's "Open" menu item (openProjectListPanel(), below).
 openProjectReveal = createRevealablePanel(openProjectPanel, openProjectPanel, { onVisibility: updatePushes });
 layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'), {
-  initiallyPinned: uiPrefs.layers, onVisibility: (visible) => { updatePushes(); if (visible && layersStale) redrawLayersPanel(); },
+  initiallyPinned: uiPrefs.layers, onVisibility: (visible) => { updatePushes(); if (visible && layersStale && layersReveal) redrawLayersPanel(); }, // not during construction: layersReveal is unset and the project isn't loaded yet
   onPinChange: (v) => { uiPrefs.layers = v; saveUiPrefs(uiPrefs); },
 });
 timelineReveal = createRevealablePanel(timelineBar, document.getElementById('timeline-trigger'), {
-  initiallyPinned: uiPrefs.timeline, onVisibility: (visible) => { updatePushes(); if (visible && timelineStale) redrawTimelinePanel(); },
+  initiallyPinned: uiPrefs.timeline, onVisibility: (visible) => { updatePushes(); if (visible && timelineStale && timelineReveal) redrawTimelinePanel(); },
   onPinChange: (v) => { uiPrefs.timeline = v; saveUiPrefs(uiPrefs); },
 });
 paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palette-trigger'), {
@@ -1405,9 +1409,6 @@ function openProjectPicker(anchor) {
   openSlideOut(anchor, options);
 }
 
-// A shut slide-out can't be seen, so its rebuild (thumbnails and all) waits
-// until it opens; these mark it as owing one.
-let layersStale = true, timelineStale = true;
 function redrawLayersPanel(force = false) {
   const file = getActiveFile(project);
   if (file._stub) return; // still loading
