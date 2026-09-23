@@ -96,6 +96,26 @@ export function setPixel(model, x, y, colorHex, mask) {
   if (!inBounds(model, x, y)) return;
   if (mask && !mask[y * model.width + x]) return;
   model.pixels[y * (model.stride || model.width) + x] = colorIndex(model.colors, colorHex);
+  touch(model.pixels, x, y);
+}
+
+// Change tracking for sprite-file.js's composite cache. Every write to a
+// layer buffer bumps its `v` and grows its dirty rectangle (`dirty` =
+// [x0, y0, x1, y1], or 'all' when the extent is unknown), so a cached
+// composite can tell what, if anything, it must redo. A caller that writes
+// `pixels[i]` directly (bypassing setPixel) must call touch(pixels) itself.
+export function touch(pixels, x, y) {
+  pixels.v = (pixels.v | 0) + 1;
+  const d = pixels.dirty;
+  if (d === 'all') return;
+  if (x === undefined) pixels.dirty = 'all';
+  else if (!d) pixels.dirty = [x, y, x, y];
+  else {
+    if (x < d[0]) d[0] = x;
+    if (y < d[1]) d[1] = y;
+    if (x > d[2]) d[2] = x;
+    if (y > d[3]) d[3] = y;
+  }
 }
 
 // Whole-array snapshot/diff, used to build one undo EditCommand per committed

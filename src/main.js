@@ -1,4 +1,4 @@
-import { setPixel, getPixel, stampBrush, floodFill, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
+import { setPixel, getPixel, touch, stampBrush, floodFill, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
 import { parseFile } from './sprite-format.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
@@ -1581,6 +1581,7 @@ function stepRotate(dir) {
   if (!rotating) return;
   rotating.angle += dir * rotating.step;
   for (let i = 0; i < model.pixels.length; i++) model.pixels[i] = rotating.snapshot[i];
+  touch(model.pixels);
   rotate(model, rotating.mask, rotating.angle);
   renderCanvas(); // live feedback only; endRotate does the full refresh
 }
@@ -1835,6 +1836,7 @@ function beginShape(key, anchor) {
 function updateShapePreview(endpoint) {
   if (!shapeState) return;
   for (let i = 0; i < model.pixels.length; i++) model.pixels[i] = shapeState.snapshot[i];
+  touch(model.pixels);
   const { x: x0, y: y0 } = shapeState.anchor;
   let { x: x1, y: y1 } = endpoint || currentCursor();
   if (held.shift) [x1, y1] = constrainSquare(x0, y0, x1, y1);

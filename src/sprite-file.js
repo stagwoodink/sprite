@@ -76,20 +76,38 @@ function blendPacked(base, top, alpha) {
   return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
 }
 
+// Per-frame composite cache. A WeakMap keyed by the frame object, so it
+// never reaches serialization and dies with the frame. A hit needs the same
+// structure (dimensions, each layer's visibility/opacity/buffer identity)
+// and the same buffer versions (canvas-model.js touch()) — so pan, zoom,
+// idle redraws and edits to *other* frames all cost one key comparison.
+const compositeCache = new WeakMap(); // frame -> { structKey, versions, out }
+let nextBufferId = 1;
+
 export function compositeFrameAt(file, frameIndex) {
   const w = file.visibleWidth, h = file.visibleHeight;
-  const out = new Uint32Array(w * h);
   const frame = file.frames[frameIndex];
-  const table = packedTable(file.colors);
   // `layer.groupId` is derived, not stored — layerOrder() is what computes
   // it (as a side effect), and this runs every frame regardless of whether
   // the layers panel has rendered since the last group/order change, so it
   // can't rely on that having already happened.
   layerOrder(file);
-  file.layers.forEach((layer, li) => {
+  const shown = file.layers.map((layer) => {
     const group = layer.groupId && file.layerGroups.find((g) => g.id === layer.groupId);
-    if (!layer.visible || (group && !group.visible)) return;
-    const src = frame.layerPixels[li];
+    return layer.visible && !(group && !group.visible);
+  });
+  const bufs = frame.layerPixels;
+  const structKey = `${w}x${h}x${file.canvasWidth}|` + file.layers.map((layer, li) => `${shown[li] ? 1 : 0}:${layer.opacity}:${bufs[li].id ??= nextBufferId++}`).join(',');
+  const versions = bufs.map((buf) => buf.v | 0);
+
+  const cached = compositeCache.get(frame);
+  if (cached && cached.structKey === structKey && cached.versions.every((v, i) => v === versions[i])) return cached.out;
+
+  const out = new Uint32Array(w * h);
+  const table = packedTable(file.colors);
+  file.layers.forEach((layer, li) => {
+    if (!shown[li]) return;
+    const src = bufs[li];
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const idx = src[y * file.canvasWidth + x];
@@ -99,6 +117,7 @@ export function compositeFrameAt(file, frameIndex) {
       }
     }
   });
+  compositeCache.set(frame, { structKey, versions, out });
   return out;
 }
 
