@@ -81,5 +81,5 @@ export function fullMask(model) {
 
 export function toRenderSelection(model, mask) {
   if (!mask) return null;
-  return { type: 'mask', width: model.width, height: model.height, mask };
+  return { width: model.width, height: model.height, mask };
 }

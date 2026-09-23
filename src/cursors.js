@@ -62,8 +62,8 @@ const SHAPE_CIRCLE = svgCursor(
 );
 
 export const CURSORS = {
-  paint: `${DOT}, crosshair`,
-  antialiasedPaint: `${BRUSH}, crosshair`,
+  place: `${DOT}, crosshair`, // precision — hard-edged square stamp
+  paint: `${BRUSH}, crosshair`, // fluid — soft antialiased circular brush
   fill: `${BUCKET}, cell`,
   antialiasedFill: `${BUCKET}, cell`,
   selectRect: `${MARQUEE}, crosshair`,
@@ -78,5 +78,5 @@ export const CURSORS = {
 };
 
 export function cursorForMode(mode) {
-  return CURSORS[mode] || CURSORS.paint;
+  return CURSORS[mode] || CURSORS.place;
 }

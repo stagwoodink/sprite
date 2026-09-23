@@ -11,3 +11,14 @@ export function resetView() {
   viewState.panX = 0;
   viewState.panY = 0;
 }
+
+// Same shape, for the read-only group grid's own camera (§ project panel
+// group select) — panning/zooming a collection as a whole is independent of
+// wherever the single-file canvas's own view happens to be.
+export const groupViewState = { zoom: null, panX: 0, panY: 0 };
+
+export function resetGroupView() {
+  groupViewState.zoom = null;
+  groupViewState.panX = 0;
+  groupViewState.panY = 0;
+}

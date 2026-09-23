@@ -4,7 +4,7 @@
 // secondary control surface slides out from the element that triggered it,
 // not a floating dropdown — this slides up from the chip rather than
 // appearing as a fixed popup.
-import { positionSlideOut } from './slide-out.js';
+import { openCustomSlideOut } from './slide-out.js';
 
 const SIZE = 120;
 
@@ -38,12 +38,7 @@ function hslToHex(h, s, l) {
 }
 
 export function openColorPicker(anchorEl, initialHex, onChange) {
-  document.querySelectorAll('.color-picker-popup').forEach((el) => el.remove());
-
   let { h, s, l } = hexToHsl(initialHex);
-
-  const popup = document.createElement('div');
-  popup.className = 'color-picker-popup slide-out-bar';
 
   const square = document.createElement('canvas');
   square.width = SIZE;
@@ -62,24 +57,24 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
   hexField.className = 'picker-hex';
   hexField.value = initialHex;
 
-  popup.append(square, hue, hexField);
-
   // Slides out flush above the chip (the palette bar docks to the bottom
-  // edge), centered horizontally on it with the chevron pointing down at it.
-  const fromTransform = positionSlideOut(popup, anchorEl, 'up');
-  popup.style.opacity = '0';
-  document.body.append(popup);
+  // edge), centered horizontally on it with the chevron pointing down at it
+  // — openCustomSlideOut's own positioning (anchor-relative on the primary
+  // axis, viewport-clamped on the cross axis) doesn't center on the anchor,
+  // so that's overridden right after appending.
+  const result = openCustomSlideOut(anchorEl, (popup) => {
+    popup.className += ' color-picker-popup';
+    popup.append(square, hue, hexField);
+  }, { side: 'up', onDismiss: () => window.removeEventListener('keydown', onKeyDown, true) });
+  if (!result) return null; // toggled closed (second click on the same chip)
+  const { el: popup, close } = result;
+
   const anchorRect = anchorEl.getBoundingClientRect();
   const popupWidth = popup.offsetWidth;
   const left = anchorRect.left + anchorRect.width / 2 - popupWidth / 2;
   popup.style.left = left + 'px';
   const chevron = popup.querySelector('.slide-out-chevron');
   if (chevron) chevron.style.left = popupWidth / 2 + 'px';
-  popup.style.transform = fromTransform;
-  requestAnimationFrame(() => {
-    popup.style.transform = 'translate(0, 0)';
-    popup.style.opacity = '1';
-  });
 
   const sctx = square.getContext('2d');
 
@@ -135,14 +130,37 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
     }
   });
 
-  function onOutsideClick(e) {
-    if (!popup.contains(e.target) && e.target !== anchorEl) {
-      popup.remove();
-      window.removeEventListener('pointerdown', onOutsideClick, true);
+  // Colors-panel keyboard scheme: arrows nudge s/l, Alt+Left/Right nudge
+  // hue, Enter/Escape close — reuses the same `s`/`l`/`h`/`commit`/
+  // `paintSquare` state the pointer-drag path above already maintains.
+  // openCustomSlideOut's outside-click dismiss doesn't know about this
+  // extra listener, so `onDismiss` (fired only on that path, not on a
+  // deliberate close) removes it too — otherwise it'd keep intercepting
+  // arrow keys after the popup's already gone.
+  const STEP = 0.03;
+  function onKeyDown(e) {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation(); // capture phase: keep main.js's canvas-cursor arrow handling from also firing
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        h = (h + (e.key === 'ArrowRight' ? 6 : -6) + 360) % 360;
+        hue.value = h;
+        paintSquare();
+      } else {
+        if (e.key === 'ArrowLeft') s = Math.max(0, s - STEP);
+        if (e.key === 'ArrowRight') s = Math.min(1, s + STEP);
+        if (e.key === 'ArrowUp') l = Math.min(1, l + STEP);
+        if (e.key === 'ArrowDown') l = Math.max(0, l - STEP);
+      }
+      commit(hslToHex(h, s, l));
+    } else if (e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      window.removeEventListener('keydown', onKeyDown, true);
+      close();
     }
   }
-  // Deferred so the opening right-click itself doesn't immediately close it.
-  setTimeout(() => window.addEventListener('pointerdown', onOutsideClick, true), 0);
+  window.addEventListener('keydown', onKeyDown, true);
 
   return popup;
 }

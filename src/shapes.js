@@ -60,4 +60,5 @@ export const SHAPE_OUTLINES = {
   rect: rectOutline,
   triangle: triangleOutline,
   circle: ellipseOutline,
+  line: linePixels,
 };
