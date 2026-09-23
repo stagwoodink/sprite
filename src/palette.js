@@ -1,71 +1,45 @@
 import { PRESETS, DEFAULT_PRESET, MAX_CHIPS } from './palettes-presets.js';
 import { openColorPicker } from './color-picker.js';
-import { positionSlideOut } from './slide-out.js';
+import { openCustomSlideOut } from './slide-out.js';
+import { button, attachNativeDragReorder, flashTip } from './ui.js';
+import { loadLibrary, addPalette, removePalette, renamePalette, MAX_SAVED } from './palette-library.js';
 
-// Live drag-reorder preview: chips between the dragged one and the hover
-// target slide aside by one chip-width to open a gap, without touching the
-// real array/DOM order until drop actually happens.
-function previewShift(row, from, target) {
-  const chips = Array.from(row.querySelectorAll('.chip'));
-  chips.forEach((chip, idx) => {
-    if (idx === from) { chip.style.opacity = '0.3'; return; }
-    let shift = 0;
-    if (from < target && idx > from && idx <= target) shift = -1;
-    else if (from > target && idx < from && idx >= target) shift = 1;
-    chip.style.transition = 'transform 120ms ease';
-    chip.style.transform = shift ? `translateX(${shift * 100}%)` : '';
-  });
-}
+const BUILTIN_NAMES = Object.values(PRESETS).map((p) => p.name);
 
-function clearPreviewShift(row) {
-  row.querySelectorAll('.chip').forEach((chip) => {
-    chip.style.transform = '';
-    chip.style.opacity = '';
-  });
-}
-
-function darken(hex, amount) {
-  const n = parseInt(hex.slice(1), 16);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  const clampDark = (v) => Math.max(24, Math.round(v * (1 - amount))); // clamped off pure black (§1.2/§1.3)
-  return '#' + [r, g, b].map((v) => clampDark(v).toString(16).padStart(2, '0')).join('');
-}
-
-// Slides up from the hamburger (palette docks to the bottom edge) — lists
-// the built-in presets plus a "+ New Palette" to start a blank one.
-function openPresetPanel(anchor, onLoadPreset, onNewPalette) {
-  document.querySelectorAll('.palette-preset-panel').forEach((el) => el.remove());
-  const panel = document.createElement('div');
-  panel.className = 'palette-preset-panel slide-out-bar';
-
-  Object.entries(PRESETS).forEach(([key, preset]) => {
-    const btn = document.createElement('button');
-    btn.textContent = preset.name;
-    btn.addEventListener('click', () => { onLoadPreset(key); panel.remove(); });
-    panel.append(btn);
-  });
-
-  const newBtn = document.createElement('button');
-  newBtn.className = 'new-palette-btn';
-  newBtn.textContent = '+ New Palette';
-  newBtn.addEventListener('click', () => { onNewPalette(); panel.remove(); });
-  panel.append(newBtn);
-
-  const fromTransform = positionSlideOut(panel, anchor, 'up');
-  panel.style.transform = fromTransform;
-  panel.style.opacity = '0';
-  document.body.append(panel);
-  requestAnimationFrame(() => {
-    panel.style.transform = 'translate(0, 0)';
-    panel.style.opacity = '1';
-  });
-
-  setTimeout(() => window.addEventListener('pointerdown', function onOutside(e) {
-    if (!panel.contains(e.target) && e.target !== anchor) {
-      panel.remove();
-      window.removeEventListener('pointerdown', onOutside);
+// Slides up from the hamburger (palette docks to the bottom edge) — one
+// list: the built-in presets, then (below a hairline) the user's saved
+// palettes, each with a hover-revealed ✕ like a layer row, then a
+// "+ New Palette" to start a blank one. Uses
+// openCustomSlideOut (not the plain openSlideOut button-list) only for the
+// left-justified/accent-text button styling below, scoped via its own
+// `className` — toggle-on-second-click, outside-click dismiss, and the
+// slide/fade-in are all shared with every other slide-out popup.
+function openPresetPanel(anchor, onLoad, onNewPalette, onDelete) {
+  const result = openCustomSlideOut(anchor, (panel, close) => {
+    Object.values(PRESETS).forEach((preset) => {
+      panel.append(button({ label: preset.name, fill: true, onClick: () => { onLoad(preset); close(); } }));
+    });
+    const saved = loadLibrary();
+    if (saved.length) {
+      const rule = document.createElement('div');
+      rule.className = 'palette-rule';
+      panel.append(rule);
     }
-  }), 0);
+    for (const entry of saved) {
+      const row = document.createElement('div');
+      row.className = 'palette-row reveal-on-hover';
+      row.append(
+        button({ label: entry.name, fill: true, onClick: () => { onLoad(entry); close(); } }),
+        button({ glyph: '✕', icon: true, className: 'btn--reveal', title: 'Delete palette', onClick: () => { onDelete(entry.name); close(); } }),
+      );
+      panel.append(row);
+    }
+    panel.append(button({
+      label: '+ New Palette', fill: true, className: 'new-palette-btn',
+      onClick: () => { onNewPalette(); close(); },
+    }));
+  }, { side: 'up', className: 'palette-preset-panel' });
+  return result && result.el;
 }
 
 // Above this many chips, the row stops stretching chips to fill the bar
@@ -78,42 +52,89 @@ const PEEK_FRACTION = 0.25; // per side
 // Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
 // loaded/created Project's own palette object; the returned `state` is that
 // same live object (mutated in place) so main.js can persist it directly.
-export function createPalette(container, initial, onChange, onSelectColor) {
+export function createPalette(container, initial, onChange, onSelectColor, getProjectName) {
   const preset = PRESETS[DEFAULT_PRESET];
-  const state = initial && initial.chips && initial.chips.length ? initial : {
+  let state = initial && initial.chips && initial.chips.length ? initial : {
+    name: preset.name,
     chips: [...preset.chips],
     primary: preset.chips[0],
-    secondary: preset.chips[1] || preset.chips[0],
   };
+  nameLegacyPalette(state);
   let scrollPx = 0; // pixel offset into the chip track, only used above MAX_VISIBLE_CHIPS
-  let draggingIndex = null; // chip index currently being dragged, for the live reorder preview
-  let dragHoverIndex = null; // last chip index dragged over — the actual drop target
 
-  function loadPreset(key) {
-    const p = PRESETS[key];
-    state.chips = [...p.chips];
+  // True when the working palette differs from the saved/built-in entry it
+  // came from — the only time switching away saves anything, which is what
+  // keeps the library from filling up with untouched presets. An unnamed
+  // palette (its entry was deleted, or a legacy custom one) never counts.
+  function hasUnsavedEdits() {
+    if (!state.name) return false;
+    const source = loadLibrary().find((p) => p.name === state.name) || Object.values(PRESETS).find((p) => p.name === state.name);
+    const same = (a, b) => a.length === b.length && a.every((c, i) => c === b[i]);
+    return source ? !same(source.chips, state.chips) : !same(state.chips, ['#FFFFFF']);
+  }
+
+  // Every way of replacing the working palette (preset, saved entry, new,
+  // import) goes through here, so the cap and the save-outgoing rule
+  // can't diverge between them.
+  function switchTo(next) {
+    if (hasUnsavedEdits() && addPalette(getProjectName(), state.chips, BUILTIN_NAMES) === null) {
+      flashTip(`Palette library is full (${MAX_SAVED}) — your edits to this palette weren't saved`);
+    }
+    state.name = next.name;
+    state.chips = [...next.chips];
     state.primary = state.chips[0];
-    state.secondary = state.chips[1] || state.chips[0];
     render();
     onChange(state);
   }
 
-  function newPalette() {
-    state.chips = ['#FFFFFF'];
-    state.primary = '#FFFFFF';
-    state.secondary = '#FFFFFF';
-    render();
-    onChange(state);
+  const loadPreset = (key) => switchTo(PRESETS[key]);
+  const newPalette = () => switchTo({ name: 'New Palette', chips: ['#FFFFFF'] });
+  const deleteSaved = (name) => {
+    removePalette(name);
+    if (state.name === name) { state.name = null; onChange(state); }
+  };
+  const openMenu = (anchor) => openPresetPanel(anchor, switchTo, newPalette, deleteSaved);
+
+  // Names the palette after the built-in preset it matches, for projects
+  // saved before palettes had names.
+  function nameLegacyPalette(s) {
+    if (s.name !== undefined) return;
+    const match = Object.values(PRESETS).find((p) => p.chips.length === s.chips.length && p.chips.every((c, i) => c === s.chips[i]));
+    s.name = match ? match.name : null;
+  }
+
+  // Shift+Enter: a small text field in a slide-out. Saving to the library
+  // is the point of naming, so a rename writes the entry (or renames the
+  // one this palette came from).
+  function rename(anchor) {
+    return openCustomSlideOut(anchor, (panel, close) => {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'picker-hex';
+      input.value = state.name || '';
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+        if (e.key !== 'Enter') return;
+        const wanted = input.value.trim();
+        if (wanted) {
+          const renamed = renamePalette(state.name, wanted, BUILTIN_NAMES) ?? addPalette(wanted, state.chips, BUILTIN_NAMES);
+          if (renamed === null) flashTip(`Palette library is full (${MAX_SAVED})`);
+          else { state.name = renamed; onChange(state); }
+        }
+        close();
+      });
+      panel.append(input);
+      requestAnimationFrame(() => input.focus());
+    }, { side: 'up' });
   }
 
   function render() {
     container.innerHTML = '';
 
-    const hamburger = document.createElement('button');
-    hamburger.className = 'palette-hamburger';
-    hamburger.textContent = '☰';
-    hamburger.title = 'Palettes';
-    hamburger.addEventListener('click', () => openPresetPanel(hamburger, loadPreset, newPalette));
+    const hamburger = button({
+      glyph: '☰', icon: true, className: 'palette-hamburger', title: 'Palettes',
+      onClick: () => openMenu(hamburger),
+    });
     container.append(hamburger);
 
     const viewport = document.createElement('div');
@@ -126,14 +147,6 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       const chip = document.createElement('div');
       chip.className = 'chip';
       chip.style.setProperty('--chip-color', hex);
-      chip.style.setProperty('--chip-shadow', darken(hex, 0.45));
-      chip.draggable = true;
-
-      const face = document.createElement('div');
-      face.className = 'chip-face';
-      const shadow = document.createElement('div');
-      shadow.className = 'chip-shadow';
-      chip.append(face, shadow);
 
       // Hex code reveals above the chip on hover — click it to open the
       // color picker (one seamless interaction, not a right-click menu).
@@ -144,10 +157,8 @@ export function createPalette(container, initial, onChange, onSelectColor) {
         e.stopPropagation();
         openColorPicker(chip, state.chips[i], (newHex) => {
           if (state.chips[i] === state.primary) state.primary = newHex;
-          if (state.chips[i] === state.secondary) state.secondary = newHex;
           state.chips[i] = newHex;
           chip.style.setProperty('--chip-color', newHex);
-          chip.style.setProperty('--chip-shadow', darken(newHex, 0.45));
           hexLabel.textContent = newHex;
           onChange(state);
         });
@@ -158,66 +169,38 @@ export function createPalette(container, initial, onChange, onSelectColor) {
       chip.addEventListener('mouseup', () => chip.classList.remove('pressed'));
       chip.addEventListener('mouseleave', () => chip.classList.remove('pressed'));
 
-      // Left-click = primary. Shift+click = select every pixel of this
-      // color on the active layer. Right-click = secondary, directly.
+      // Click = primary. Shift+click = select every pixel of this color on
+      // the active layer.
       chip.addEventListener('click', (e) => {
         if (e.shiftKey) {
           onSelectColor(hex);
           return;
         }
         state.primary = hex;
-        onChange(state);
-      });
-
-      chip.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        state.secondary = hex;
-        onChange(state);
-      });
-
-      chip.addEventListener('dragstart', (e) => {
-        draggingIndex = i;
-        chip.classList.add('dragging');
-        e.dataTransfer.setData('text/plain', String(i));
-      });
-      // 'drag' fires continuously (unlike 'dragover', which only fires over
-      // valid drop targets) — use it to flag when the chip has been pulled
-      // outside the palette, so removal has a visible cue before release.
-      chip.addEventListener('drag', (e) => {
-        if (e.clientX === 0 && e.clientY === 0) return; // fires once with zeroed coords
-        const outside = !document.elementFromPoint(e.clientX, e.clientY)?.closest('.chip-viewport');
-        chip.classList.toggle('removing', outside && state.chips.length > 1);
-      });
-      chip.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        if (draggingIndex === null || draggingIndex === i) return;
-        dragHoverIndex = i;
-        previewShift(row, draggingIndex, i);
-      });
-      // The reorder happens here, not on 'drop': previewShift's transform
-      // can visually move a chip out from under the pointer, so whatever
-      // element the browser resolves as the drop target can be wrong (or
-      // have no listener at all). dragend always fires on the dragged
-      // element itself regardless, so it's the reliable place to commit
-      // using the last hovered index tracked above.
-      chip.addEventListener('dragend', (e) => {
-        const droppedOutside = !document.elementFromPoint(e.clientX, e.clientY)?.closest('.chip-viewport');
-        if (droppedOutside && state.chips.length > 1) {
-          // Drag a chip off the palette entirely to remove it.
-          state.chips.splice(draggingIndex, 1);
-          if (state.primary === hex) state.primary = state.chips[0];
-          if (state.secondary === hex) state.secondary = state.chips[0];
-        } else if (draggingIndex !== null && dragHoverIndex !== null && dragHoverIndex !== draggingIndex) {
-          const [moved] = state.chips.splice(draggingIndex, 1);
-          state.chips.splice(dragHoverIndex, 0, moved);
-        }
-        draggingIndex = null;
-        dragHoverIndex = null;
-        clearPreviewShift(row);
         render();
         onChange(state);
       });
-      chip.addEventListener('drop', (e) => e.preventDefault());
+
+      attachNativeDragReorder(chip, i, {
+        getItems: () => Array.from(row.querySelectorAll('.chip')),
+        axis: 'x',
+        containerEl: viewport,
+        onReorder: (from, to) => {
+          const [moved] = state.chips.splice(from, 1);
+          state.chips.splice(to, 0, moved);
+          render();
+          onChange(state);
+        },
+        // Drag a chip off the palette entirely to remove it — never down to
+        // zero chips.
+        onRemove: (removedIndex) => {
+          if (state.chips.length <= 1) return;
+          const [removed] = state.chips.splice(removedIndex, 1);
+          if (state.primary === removed) state.primary = state.chips[0];
+          render();
+          onChange(state);
+        },
+      });
 
       row.append(chip);
     });
@@ -225,17 +208,15 @@ export function createPalette(container, initial, onChange, onSelectColor) {
     container.append(viewport);
 
     if (state.chips.length < MAX_CHIPS) {
-      const add = document.createElement('button');
-      add.className = 'chip-add';
-      add.textContent = '+';
-      add.title = 'Add color';
-      add.addEventListener('click', () => {
-        state.chips.push('#FFFFFF');
-        scrollPx = Infinity; // clamped to the new max in layoutChips — scrolls the new chip into view
-        render();
-        onChange(state);
-      });
-      container.append(add);
+      container.append(button({
+        glyph: '+', icon: true, className: 'chip-add', title: 'Add color',
+        onClick: () => {
+          state.chips.push('#FFFFFF');
+          scrollPx = Infinity; // clamped to the new max in layoutChips — scrolls the new chip into view
+          render();
+          onChange(state);
+        },
+      }));
     }
 
     layoutChips(viewport, row);
@@ -274,26 +255,63 @@ export function createPalette(container, initial, onChange, onSelectColor) {
 
   render();
 
+  function primaryIndex() {
+    const i = state.chips.indexOf(state.primary);
+    return i < 0 ? 0 : i;
+  }
+
   return {
     getPrimary: () => state.primary,
-    getSecondary: () => state.secondary,
+    // Swaps in a different project's palette object wholesale (project
+    // switching, §ProjectSwitching) — replaces the live reference rather
+    // than copying fields, so main.js's `project.palette` stays the same
+    // object this module reads/mutates.
+    setState(newState) { state = newState; nameLegacyPalette(state); render(); },
     setPrimaryByIndex(i) {
-      if (state.chips[i]) { state.primary = state.chips[i]; onChange(state); }
-    },
-    setSecondaryByIndex(i) {
-      if (state.chips[i]) { state.secondary = state.chips[i]; onChange(state); }
+      if (state.chips[i]) { state.primary = state.chips[i]; render(); onChange(state); }
     },
     loadPreset,
-    // Eyedropper (§8, "I" hold): sets primary/secondary from a sampled
-    // color, adding it as a new chip first if the palette doesn't have it.
-    pickColor(hex, isSecondary) {
+    // Colors-panel keyboard scheme: cycle/add/remove the primary chip
+    // without a mouse.
+    cyclePrimary(dir) {
+      const i = (primaryIndex() + dir + state.chips.length) % state.chips.length;
+      state.primary = state.chips[i];
+      render(); onChange(state);
+    },
+    addChip() {
+      if (state.chips.length >= MAX_CHIPS) return;
+      state.chips.push('#FFFFFF');
+      state.primary = '#FFFFFF';
+      render(); onChange(state);
+    },
+    removePrimary() {
+      if (state.chips.length <= 1) return;
+      const i = primaryIndex();
+      state.chips.splice(i, 1);
+      state.primary = state.chips[Math.max(0, i - 1)];
+      render(); onChange(state);
+    },
+    // Eyedropper (§8, "I" hold): sets primary from a sampled color, adding
+    // it as a new chip first if the palette doesn't have it.
+    pickColor(hex) {
       const upper = hex.toUpperCase();
       if (!state.chips.some((c) => c.toUpperCase() === upper) && state.chips.length < MAX_CHIPS) {
         state.chips.push(upper);
-        render();
       }
-      if (isSecondary) state.secondary = upper; else state.primary = upper;
+      state.primary = upper;
+      render();
       onChange(state);
+    },
+    // Colors-panel keyboard scheme: `\` opens the same preset picker as the
+    // hamburger button; `Return` opens the same hex/HSL editor as clicking a
+    // chip's hex label — both just replay the existing click handlers rather
+    // than duplicating them.
+    openPresetMenu: openMenu,
+    renamePalette() { return rename(container.querySelector('.palette-hamburger')); },
+    editPrimaryChip() {
+      const chipEl = container.querySelectorAll('.chip')[primaryIndex()];
+      const hexLabel = chipEl && chipEl.querySelector('.chip-hex-label');
+      if (hexLabel) hexLabel.click();
     },
   };
 }

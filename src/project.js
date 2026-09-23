@@ -11,7 +11,7 @@ export function createProject(name) {
   return {
     id: crypto.randomUUID(),
     name,
-    palette: { chips: [...preset.chips], primary: preset.chips[0] },
+    palette: { name: preset.name, chips: [...preset.chips], primary: preset.chips[0] },
     files: [{ ...createSpriteFile('sprite', 9, 9), order: 2000 }],
     collections: [collection],
     activeFileIndex: 0,

@@ -75,6 +75,7 @@ const GROUPS = [
     ['-', 'Remove current chip'],
     ['\\', 'Open the palette preset menu (Up/Down navigate, Enter commits)'],
     ['Enter', 'Edit the primary chip’s color'],
+    ['Shift+Enter', 'Rename (and save) the palette'],
   ]],
   ['Projects', [
     ['Up/Down', 'Navigate files and collections'],

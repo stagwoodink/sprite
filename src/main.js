@@ -660,7 +660,7 @@ let frameSelection = null; // { anchor, to } inclusive frame-index range, while 
 const palette = createPalette(paletteBar, project.palette, () => autosave(), (hex) => {
   selectionApi.set(maskFromColor(model, hex));
   draw();
-});
+}, () => project.name);
 const colors = { primary: () => palette.getPrimary() };
 
 let contentDragSnapshot = null;
@@ -2173,6 +2173,7 @@ function dispatchColors(e) {
     window.addEventListener('keydown', onKey, true);
     return;
   }
+  if (e.key === 'Enter' && e.shiftKey && !e.repeat) { palette.renamePalette(); return; }
   if (e.key === 'Enter' && !e.repeat) { palette.editPrimaryChip(); return; }
 }
 

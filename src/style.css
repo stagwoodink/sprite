@@ -746,6 +746,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .palette-preset-panel { min-width: calc(var(--block) * 2); }
 .palette-preset-panel .btn { justify-content: flex-start; }
 .palette-preset-panel .new-palette-btn { color: var(--accent); }
+.palette-preset-panel .palette-rule { border-top: 1px solid var(--hairline); }
+.palette-row { display: flex; }
 
 /* ---- Project capacity meter: plain filled rectangle, no gradient ------ */
 .capacity-meter { height: 4px; background: var(--bg-base); border-top: 1px solid var(--hairline); }
