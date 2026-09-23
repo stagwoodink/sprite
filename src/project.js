@@ -50,11 +50,23 @@ function orderAtEndOfCollection(project, collectionId) {
 // than create a File with nowhere to live. `collectionId`, when given,
 // targets that Collection's own block instead of the project's end.
 export function addFile(project, name, width, height, collectionId) {
+  addExistingFile(project, createSpriteFile(name, width, height), collectionId);
+}
+
+// Same placement as addFile, for a File built elsewhere (spritesheet import).
+export function addExistingFile(project, file, collectionId) {
   if (!project.collections.length) addCollection(project);
-  const order = collectionId ? orderAtEndOfCollection(project, collectionId) : nextOrder(project.collections, project.files);
-  const file = { ...createSpriteFile(name, width, height), order };
+  file.order = collectionId ? orderAtEndOfCollection(project, collectionId) : nextOrder(project.collections, project.files);
   project.files.push(file);
   project.activeFileIndex = project.files.length - 1;
+}
+
+// The bare name, then "name 2", "name 3" — never a "1" suffix on the first.
+export function uniqueFileName(project, base) {
+  const taken = new Set(project.files.map((f) => f.name));
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;
+  return name;
 }
 
 // The Collection a newly added File lands under by default (§ addFile) —

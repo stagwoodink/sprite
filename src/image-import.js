@@ -26,9 +26,10 @@ async function naturalSize(file) {
 // only when the image has more than `abovePixels` pixels. Downscaling is
 // nearest-neighbour ('pixelated'): the default smooth filter averages
 // neighbours and would invent colors that were never in the image.
-export async function decodeImage(file, { longEdge, abovePixels = 0 } = {}) {
+export async function decodeImage(file, { longEdge, abovePixels = 0, maxPixels = Infinity } = {}) {
   if (file.size > MAX_IMAGE_BYTES) throw new Error(`${file.name} is over ${MAX_IMAGE_BYTES / 1024 / 1024}MB`);
   const { w, h } = await naturalSize(file);
+  if (w * h > maxPixels) throw new Error(`${file.name} is too large (${w}x${h})`);
   const shrink = longEdge && Math.max(w, h) > longEdge && w * h > abovePixels ? longEdge / Math.max(w, h) : 1;
   return createImageBitmap(file, shrink < 1
     ? { resizeWidth: Math.max(1, Math.round(w * shrink)), resizeHeight: Math.max(1, Math.round(h * shrink)), resizeQuality: 'pixelated' }

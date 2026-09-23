@@ -757,6 +757,9 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* ---- New-File size popup: custom W x H row --------------------------- */
 .size-popup { min-width: calc(var(--block) * 4); }
 .size-row { display: flex; }
+.sheet-popup { min-width: calc(var(--block) * 6); }
+.sheet-fields { flex-wrap: wrap; }
+.sheet-fields input { width: 50%; }
 .size-row input {
   background: var(--bg-base);
   border: 1px solid var(--border-strong);

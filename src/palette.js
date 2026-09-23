@@ -1,7 +1,7 @@
 import { PRESETS, DEFAULT_PRESET, MAX_CHIPS } from './palettes-presets.js';
 import { openColorPicker } from './color-picker.js';
 import { openCustomSlideOut } from './slide-out.js';
-import { button, attachNativeDragReorder, flashTip } from './ui.js';
+import { button, attachNativeDragReorder, flashTip, pickFile } from './ui.js';
 import { parsePalette, paletteNameFromFile } from './palette-parse.js';
 import { extractPalette } from './quantize.js';
 import { decodeImage, bitmapPixels, isImageFile } from './image-import.js';
@@ -121,13 +121,9 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     else if (saved !== name) { state.name = saved; onChange(state); }
   }
 
-  function pickPaletteFile() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.gpl,.hex,.pal,image/*';
-    input.addEventListener('change', () => { if (input.files[0]) importFile(input.files[0]).catch((err) => { console.error('Palette import failed:', err); flashTip(err.message); }); });
-    input.click();
-  }
+  const pickPaletteFile = () => pickFile('.gpl,.hex,.pal,image/*', (file) => {
+    importFile(file).catch((err) => { console.error('Palette import failed:', err); flashTip(err.message); });
+  });
 
   const openMenu = (anchor) => openPresetPanel(anchor, switchTo, newPalette, deleteSaved, pickPaletteFile);
 

@@ -12,7 +12,7 @@ import { commitCommand, undo as undoCmd, redo as redoCmd, snapshotLayers } from 
 import {
   createProject, activeFile as getActiveFile, addFile, deleteFile,
   addCollection, deleteCollection, NEW_FILE_SIZES, projectOrder, moveProjectItem,
-  lastCollection, mostRecentFileIn, splitByCollection,
+  lastCollection, mostRecentFileIn, splitByCollection, addExistingFile, uniqueFileName,
 } from './project.js';
 import {
   activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer,
@@ -30,7 +30,11 @@ import { renderOpenProjectPanel } from './open-project-panel.js';
 import { VERSION, GITHUB_ISSUES_URL, ITCH_IO_URL, DISCORD_URL } from './version.js';
 import { BLOCK } from './grid.js';
 import { loadUiPrefs, saveUiPrefs } from './ui-prefs.js';
-import { startInlineEdit, onHoverTip, button } from './ui.js';
+import { startInlineEdit, onHoverTip, button, flashTip, pickFile } from './ui.js';
+import { decodeImage, bitmapPixels } from './image-import.js';
+import { detectGrid, buildSheetFile } from './spritesheet.js';
+import { askSheetGrid } from './spritesheet-panel.js';
+import { paletteNameFromFile } from './palette-parse.js';
 import { exportFile, exportCollection, exportProjectSprite, onExportProgress } from './export.js';
 import { unzipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 import { SHAPE_OUTLINES, constrainSquare } from './shapes.js';
@@ -1212,10 +1216,43 @@ async function newProject() {
   await switchToProject(p);
 }
 
+// Spritesheet -> a new File in the current Collection (never into the open
+// File). The grid is auto-detected from transparent gutters; only if that
+// fails does a slide-out ask, carrying the numeric fields.
+async function importSpritesheet(file, { mode = 'frames', anchor } = {}) {
+  try {
+    const bitmap = await decodeImage(file, { maxPixels: 16_000_000 });
+    const image = bitmapPixels(bitmap);
+    bitmap.close();
+    let grid = detectGrid(image.data, image.width, image.height);
+    if (!grid) {
+      const answer = await askSheetGrid(anchor, { cellW: image.width, cellH: image.height, margin: 0, spacing: 0, mode });
+      if (!answer) return;
+      grid = answer;
+      mode = answer.mode;
+    }
+    const sheet = buildSheetFile(uniqueFileName(project, paletteNameFromFile(file.name)), image, grid, mode, project.palette.chips);
+    const collectionId = currentCollectionId(); // read before exiting group view below
+    setActiveGroup(null);
+    addExistingFile(project, sheet, collectionId);
+    bindActiveFile();
+    resetView();
+    redrawProjectPanel();
+    scrollProjectRowIntoView({ scrollToFileIndex: project.activeFileIndex });
+    draw();
+    autosave();
+  } catch (err) {
+    console.error('Spritesheet import failed:', err);
+    flashTip(err.message);
+  }
+}
+
 function openProjectPicker(anchor) {
   const options = [
     { label: 'New', onClick: () => newProject() },
     { label: 'Import', onClick: () => importProject() },
+    { label: 'Sheet > frames', onClick: () => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor })) },
+    { label: 'Sheet > layers', onClick: () => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'layers', anchor })) },
     // Docks the actual project list beside Project (openProjectListPanel) —
     // not flattened into this menu (projects aren't fixed one-off actions
     // like New/Import, and the list can be long).

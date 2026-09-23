@@ -5,6 +5,15 @@
 let hoverTipListener = null;
 export function onHoverTip(fn) { hoverTipListener = fn; }
 
+// A native file-picker dialog, no custom UI (same as the project import).
+export function pickFile(accept, onFile) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept;
+  input.addEventListener('change', () => { if (input.files[0]) onFile(input.files[0]); });
+  input.click();
+}
+
 // A transient message in the corner tool tag — the app's one non-modal way
 // to say "that didn't happen, and why" without a dialog.
 export function flashTip(text, ms = 3000) {
