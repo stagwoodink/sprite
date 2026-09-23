@@ -272,14 +272,16 @@ function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy) {
   }
 }
 
-// Repeating 2x2-cell tile (light/dark/dark/light), built once. `cellPx`
-// defaults to the single-file canvas's density (CHECKER_CELL); the group
-// grid's screen-space backdrop passes a bigger value — "big and chunky",
-// legible at any zoom since it's not tied to any one sprite's resolution —
-// via its own cached tile instead of reusing this one at the wrong size.
-const checkerTiles = new Map(); // cellPx -> tile canvas
-function getCheckerTile(cellPx = CHECKER_CELL) {
-  if (!checkerTiles.has(cellPx)) {
+// Repeating 2x2-cell tile (light/dark/dark/light), built once as a
+// CanvasPattern. `cellPx` defaults to the single-file canvas's density
+// (CHECKER_CELL); the group grid's screen-space backdrop passes a bigger
+// value — "big and chunky", legible at any zoom since it's not tied to any
+// one sprite's resolution — via its own cached pattern instead of reusing
+// this one at the wrong size. Caching the pattern, not just the tile,
+// spares a createPattern allocation per fill, up to twice per render.
+const checkerPatterns = new Map(); // cellPx -> CanvasPattern
+function getCheckerPattern(ctx, cellPx = CHECKER_CELL) {
+  if (!checkerPatterns.has(cellPx)) {
     const tile = document.createElement('canvas');
     tile.width = cellPx * 2;
     tile.height = cellPx * 2;
@@ -289,9 +291,9 @@ function getCheckerTile(cellPx = CHECKER_CELL) {
     tctx.fillStyle = CHECKER_DARK;
     tctx.fillRect(cellPx, 0, cellPx, cellPx);
     tctx.fillRect(0, cellPx, cellPx, cellPx);
-    checkerTiles.set(cellPx, tile);
+    checkerPatterns.set(cellPx, ctx.createPattern(tile, 'repeat'));
   }
-  return checkerTiles.get(cellPx);
+  return checkerPatterns.get(cellPx);
 }
 
 // Fills `(destX, destY, destW, destH)` (screen px) with the checker pattern,
@@ -306,7 +308,7 @@ function fillCheckerboard(ctx, scale, ox, oy, destX, destY, destW, destH, cellPx
   ctx.imageSmoothingEnabled = false;
   ctx.translate(ox, oy);
   ctx.scale(scale, scale);
-  ctx.fillStyle = ctx.createPattern(getCheckerTile(cellPx), 'repeat');
+  ctx.fillStyle = getCheckerPattern(ctx, cellPx);
   ctx.fillRect((destX - ox) / scale, (destY - oy) / scale, destW / scale, destH / scale);
   ctx.restore();
 }
