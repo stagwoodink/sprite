@@ -5,8 +5,15 @@ import { button, attachNativeDragReorder } from './ui.js';
 
 const THUMB_H = BLOCK * 2; // frame tiles are 2 blocks tall
 
+// Thumbnails already painted, per frame (a WeakMap, so a deleted frame's
+// entry goes with it). `out`/`rev` identify the composite the canvas shows:
+// `out` changes identity when the layer structure or size changes, `rev` on
+// every edit to it. A rebuild reuses the canvas and repaints only when they moved.
+const painted = new WeakMap(); // frame -> { canvasEl, out, rev }
+
 export function renderTimelinePanel(container, file, playback, callbacks, frameSelection) {
   container._thumbObserver?.disconnect();
+  const scrollLeft = container.querySelector('.frame-strip')?.scrollLeft ?? 0; // a rebuild would otherwise snap the strip back to the start
   container.innerHTML = '';
   const selLo = frameSelection ? Math.min(frameSelection.anchor, frameSelection.to) : -1;
   const selHi = frameSelection ? Math.max(frameSelection.anchor, frameSelection.to) : -1;
@@ -39,7 +46,10 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
       observer.unobserve(entry.target);
-      paintThumbnail(entry.target, file, compositeFrameAt(file, Number(entry.target.dataset.frame)), THUMB_H);
+      const index = Number(entry.target.dataset.frame);
+      const out = compositeFrameAt(file, index);
+      paintThumbnail(entry.target, file, out, THUMB_H);
+      painted.set(file.frames[index], { canvasEl: entry.target, out, rev: out.rev });
     }
   });
   container._thumbObserver = observer;
@@ -56,11 +66,23 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
       + (i === file.activeFrameIndex ? ' active' : '')
       + (i >= selLo && i <= selHi ? ' frame-tile--selected' : ''); // T+Shift multi-frame select
 
-    const canvasEl = document.createElement('canvas');
-    canvasEl.width = tileWidth;
-    canvasEl.height = THUMB_H;
-    canvasEl.dataset.frame = i;
-    observer.observe(canvasEl);
+    let canvasEl;
+    const known = painted.get(frame);
+    if (known) {
+      canvasEl = known.canvasEl;
+      const out = compositeFrameAt(file, i);
+      if (known.out !== out || known.rev !== out.rev) {
+        paintThumbnail(canvasEl, file, out, THUMB_H);
+        known.out = out;
+        known.rev = out.rev;
+      }
+    } else {
+      canvasEl = document.createElement('canvas');
+      canvasEl.width = tileWidth;
+      canvasEl.height = THUMB_H;
+      canvasEl.dataset.frame = i;
+      observer.observe(canvasEl);
+    }
 
     const del = document.createElement('div');
     del.className = 'frame-delete';
@@ -90,4 +112,5 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
   stack.append(onionBtn, addBtn, importBtn);
 
   container.append(fpsField, stack, strip);
+  strip.scrollLeft = scrollLeft;
 }
