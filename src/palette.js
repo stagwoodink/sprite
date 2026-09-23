@@ -2,6 +2,7 @@ import { PRESETS, DEFAULT_PRESET, MAX_CHIPS } from './palettes-presets.js';
 import { openColorPicker } from './color-picker.js';
 import { openCustomSlideOut } from './slide-out.js';
 import { button, attachNativeDragReorder, flashTip } from './ui.js';
+import { parsePalette, paletteNameFromFile } from './palette-parse.js';
 import { loadLibrary, addPalette, removePalette, renamePalette, MAX_SAVED } from './palette-library.js';
 
 const BUILTIN_NAMES = Object.values(PRESETS).map((p) => p.name);
@@ -14,7 +15,7 @@ const BUILTIN_NAMES = Object.values(PRESETS).map((p) => p.name);
 // left-justified/accent-text button styling below, scoped via its own
 // `className` — toggle-on-second-click, outside-click dismiss, and the
 // slide/fade-in are all shared with every other slide-out popup.
-function openPresetPanel(anchor, onLoad, onNewPalette, onDelete) {
+function openPresetPanel(anchor, onLoad, onNewPalette, onDelete, onImport) {
   const result = openCustomSlideOut(anchor, (panel, close) => {
     Object.values(PRESETS).forEach((preset) => {
       panel.append(button({ label: preset.name, fill: true, onClick: () => { onLoad(preset); close(); } }));
@@ -34,6 +35,7 @@ function openPresetPanel(anchor, onLoad, onNewPalette, onDelete) {
       );
       panel.append(row);
     }
+    panel.append(button({ label: 'Import…', fill: true, onClick: () => { onImport(); close(); } }));
     panel.append(button({
       label: '+ New Palette', fill: true, className: 'new-palette-btn',
       onClick: () => { onNewPalette(); close(); },
@@ -95,7 +97,27 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     removePalette(name);
     if (state.name === name) { state.name = null; onChange(state); }
   };
-  const openMenu = (anchor) => openPresetPanel(anchor, switchTo, newPalette, deleteSaved);
+  // Reads a .gpl/.hex/.pal file into a new library palette named after the
+  // file, and switches to it. Nothing is destroyed, so no undo entry.
+  async function importFile(file) {
+    const chips = parsePalette(new TextDecoder().decode(await file.arrayBuffer()));
+    if (!chips.length) { flashTip(`No colors found in ${file.name}`); return; }
+    const name = paletteNameFromFile(file.name);
+    switchTo({ name, chips });
+    const saved = addPalette(name, chips, BUILTIN_NAMES);
+    if (saved === null) flashTip(`Palette library is full (${MAX_SAVED}) — imported palette wasn't saved`);
+    else if (saved !== name) { state.name = saved; onChange(state); }
+  }
+
+  function pickPaletteFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.gpl,.hex,.pal,.txt';
+    input.addEventListener('change', () => { if (input.files[0]) importFile(input.files[0]).catch((err) => console.error('Palette import failed:', err)); });
+    input.click();
+  }
+
+  const openMenu = (anchor) => openPresetPanel(anchor, switchTo, newPalette, deleteSaved, pickPaletteFile);
 
   // Names the palette after the built-in preset it matches, for projects
   // saved before palettes had names.
@@ -314,6 +336,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     // chip's hex label — both just replay the existing click handlers rather
     // than duplicating them.
     openPresetMenu: openMenu,
+    importFile,
     renamePalette() { return rename(container.querySelector('.palette-hamburger')); },
     editPrimaryChip() {
       const chipEl = container.querySelectorAll('.chip')[primaryIndex()];
