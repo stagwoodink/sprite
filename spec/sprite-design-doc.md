@@ -1,6 +1,6 @@
-# Pixi — Design & Build Specification
+# Sprite — Design & Build Specification
 
-**Status:** This is the **canonical, authoritative build spec** for Pixi — the consolidated result of the full design process, including everything in `pixi-features-doc.md` and `pixi-ui-design-system.md`. If anything in those two documents appears to conflict with this one, **this document wins** — they're kept alongside it for the detailed design rationale and visual reference they contain (including a still-current list of genuinely open items), not as competing authorities. See `INDEX.md` for the full reading order and how the four files relate.
+**Status:** This is the **canonical, authoritative build spec** for Sprite — the consolidated result of the full design process, including everything in `sprite-features-doc.md` and `sprite-ui-design-system.md`. If anything in those two documents appears to conflict with this one, **this document wins** — they're kept alongside it for the detailed design rationale and visual reference they contain (including a still-current list of genuinely open items), not as competing authorities. See `INDEX.md` for the full reading order and how the four files relate.
 
 **Audience:** Claude Code (autonomous build agent)
 
@@ -10,16 +10,16 @@
 
 ### 0.1 Design principle
 
-Pixi is opinionated, not customizable. When a feature could be built as a user-adjustable setting or as a single fixed, deliberate choice, default to the fixed choice unless this document says otherwise. The onion-skin range (§12.3) is the reference example — it was originally scoped as an adjustable 1–3 range and was deliberately simplified to a fixed value for exactly this reason. Treat that as the model for resolving similar judgment calls, not as an isolated exception.
+Sprite is opinionated, not customizable. When a feature could be built as a user-adjustable setting or as a single fixed, deliberate choice, default to the fixed choice unless this document says otherwise. The onion-skin range (§12.3) is the reference example — it was originally scoped as an adjustable 1–3 range and was deliberately simplified to a fixed value for exactly this reason. Treat that as the model for resolving similar judgment calls, not as an isolated exception.
 
-v1 scoped Pixi as "single canvas, draw and export a PNG." That scope has grown substantially through design discussion. The following v1 assumptions are now **explicitly overturned**:
+v1 scoped Sprite as "single canvas, draw and export a PNG." That scope has grown substantially through design discussion. The following v1 assumptions are now **explicitly overturned**:
 
 | v1 assumption | v2 reality |
 |---|---|
 | One canvas, no projects | Projects are directories containing multiple canvas files |
 | No undo | Undo/redo, 50 steps, **persisted in the file** (survives reopening) |
 | Manual save (`Ctrl+S`) | **Autosave on every change.** There is no manual save action at all. |
-| PNG-only export | PNG, JPG, SVG, PDF, JSON, and `.pixi` project files |
+| PNG-only export | PNG, JPG, SVG, PDF, JSON, and `.sprite` project files |
 | Multiple tools (pencil/eraser) | **One tool.** Behavior changes via modifier keys, not tool switching |
 | No layers | Full layers panel (add/delete/duplicate/reorder/visibility/opacity) |
 | No animation | Frame timeline with playback and onion skinning |
@@ -37,19 +37,19 @@ Three points in the source discussion were ambiguous or self-contradictory. Rath
 2. **Palette "add chip" button glyph.** The spec calls it `[x]`, but every other "add" affordance in this spec (`[+]` for new layer, new frame, new project) uses a plus glyph, and `x` conventionally means close/delete. **Default adopted here:** this is styled as a `+` for consistency with every other add-button in the app; treat the `[x]` in the source discussion as a typo. **Flag for confirmation.**
 3. **Palette panel default pin state.** The palette is introduced as always-visible and anchored, but later given a `P` key to "unpin" it — implying it participates in the same pin/hover system as the layers/timeline/project panels. **Default adopted here:** the palette is **pinned (visible) by default**; `P` toggles it into the same hover-to-reveal/idle-to-hide behavior as the other panels, rather than being a permanently fixed element. **Flag for confirmation.**
 4. **Right-click on a project file** is described twice: once as "lets you rename it," later as "slides out a context menu that lets you resize the canvas." **Default adopted here:** these merge into one context menu with (at minimum) **Rename** and **Resize Canvas** as entries — not two competing behaviors.
-5. **Persistence architecture.** Pixi is now web-only (no native build). Browsers don't grant arbitrary folder access by default; the only way to get real, persistent, multi-file directory behavior in-browser is the File System Access API (`showDirectoryPicker`), which is **Chromium-only** (not supported in Safari or Firefox as of this writing). **Resolved (see `DECISIONS.md` and `docs/adr/0001-hybrid-web-storage.md`):** feature-detect `showDirectoryPicker`; if available, offer an optional one-time "connect a folder" grant for real filesystem access; otherwise fall back silently to an IndexedDB-backed virtual filesystem mirroring the same project/file model. Manual PNG/JSON/`.pixi` export remains the way to get work out of the browser regardless of backend.
+5. **Persistence architecture.** Sprite is now web-only (no native build). Browsers don't grant arbitrary folder access by default; the only way to get real, persistent, multi-file directory behavior in-browser is the File System Access API (`showDirectoryPicker`), which is **Chromium-only** (not supported in Safari or Firefox as of this writing). **Resolved (see `DECISIONS.md` and `docs/adr/0001-hybrid-web-storage.md`):** feature-detect `showDirectoryPicker`; if available, offer an optional one-time "connect a folder" grant for real filesystem access; otherwise fall back silently to an IndexedDB-backed virtual filesystem mirroring the same project/file model. Manual PNG/JSON/`.sprite` export remains the way to get work out of the browser regardless of backend.
 
 ---
 
 ## 2. Intention
 
-Pixi is a minimalist pixel-art editor built around a single idea: **one tool, altered by modifier keys, rather than a toolbox of many tools.** The aim is rapid experimentation with small-scale pixel art — icons, tiny sprites, animation loops — not murals, tilesets, or large sprite sheets. Every feature below should reinforce speed and immediacy over configurability.
+Sprite is a minimalist pixel-art editor built around a single idea: **one tool, altered by modifier keys, rather than a toolbox of many tools.** The aim is rapid experimentation with small-scale pixel art — icons, tiny sprites, animation loops — not murals, tilesets, or large sprite sheets. Every feature below should reinforce speed and immediacy over configurability.
 
 ---
 
 ## 3. Tech Stack
 
-**Visual/styling note:** this document specifies *behavior* — what things do. Every visual detail (the dark color palette and its exact tokens, the m3x6 pixel font and its sizing rules, the chunky offset-shadow button/chip language, corner radius, hairline weights, checkerboard thumbnails, and the full anatomy of the layers/timeline/project panels) lives in `pixi-ui-design-system.md` and is not repeated here. Build the behavior from this document and the look from that one — they're both required, not alternatives.
+**Visual/styling note:** this document specifies *behavior* — what things do. Every visual detail (the dark color palette and its exact tokens, the m3x6 pixel font and its sizing rules, the chunky offset-shadow button/chip language, corner radius, hairline weights, checkerboard thumbnails, and the full anatomy of the layers/timeline/project panels) lives in `sprite-ui-design-system.md` and is not repeated here. Build the behavior from this document and the look from that one — they're both required, not alternatives.
 
 **Changed from v1 (see `docs/adr/0002-web-stack.md`): plain JavaScript/HTML/CSS, no framework, no build step.** Single web app, no native target, no Electron. Rendering is Canvas2D (`<canvas>` + `ImageData`), UI chrome is DOM/CSS. Loaded directly via `<script type="module">` — no bundler, no transpiler.
 
@@ -63,7 +63,7 @@ Additions required by this spec:
 | SVG export | Hand-rolled: each pixel becomes a `<rect>`; no library needed at this pixel-grid scale |
 | PDF export | `pdf-lib` (via CDN or vendored), embedding the rendered raster (PDF is not a native pixel format, so this is "image inside a PDF page," not vector) |
 | JPG export | `canvas.toBlob('image/jpeg')` — native browser API, no dependency |
-| JSON export | `JSON.stringify` of the same structure used internally for `.pixi` |
+| JSON export | `JSON.stringify` of the same structure used internally for `.sprite` |
 
 ---
 
@@ -72,7 +72,7 @@ Additions required by this spec:
 | Term | Meaning |
 |---|---|
 | **Project** | A directory. Contains one or more Files and one shared Palette. |
-| **File** | A single canvas document within a Project. Has its own Layers, Frames, and undo history. Saved as `.pixi`. |
+| **File** | A single canvas document within a Project. Has its own Layers, Frames, and undo history. Saved as `.sprite`. |
 | **Layer** | A stack element within a File. All Frames share the same Layer stack. |
 | **Frame** | A single point in time within a File's animation. Each Frame has its own pixel content per Layer. A File with exactly one Frame is a static image. |
 | **Palette** | Up to 32 color chips. Belongs to a Project (not a File) — switching Files within a Project keeps the same Palette; switching Projects swaps it. |
@@ -82,10 +82,10 @@ Additions required by this spec:
 ## 5. Data Model
 
 ```js
-// Project: { name, rootPath, palette, files: [PixiFile], activeFileIndex }
+// Project: { name, rootPath, palette, files: [SpriteFile], activeFileIndex }
 //   rootPath: FSA FileSystemDirectoryHandle, or virtual path string in IndexedDB
 // Palette:  { chips: [colorHex], primary: colorHex, secondary: colorHex }  // chips.length <= 32
-// PixiFile: {
+// SpriteFile: {
 //   name, layers: [Layer], frames: [Frame],
 //   activeLayerIndex, activeFrameIndex,
 //   canvasWidth, canvasHeight,     // logical size, can exceed visible/exported size after a shrink (see §13.4)
@@ -94,7 +94,7 @@ Additions required by this spec:
 //   redoStack: [EditCommand],      // NOT persisted — redo history clears on file close/reopen
 // }
 // Layer:    { name, visible, opacity }  // opacity: 0.0-1.0
-// Frame:    { layerPixels: [[colorHex]] }  // one array per layer, indexed same as PixiFile.layers;
+// Frame:    { layerPixels: [[colorHex]] }  // one array per layer, indexed same as SpriteFile.layers;
 //                                           // each inner array is canvasWidth * canvasHeight, row-major
 
 // EditCommand is a plain tagged object, JSON-serializable as-is:
@@ -113,7 +113,7 @@ Additions required by this spec:
 // { type: 'canvasResize', oldW, oldH, newW, newH }
 ```
 
-Each `EditCommand.type` maps to an `apply`/`unapply` pair via a single `switch` — no class hierarchy. This is what makes the command array directly `JSON.stringify`-able into the `.pixi` file for persistent undo (§10).
+Each `EditCommand.type` maps to an `apply`/`unapply` pair via a single `switch` — no class hierarchy. This is what makes the command array directly `JSON.stringify`-able into the `.sprite` file for persistent undo (§10).
 
 ---
 
@@ -122,7 +122,7 @@ Each `EditCommand.type` maps to an `apply`/`unapply` pair via a single `switch` 
 - Canvas always opens **zoomed to fill available space** on load (fit-to-window), not at a fixed default zoom.
 - Pixels are always rendered perfectly square regardless of window aspect ratio.
 - Zoom range: from fit-to-window down to **1:1 actual size** as the *minimum* zoom-out floor — i.e., the user can never zoom out further than one screen pixel per canvas pixel would imply is silly; and can zoom in until a single canvas pixel fills the visible canvas area, whichever constraint is closer. Scroll wheel while hovering canvas zooms in/out (not stepped — free/continuous zoom, unlike v1's snapped-step approach, since no snap increments were specified here).
-- Canvas background: dull dark near-black (suggest `#0A0A0A`–`#0C0C0D` — matches the value used throughout the UI mockups in `pixi-ui-design-system.md`, distinct from that document's `bg-base` token which covers the surrounding app chrome, not the canvas fill itself) with a **very subtle** grid overlay by default.
+- Canvas background: dull dark near-black (suggest `#0A0A0A`–`#0C0C0D` — matches the value used throughout the UI mockups in `sprite-ui-design-system.md`, distinct from that document's `bg-base` token which covers the surrounding app chrome, not the canvas fill itself) with a **very subtle** grid overlay by default.
 - **`G`** toggles the grid overlay.
 - **`Shift+G`** toggles the ruler (top and bottom edges), showing pixel coordinates. Hidden by default.
 - While the ruler is visible, the row/column corresponding to the cursor's current position highlights subtly (slight brightness increase, not a hard color) on both the top and bottom rulers.
@@ -258,7 +258,7 @@ Reveal behavior: hovering the **bottom edge** slides the timeline up; mousing aw
 
 ### 12.3 Onion skinning
 
-- Range is **fixed at 2 frames** in each direction — not user-configurable, and there is no range control in the UI at all. (This was originally scoped as an adjustable 1–3 range and was deliberately simplified — see the design principle in §0.1: Pixi is opinionated, not customizable.)
+- Range is **fixed at 2 frames** in each direction — not user-configurable, and there is no range control in the UI at all. (This was originally scoped as an adjustable 1–3 range and was deliberately simplified — see the design principle in §0.1: Sprite is opinionated, not customizable.)
 - Ghosted frames are **tinted and faded**: frames before the current one tint toward one color (suggest red), frames after tint toward another (suggest blue), with opacity falling off the further a ghost frame is from the current one.
 - Toggleable between showing the **full composited frame** (all layers) or **active-layer-only** as the ghost source.
 
@@ -277,7 +277,7 @@ Reveal behavior: hovering the **left edge** slides this panel in; mousing away s
 ### 13.2 Creating things
 
 - Clicking the project's `+`: opens a slide-out bar with a text cursor already active; type a name, hit `Return` to create and switch into the new project.
-- Clicking the file list's `+`: opens a **popup** (not a modal — the rest of the UI stays interactive/visible around it) prompting canvas size selection, from the preset set only (`8x8, 16x16, 32x32, 64x64, 128x128, 256x256, Game Boy DMG`). **No custom-size option** — this was considered and deliberately dropped; a non-preset size is out of scope until the resize feature (§13.4) is used after creation.
+- Clicking the file list's `+`: opens a **popup** (not a modal — the rest of the UI stays interactive/visible around it) prompting canvas size selection: one of the presets (`6x6, 9x9, 16x16, 24x24, 32x32, 64x64, Pico-8, Game Boy DMG, 256x256, 512x512`) or a custom width × height (Tab between the two fields; height mirrors width until edited; 6×6 minimum, 512×512 maximum, non-square allowed). Pico-8 (128×128) and Game Boy DMG (160×144) also swap the Project's palette to match. *(Revised: this section originally allowed presets only and deliberately dropped custom sizing — see `docs/adr/0003-canvas-size-range.md`.)*
 
 ### 13.3 Navigating and editing
 
@@ -288,11 +288,11 @@ Reveal behavior: hovering the **left edge** slides this panel in; mousing away s
 ### 13.4 Canvas resize behavior
 
 - Resizing **larger**: canvas grows outward from **center**.
-- Resizing **smaller**: pixels outside the new visible bounds are **not deleted** — they're simply outside `visible_width`/`visible_height` (see the `PixiFile` struct in §5) and excluded from both the on-screen canvas and any export. If the canvas is later resized larger again, those previously out-of-bounds pixels reappear intact, since `canvas_width`/`canvas_height` (the logical/full backing buffer) never actually shrinks — only the visible window into it does.
+- Resizing **smaller**: pixels outside the new visible bounds are **not deleted** — they're simply outside `visible_width`/`visible_height` (see the `SpriteFile` struct in §5) and excluded from both the on-screen canvas and any export. If the canvas is later resized larger again, those previously out-of-bounds pixels reappear intact, since `canvas_width`/`canvas_height` (the logical/full backing buffer) never actually shrinks — only the visible window into it does.
 
 ### 13.5 Projects on disk
 
-- A Project is a directory. Individual canvas documents within it are `.pixi` files. (Native: real directory. Web: virtual, per the IndexedDB approach flagged in §1.5.)
+- A Project is a directory. Individual canvas documents within it are `.sprite` files. (Native: real directory. Web: virtual, per the IndexedDB approach flagged in §1.5.)
 
 ---
 
@@ -302,7 +302,7 @@ Reveal behavior: hovering the **left edge** slides this panel in; mousing away s
 - Pressing `E` (or the button) **slides the Project panel out** if it isn't already visible, and opens a **context bar** to the right of the currently selected file, containing: a file-type selector, a scale multiplier selector, and an export/confirm icon.
 - `Return` while this context bar is open executes the export using whatever is currently set.
 - **Default**: PNG at 1x scale. The app **remembers the user's last-used format and scale globally** (not per-project) and defaults to that on the next export.
-- **Formats:** PNG, JPG, SVG, PDF, JSON, `.pixi` (the last being a full project-file export, distinct from the app's own autosave location).
+- **Formats:** PNG, JPG, SVG, PDF, JSON, `.sprite` (the last being a full project-file export, distinct from the app's own autosave location).
 - **Scale multiplier**: integer upscale (nearest-neighbor, no smoothing) — exact preset steps (2x/4x/8x/etc.) to be confirmed, but the mechanism is an integer multiplier applied to the visible canvas dimensions.
 - **Alpha handling for JPG/PDF** (neither supports transparency): background fill **defaults to white**. Clicking the JPG (or PDF) format option a **second time** toggles the fill to black. **Right-clicking** the JPG or PDF option sets the fill to the user's current **secondary** color instead.
 
@@ -384,11 +384,11 @@ Note the deliberate overload of `Backspace`/`Delete`, `Arrows`, and `+` across c
 
 ---
 
-## 18. File I/O & `.pixi` Format
+## 18. File I/O & `.sprite` Format
 
-- `.pixi` is a `serde_json`- or `bincode`-serialized dump of a `PixiFile` (§5), including its full `undo_stack` (capped at 50 entries — once full, the oldest entry is dropped as a new one is pushed).
-- **JSON export** (§14) is a human-readable dump of the same structure, intended for interop/inspection rather than reopening in Pixi itself (though there's no reason it couldn't also be re-imported — confirm if that's desired, or if JSON export is one-way only).
-- **Autosave** writes the current `PixiFile` state to its `.pixi` location after every committed `EditCommand`. This should be debounced against rapid-fire commands (e.g., end-of-stroke) rather than writing mid-stroke.
+- `.sprite` is a `serde_json`- or `bincode`-serialized dump of a `SpriteFile` (§5), including its full `undo_stack` (capped at 50 entries — once full, the oldest entry is dropped as a new one is pushed).
+- **JSON export** (§14) is a human-readable dump of the same structure, intended for interop/inspection rather than reopening in Sprite itself (though there's no reason it couldn't also be re-imported — confirm if that's desired, or if JSON export is one-way only).
+- **Autosave** writes the current `SpriteFile` state to its `.sprite` location after every committed `EditCommand`. This should be debounced against rapid-fire commands (e.g., end-of-stroke) rather than writing mid-stroke.
 - Native: real file paths under the Project's directory. Web: entries in the IndexedDB virtual filesystem, keyed by Project/File path (see §1.5).
 
 ---
@@ -402,8 +402,8 @@ Note the deliberate overload of `Backspace`/`Delete`, `Arrows`, and `+` across c
 5. **Phase 4 — Selection system.** All three selector modes (`Shift`, `Shift+Alt`, `Shift+Ctrl`), select-all, delete-within-selection, `Esc`.
 6. **Phase 5 — Undo/redo, in-memory only.** `EditCommand` objects + apply/unapply, 50-step cap, `Ctrl+Z`/`Ctrl+Y`. Do not persist yet.
 7. **Phase 6 — Persistence backend.** Implement the hybrid storage from §1.5 (`docs/adr/0001-hybrid-web-storage.md`): File System Access API when available, IndexedDB fallback otherwise — this affects every phase after it.
-8. **Phase 7 — Projects & Files.** Project panel, multiple `PixiFile`s per project, new-project/new-file flows, instant-swap between files, resize-canvas-from-center with the hidden-pixel-preservation behavior (§13.4).
-9. **Phase 8 — Autosave + persisted undo.** Wire `.pixi` read/write via Phase 6's backend, confirm undo history survives a close/reopen cycle.
+8. **Phase 7 — Projects & Files.** Project panel, multiple `SpriteFile`s per project, new-project/new-file flows, instant-swap between files, resize-canvas-from-center with the hidden-pixel-preservation behavior (§13.4).
+9. **Phase 8 — Autosave + persisted undo.** Wire `.sprite` read/write via Phase 6's backend, confirm undo history survives a close/reopen cycle.
 10. **Phase 9 — Layers.** Full layers panel per §11, including its focus-scoped keybinds.
 11. **Phase 10 — Frames & Timeline.** Frame operations, playback, FPS control.
 12. **Phase 11 — Onion skinning.** Per §12.3.
@@ -416,4 +416,4 @@ Note the deliberate overload of `Backspace`/`Delete`, `Arrows`, and `+` across c
 
 ## 20. Non-Goals (unchanged in spirit from v1)
 
-Pixi is still aimed at small-scale, rapid pixel art — not large sprite sheets, tilemaps, or general-purpose image editing. Nothing in this document should be read as inviting scope beyond what's written here (e.g., no plugin/scripting system, no arbitrary canvas sizes beyond the preset list, no non-integer zoom snapping unless specified).
+Sprite is still aimed at small-scale, rapid pixel art — not large sprite sheets, tilemaps, or general-purpose image editing. Nothing in this document should be read as inviting scope beyond what's written here (e.g., no plugin/scripting system, no canvas larger than 512×512, no non-integer zoom snapping unless specified).
