@@ -221,6 +221,17 @@ export function stampSquare(model, cx, cy, size, colorHex, mask) {
   }
 }
 
+// The one place a brush stamp is decided, shared by the mouse (input.js)
+// and keyboard (main.js) paint paths so anything that changes how a cell
+// gets painted (symmetry, dither) is written once. Erase is always a hard
+// square; Paint (`antialiased`) is the soft circular brush; otherwise Place,
+// a hard-edged square. `color` null/erase both write transparent.
+export function paintAt(model, x, y, { size, antialiased = false, erase = false, color, mask }) {
+  if (erase) stampSquare(model, x, y, size, null, mask);
+  else if (antialiased) stampBrush(model, x, y, size, color, mask);
+  else stampSquare(model, x, y, size, color, mask);
+}
+
 // Plain (non-antialiased) flood fill: all 4-connected pixels matching the
 // clicked pixel's color are replaced outright. `mask` (active selection)
 // also bounds the fill's spread, not just which pixels get written — a

@@ -1,4 +1,4 @@
-import { setPixel, getPixel, touch, stampBrush, floodFill, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
+import { setPixel, getPixel, touch, paintAt, floodFill, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
 import { parseFile } from './sprite-format.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
@@ -1750,25 +1750,9 @@ const arrowRepeater = createHoldRepeater(arrowTick);
 // antialiased brush for free without their callers needing to know that.
 function stampCurrentTool(x, y, erase = false) {
   const snap = snapshotPixels(model);
-  if (erase) {
-    if (brushSize > 1) { for (const [px, py] of squareOffsets(brushSize)) setPixel(model, x + px, y + py, null, selectionMask); }
-    else setPixel(model, x, y, null, selectionMask);
-  } else if (held.alt) {
-    // Paint: soft antialiased circular brush, fluid strokes.
-    stampBrush(model, x, y, brushSize, colors.primary(), selectionMask);
-  } else if (brushSize > 1) {
-    // Place: hard-edged square stamp, precision.
-    for (const [px, py] of squareOffsets(brushSize)) setPixel(model, x + px, y + py, colors.primary(), selectionMask);
-  } else {
-    setPixel(model, x, y, colors.primary(), selectionMask);
-  }
+  paintAt(model, x, y, { size: brushSize, antialiased: held.alt, erase, color: colors.primary(), mask: selectionMask });
   const { before, after } = diffFromSnapshot(model, snap);
   if (before.length) history.commit({ type: 'pixelEdit', before, after });
-}
-function squareOffsets(size) {
-  const half = Math.floor(size / 2), out = [];
-  for (let y = -half; y < -half + size; y++) for (let x = -half; x < -half + size; x++) out.push([x, y]);
-  return out;
 }
 const stampRepeater = createHoldRepeater(() => stampCurrentTool(currentCursor().x, currentCursor().y));
 
