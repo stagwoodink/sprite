@@ -1,4 +1,4 @@
-import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder, projectLoad } from './project.js';
+import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder, projectLoad, projectLoadBreakdown } from './project.js';
 import { visibleOrder } from './ordering.js';
 import { openSlideOut, openCustomSlideOut, closeSlideOut } from './slide-out.js';
 import { button, makeReorderable, startInlineEdit } from './ui.js';
@@ -201,7 +201,9 @@ function buildCapacityMeter(project, callbacks) {
   const load = projectLoad(project);
   const meter = document.createElement('div');
   meter.className = 'capacity-meter';
-  meter.title = `Project capacity: ${Math.round(load * 100)}%`;
+  const { pixelBytes, referenceBytes, files } = projectLoadBreakdown(project);
+  const mb = (n) => (n / 1048576).toFixed(1) + 'MB';
+  meter.title = `Project capacity: ${Math.round(load * 100)}% (${files} files, ${mb(pixelBytes)} pixels, ${mb(referenceBytes)} references)`;
   const fill = document.createElement('div');
   fill.className = 'capacity-fill';
   fill.style.width = Math.min(100, load * 100) + '%';
