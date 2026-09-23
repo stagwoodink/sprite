@@ -11,7 +11,7 @@ import { commitCommand, undo as undoCmd, redo as redoCmd, snapshotLayers } from 
 import {
   createProject, activeFile as getActiveFile, addFile, deleteFile,
   addCollection, deleteCollection, NEW_FILE_SIZES, projectOrder, moveProjectItem,
-  lastCollection, mostRecentFileIn,
+  lastCollection, mostRecentFileIn, splitByCollection,
 } from './project.js';
 import {
   activePixels, compositeFrame, resizeCanvas, addLayer, deleteLayer,
@@ -21,7 +21,7 @@ import {
 import { renderProjectPanel, openSizePopup } from './project-panel.js';
 import { renderLayersPanel } from './layers-panel.js';
 import { renderTimelinePanel } from './timeline-panel.js';
-import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, debounce, autosaveDelay } from './persistence.js';
+import { chooseBackend, loadProject, saveProject, listProjects, deleteProject, deleteStoredFile, debounce, autosaveDelay } from './persistence.js';
 import { createRevealablePanel } from './panel-reveal.js';
 import { createKeybindHelp } from './keybind-help.js';
 import { renderExportPanel } from './export-panel.js';
@@ -918,6 +918,7 @@ function redrawProjectPanel() {
       autosave();
     },
     onAddFile: (w, h, preset) => commitNewFile(w, h, preset),
+    onSplitProject: () => splitProject(),
     // "Current" (bottom of the New File size picker): same size as
     // whichever File was most recently worked on in the collection this
     // new one is about to land in — falls back to the new-project default
@@ -1122,6 +1123,24 @@ async function switchToProject(newProject) {
   saveUiPrefs(uiPrefs);
   palette.setState(project.palette);
   setActiveGroup(null); // a different project has no relation to the previous one's group view
+  bindActiveFile();
+  resetView();
+  selectionApi.clear();
+  redrawProjectPanel();
+  redrawLayersPanel();
+  redrawTimelinePanel();
+  draw();
+  autosave();
+}
+
+// Capacity meter's offer at 100%: each Collection becomes its own Project,
+// Files at the Project root stay here. New Projects are saved before the
+// moved Files' old copies are deleted, so a failure never loses a File.
+async function splitProject() {
+  setActiveGroup(null); // read collections before splitByCollection empties them
+  const { parts, moved } = splitByCollection(project);
+  for (const part of parts) await saveProject(backend, part);
+  await Promise.all(moved.map((file) => deleteStoredFile(backend, project.id, file.name)));
   bindActiveFile();
   resetView();
   selectionApi.clear();

@@ -750,6 +750,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* ---- Project capacity meter: plain filled rectangle, no gradient ------ */
 .capacity-meter { height: 4px; background: var(--bg-base); border-top: 1px solid var(--hairline); }
 .capacity-fill { height: 100%; background: var(--accent); }
+.capacity-meter.full { cursor: pointer; }
 
 /* ---- New-File size popup: custom W x H row --------------------------- */
 .size-popup { min-width: calc(var(--block) * 4); }

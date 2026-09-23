@@ -191,13 +191,13 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   // `addRow` is a sibling of the scrollable `fileList`, not a child of its
   // stack, so it stays anchored above the panel footer instead of scrolling
   // away with a long file list.
-  container.append(fileList, addRow, buildCapacityMeter(project), header);
+  container.append(fileList, addRow, buildCapacityMeter(project, callbacks), header);
 }
 
 // Filled bar showing how close the Project is to what a low-end machine
 // handles comfortably (project.js's projectLoad). Advisory — it never
 // blocks anything; the bar filling *is* the warning.
-function buildCapacityMeter(project) {
+function buildCapacityMeter(project, callbacks) {
   const load = projectLoad(project);
   const meter = document.createElement('div');
   meter.className = 'capacity-meter';
@@ -206,6 +206,11 @@ function buildCapacityMeter(project) {
   fill.className = 'capacity-fill';
   fill.style.width = Math.min(100, load * 100) + '%';
   meter.append(fill);
+  // At 100% the bar offers a way out instead of refusing anything.
+  if (load >= 1 && project.collections.length) {
+    meter.classList.add('full');
+    meter.addEventListener('click', () => openSlideOut(meter, [{ label: 'Split by collection', onClick: callbacks.onSplitProject }], { side: 'right' }));
+  }
   return meter;
 }
 

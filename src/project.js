@@ -160,3 +160,41 @@ export function projectLoad(project) {
   const bytes = project.files.reduce((sum, f) => sum + f.canvasWidth * f.canvasHeight * 2 * f.layers.length * f.frames.length, 0);
   return Math.max(bytes / BYTE_BUDGET, project.files.length / FILE_BUDGET);
 }
+
+// Promotes each non-empty Collection to its own Project named after it;
+// Files at the Project root stay in `project` (mutated in place). With no
+// root Files, the first Collection stays behind as `project` itself, so the
+// original is never left empty. Returns { parts, moved }: the new Projects
+// (unsaved) and the Files that left `project`, whose stored copies the
+// caller must delete.
+export function splitByCollection(project) {
+  const combined = projectOrder(project);
+  const filesOf = (id) => combined.filter((e) => !e.isHeader && e.item.groupId === id).map((e) => e.item);
+  const groups = project.collections.map((c) => ({ name: c.name, files: filesOf(c.id) })).filter((g) => g.files.length);
+  const root = filesOf(null);
+  if (!groups.length) return { parts: [], moved: [] };
+
+  const shell = (name, files) => ({
+    id: crypto.randomUUID(),
+    name,
+    palette: structuredClone(project.palette),
+    files,
+    collections: [{ id: crypto.randomUUID(), name: 'Collection 1', collapsed: false, order: Math.min(...files.map((f) => f.order)) - 1 }],
+    activeFileIndex: 0,
+  });
+  const active = activeFile(project);
+  const keep = root.length ? null : groups.shift();
+  const parts = groups.map((g) => shell(g.name, g.files));
+  const moved = parts.flatMap((p) => p.files);
+  if (keep) {
+    const kept = shell(keep.name, keep.files);
+    project.name = kept.name;
+    project.files = kept.files;
+    project.collections = kept.collections;
+  } else {
+    project.files = root;
+    project.collections = [];
+  }
+  project.activeFileIndex = Math.max(0, project.files.indexOf(active));
+  return { parts, moved };
+}

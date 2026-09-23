@@ -126,6 +126,12 @@ async function writeFile(backend, projectId, file) {
   return true;
 }
 
+// Drops a File's stored JSON and binary sidecar (it moved to another
+// Project, or was deleted).
+export async function deleteStoredFile(backend, projectId, fileName) {
+  await Promise.all([fileName + '.sprite', fileName + '.sprite' + BIN_SUFFIX].map((n) => backend.delete([projectId, n])));
+}
+
 export async function saveProject(backend, project) {
   const projectJson = {
     name: project.name,
