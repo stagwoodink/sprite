@@ -224,15 +224,43 @@ export function stampSquare(model, cx, cy, size, colorHex, mask) {
   }
 }
 
+// The cells a stroke at (x, y) also lands on under `symmetry`, the axis
+// through the canvas centre: x -> width - 1 - x, y -> height - 1 - y. Exact
+// for odd and even sizes alike. Includes (x, y) itself.
+export function mirroredPoints(model, x, y, symmetry) {
+  const pts = [[x, y]];
+  const mx = symmetry === 'h' || symmetry === 'both', my = symmetry === 'v' || symmetry === 'both';
+  if (mx) pts.push([model.width - 1 - x, y]);
+  if (my) pts.push([x, model.height - 1 - y]);
+  if (mx && my) pts.push([model.width - 1 - x, model.height - 1 - y]);
+  return pts;
+}
+
 // The one place a brush stamp is decided, shared by the mouse (input.js)
 // and keyboard (main.js) paint paths so anything that changes how a cell
 // gets painted (symmetry, dither) is written once. Erase is always a hard
 // square; Paint (`antialiased`) is the soft circular brush, the only one
 // `dither` applies to; otherwise Place, a hard-edged square. `color` null/erase both write transparent.
-export function paintAt(model, x, y, { size, antialiased = false, erase = false, color, mask, dither = false }) {
-  if (erase) stampSquare(model, x, y, size, null, mask);
-  else if (antialiased) stampBrush(model, x, y, size, color, mask, dither);
-  else stampSquare(model, x, y, size, color, mask);
+// `symmetry` repeats the stamp across the canvas centre; goes through the
+// stamps' setPixel, never raw buffer offsets (a shrunk canvas has
+// stride != width).
+export function paintAt(model, x, y, { size, antialiased = false, erase = false, color, mask, dither = false, symmetry = 'off' }) {
+  const soft = antialiased && !erase;
+  const stamp = (cx, cy) => {
+    if (erase) stampSquare(model, cx, cy, size, null, mask);
+    else if (antialiased) stampBrush(model, cx, cy, size, color, mask, dither);
+    else stampSquare(model, cx, cy, size, color, mask);
+  };
+  stamp(x, y);
+  if (symmetry === 'off') return;
+  // A square stamp of even size isn't centred on a cell, so its mirrored
+  // centre shifts by one; the soft brush is always centred on a cell.
+  const half = Math.floor(size / 2);
+  const flip = (c, extent) => (soft ? extent - 1 - c : extent - size - c + 2 * half);
+  const mx = symmetry === 'h' || symmetry === 'both', my = symmetry === 'v' || symmetry === 'both';
+  if (mx) stamp(flip(x, model.width), y);
+  if (my) stamp(x, flip(y, model.height));
+  if (mx && my) stamp(flip(x, model.width), flip(y, model.height));
 }
 
 // Plain (non-antialiased) flood fill: all 4-connected pixels matching the

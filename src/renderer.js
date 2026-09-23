@@ -28,7 +28,7 @@ const CROSSHAIR_COLOR = '#FFFFFF';
 const ONION_BEFORE_TINT = '#BE1425';
 const ONION_AFTER_TINT = '#3366FF';
 
-export function render(ctx, model, viewW, viewH, { showGrid, showRuler, selection, onionFrames, brushCursor, cursorPos, canvasBg = 'checker', appBg = 'black' }) {
+export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry = 'off', selection, onionFrames, brushCursor, cursorPos, canvasBg = 'checker', appBg = 'black' }) {
   const { scale, ox, oy } = computeViewport(model, viewW, viewH);
   const w = model.width * scale;
   const h = model.height * scale;
@@ -61,6 +61,8 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, selectio
   }
 
   drawPixels(ctx, model, scale, ox, oy, w, h);
+
+  if (symmetry !== 'off') drawSymmetryAxes(ctx, symmetry, ox, oy, w, h);
 
   if (showGrid) {
     // A reference, not a measurement: at 1 screen-pixel-per-canvas-pixel
@@ -429,6 +431,18 @@ function rulerAnchor(scale, ox, oy, viewW, viewH) {
 // once its own coordinate is actually within the canvas, so that overshoot
 // never paints a highlight stripe into the ruler/app-background margin
 // beyond where the canvas ends.
+// Hairline through the canvas centre for each active mirror axis. Same
+// 'difference' convention as the grid and crosshair, so it inverts whatever
+// is beneath instead of vanishing against a matching color.
+function drawSymmetryAxes(ctx, symmetry, ox, oy, w, h) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'difference';
+  ctx.fillStyle = CROSSHAIR_COLOR;
+  if (symmetry === 'h' || symmetry === 'both') ctx.fillRect(Math.floor(ox + w / 2), oy, 1, h);
+  if (symmetry === 'v' || symmetry === 'both') ctx.fillRect(ox, Math.floor(oy + h / 2), w, 1);
+  ctx.restore();
+}
+
 function drawCrosshair(ctx, hoverPixel, { topY, leftX }, scale, ox, oy, w, h) {
   const vx = ox + hoverPixel.x * scale;
   const hy = oy + hoverPixel.y * scale;

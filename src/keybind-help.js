@@ -42,6 +42,7 @@ const GROUPS = [
     ['_', 'Zoom out'],
     ['G / Shift+G', 'Toggle grid / ruler'],
     ['D', 'Toggle dither (Paint and fill only)'],
+    ['M', 'Cycle mirror drawing: off, horizontal, vertical, both'],
     ['u', 'Cycle canvas background'],
     ['Shift+U', 'Cycle app background (dark/mid/light, bounces off mid)'],
   ]],

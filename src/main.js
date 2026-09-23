@@ -1,6 +1,6 @@
-import { setPixel, getPixel, touch, paintAt, floodFill, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
+import { setPixel, getPixel, touch, paintAt, floodFill, mirroredPoints, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
 import { parseFile } from './sprite-format.js';
-import { paintOptions } from './paint-options.js';
+import { paintOptions, SYMMETRY_CYCLE } from './paint-options.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
 import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView } from './viewport.js';
@@ -202,7 +202,7 @@ function updateToolTag() {
     toolLabel.hidden = false;
     const modeLabel = MODE_LABELS[inputController && inputController.getMode()] || 'Place';
     const size = brushSize;
-    toolLabel.textContent = hoverTip || `${size}px ${modeLabel}${paintOptions.dither ? ' (dither)' : ''}`;
+    toolLabel.textContent = hoverTip || `${size}px ${modeLabel}${paintOptions.dither ? ' (dither)' : ''}${paintOptions.symmetry !== 'off' ? ' (mirror)' : ''}`;
   }
   primarySwatch.hidden = false;
   const scale = (viewState.zoom || fitScale(model, rect.width, rect.height));
@@ -518,6 +518,7 @@ bindActiveFile();
 let inputController = null;
 let showGrid = uiPrefs.showGrid;
 paintOptions.dither = uiPrefs.dither;
+paintOptions.symmetry = uiPrefs.symmetry;
 let showRuler = uiPrefs.showRuler;
 // Shared step order for every checker/solid backdrop in the app (the
 // single-file canvas's own `u`, its app-wide `Shift+U` chrome, and the
@@ -743,7 +744,7 @@ function renderCanvas() {
   const onionFrames = computeOnionFrames(file);
   const brushCursor = { mode: (inputController && inputController.getMode()) || 'place', size: brushSize };
   render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
-    showGrid, showRuler, hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos, canvasBg: canvasBgCycler.get(), appBg: appBgCycler.get(),
+    showGrid, showRuler, symmetry: paintOptions.symmetry, hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos, canvasBg: canvasBgCycler.get(), appBg: appBgCycler.get(),
   });
   updateToolTag();
 }
@@ -1779,7 +1780,7 @@ function fillCurrentTool(x, y) {
       }
     }
   } else {
-    floodFill(model, x, y, colors.primary(), false, undefined, paintOptions.dither);
+    for (const [fx, fy] of mirroredPoints(model, x, y, paintOptions.symmetry)) floodFill(model, fx, fy, colors.primary(), false, undefined, paintOptions.dither);
   }
   const { before, after } = diffFromSnapshot(model, snap);
   if (before.length) history.commit({ type: 'fill', before, after });
@@ -1964,6 +1965,10 @@ function dispatchCanvas(e) {
   if (e.key === '=' && !e.repeat) { fitView(); return; }
   if (e.key === '_' && !e.repeat) { zoomStep(-1); return; }
   if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) { paintOptions.dither = !paintOptions.dither; uiPrefs.dither = paintOptions.dither; saveUiPrefs(uiPrefs); draw(); return; }
+  if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+    paintOptions.symmetry = SYMMETRY_CYCLE[(SYMMETRY_CYCLE.indexOf(paintOptions.symmetry) + 1) % SYMMETRY_CYCLE.length];
+    uiPrefs.symmetry = paintOptions.symmetry; saveUiPrefs(uiPrefs); draw(); return;
+  }
   if (e.key === 'g' && !e.shiftKey) { showGrid = !showGrid; uiPrefs.showGrid = showGrid; saveUiPrefs(uiPrefs); draw(); return; }
   if (e.key === 'G' && e.shiftKey) { showRuler = !showRuler; uiPrefs.showRuler = showRuler; saveUiPrefs(uiPrefs); draw(); return; }
   if (e.key === 'u' && e.ctrlKey) { e.preventDefault(); cycleBothBg(); return; }
