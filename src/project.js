@@ -146,3 +146,17 @@ export const NEW_FILE_SIZES = [
 export function clampCanvasSize(n) {
   return Math.min(MAX_CANVAS, Math.max(MIN_CANVAS, Math.round(Number(n)) || MIN_CANVAS));
 }
+
+// --- Capacity meter (§ project panel) ---------------------------------
+// A Project's cost is canvas area x layers x frames summed over its Files —
+// exactly its total pixel-buffer bytes — but a crowd of tiny Files still
+// costs DOM and thumbnail work the byte count can't see, so the meter shows
+// whichever budget is closer to full. Both budgets are tuned to keep a
+// 4GB low-end machine responsive. Advisory only: nothing here ever blocks.
+const BYTE_BUDGET = 256 * 1024 * 1024;
+const FILE_BUDGET = 64;
+
+export function projectLoad(project) {
+  const bytes = project.files.reduce((sum, f) => sum + f.canvasWidth * f.canvasHeight * 2 * f.layers.length * f.frames.length, 0);
+  return Math.max(bytes / BYTE_BUDGET, project.files.length / FILE_BUDGET);
+}

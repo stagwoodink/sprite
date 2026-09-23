@@ -1,4 +1,4 @@
-import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder } from './project.js';
+import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder, projectLoad } from './project.js';
 import { visibleOrder } from './ordering.js';
 import { openSlideOut, openCustomSlideOut, closeSlideOut } from './slide-out.js';
 import { button, makeReorderable, startInlineEdit } from './ui.js';
@@ -191,7 +191,22 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   // `addRow` is a sibling of the scrollable `fileList`, not a child of its
   // stack, so it stays anchored above the panel footer instead of scrolling
   // away with a long file list.
-  container.append(fileList, addRow, header);
+  container.append(fileList, addRow, buildCapacityMeter(project), header);
+}
+
+// Filled bar showing how close the Project is to what a low-end machine
+// handles comfortably (project.js's projectLoad). Advisory — it never
+// blocks anything; the bar filling *is* the warning.
+function buildCapacityMeter(project) {
+  const load = projectLoad(project);
+  const meter = document.createElement('div');
+  meter.className = 'capacity-meter';
+  meter.title = `Project capacity: ${Math.round(load * 100)}%`;
+  const fill = document.createElement('div');
+  fill.className = 'capacity-fill';
+  fill.style.width = Math.min(100, load * 100) + '%';
+  meter.append(fill);
+  return meter;
 }
 
 // Slide-out button stack (§13.2's "non-modal popup" — the rest of the UI
