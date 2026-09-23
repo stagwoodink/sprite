@@ -1,8 +1,8 @@
 # Switch from Rust/egui to plain web stack, drop native target
 
-The original spec package (`pixi-design-doc.md` v1/v2) specced Rust + `egui`/`eframe`,
+The original spec package (`sprite-design-doc.md` v1/v2) specced Rust + `egui`/`eframe`,
 compiling to both a native binary and WASM (via `trunk`) for the itch.io web build.
-A working prototype was built against that spec (now archived at `../pixi-prototype`,
+A working prototype was built against that spec (now archived at `../sprite-prototype`,
 outside this repo) but proved harder to modify than the UI's actual complexity
 warranted: `egui`'s immediate-mode model fuses view, state, and layout into one
 function per frame, so panels couldn't be touched in isolation, and the dual

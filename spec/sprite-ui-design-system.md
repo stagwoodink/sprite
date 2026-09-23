@@ -1,6 +1,6 @@
-# Pixi — UI Design System & Web Storage Architecture
+# Sprite — UI Design System & Web Storage Architecture
 
-**Status:** Supporting detail document — the authoritative source for visual/styling specifics (color tokens, typography, button/chip/panel anatomy) that `pixi-design-doc.md` references but doesn't duplicate in full. For anything *behavioral* (not visual), `pixi-design-doc.md` is canonical; where the two genuinely conflict on behavior, `pixi-design-doc.md` wins. See `INDEX.md` for the complete file relationship. Supersedes the two-font (chunky header + lighter body) pairing floated earlier in design discussion; that idea is dead, replaced by the single-font system in §2 below.
+**Status:** Supporting detail document — the authoritative source for visual/styling specifics (color tokens, typography, button/chip/panel anatomy) that `sprite-design-doc.md` references but doesn't duplicate in full. For anything *behavioral* (not visual), `sprite-design-doc.md` is canonical; where the two genuinely conflict on behavior, `sprite-design-doc.md` wins. See `INDEX.md` for the complete file relationship. Supersedes the two-font (chunky header + lighter body) pairing floated earlier in design discussion; that idea is dead, replaced by the single-font system in §2 below.
 
 **Audience:** Claude Code (autonomous build agent)
 
@@ -46,7 +46,7 @@ Four confirmed states, all bottom-anchored (so shorter states appear to sink rat
 
 ### 1.3 Chips and tiles
 
-Applies to palette chips and layer/frame rows. See `pixi-ui-reference.svg` (shipped alongside this doc) for the literal visual reference this section describes.
+Applies to palette chips and layer/frame rows. See `sprite-ui-reference.svg` (shipped alongside this doc) for the literal visual reference this section describes.
 
 - **Palette chips — structure:** no outer panel/container — chips sit directly on the app background, edge-to-edge with no gaps. Each chip has its own offset shadow ledge beneath it, filled with a **darker shade of that chip's own color** — never a generic dark or black shadow, the same rule §1.2 uses for buttons, and with the same background-clamping caveat for very dark chips. Adjacent chips are separated by a hairline that is **barely perceptible** — a very low-contrast, same-family tonal shift, not a dark or black line.
 - **Chip states (confirmed):**
@@ -76,7 +76,7 @@ Since m3x6 has no bold or alternate weight, visual hierarchy is built from **cas
 
 | Role | Case | Size |
 |---|---|---|
-| Headers / panel titles (e.g. "LAYERS", "PIXI") | ALL CAPS | Larger — proposed default **32px** |
+| Headers / panel titles (e.g. "LAYERS", "SPRITE") | ALL CAPS | Larger — proposed default **32px** |
 | Everything else (labels, file/layer names, status bar, coordinates, buttons, fields) | Normal case | Smaller — proposed default **16px** |
 
 These two sizes (32px, 16px) follow the "use multiples of 16" convention documented for this font family (confirmed for m5x7/m6x11 on their itch.io pages) as a reasonable default, but **this hasn't been independently confirmed for m3x6's own native grid** — verify against the actual font before locking it in, since the wrong multiple will blur the pixel edges exactly the way non-integer canvas zoom would.
@@ -104,9 +104,9 @@ Reconciling the discussion from earlier into a concrete spec, replacing the "Ind
 
 ### 3.2 Known limitations to flag, not silently absorb
 
-- **IndexedDB path only:** storage is origin-scoped and single-device/single-browser. No sync between browsers or machines. This is why Export-to-`.pixi` (already specced) matters more on this path than it does on native or on the File System Access path.
+- **IndexedDB path only:** storage is origin-scoped and single-device/single-browser. No sync between browsers or machines. This is why Export-to-`.sprite` (already specced) matters more on this path than it does on native or on the File System Access path.
 - **Itch.io serves games inside an iframe.** Some browsers (Safari's ITP, Chrome's storage partitioning) restrict or evict iframed-context storage more aggressively than a top-level site would get. This needs an early verification spike — confirm IndexedDB (and, separately, whether `showDirectoryPicker` even works inside an itch.io iframe at all, since permission-prompting APIs are sometimes blocked in embedded contexts) actually behaves as expected in a real itch.io-hosted build — before either storage path is built out fully on the assumption that it will.
-- **Open UX question, not yet decided:** should the web build (on the IndexedDB path specifically) show a periodic gentle prompt nudging the user to export a `.pixi` backup, given how much easier it is to lose that data than on desktop or the File System Access path? Desktop and the File System Access path don't need this since they're writing to real, user-owned storage already.
+- **Open UX question, not yet decided:** should the web build (on the IndexedDB path specifically) show a periodic gentle prompt nudging the user to export a `.sprite` backup, given how much easier it is to lose that data than on desktop or the File System Access path? Desktop and the File System Access path don't need this since they're writing to real, user-owned storage already.
 
 ---
 
@@ -162,7 +162,7 @@ Left to right: a single FPS field (drag left/right to change the value, or click
 - **Active frame indicator:** a thin bar (~5px) runs beneath the entire frame strip, neutral gray by default, with the segment directly under the currently active frame turning full accent-red. This replaced an earlier full-red-fill-on-the-tile approach — filling the whole tile red would obscure the frame's own thumbnail content the same way it doesn't for layer rows (which don't show a thumbnail preview at that scale in the same way); the indicator bar avoids that problem while still giving a clear, glanceable "this one's active" signal.
 - **Deleting a frame:** the hover-revealed delete pip, same minimal treatment as the layers panel's delete tile (§4.2) — a neutral tile with a small centered red pip, not a literal icon yet.
 - **Inserting a frame at a specific position:** hovering the gap between two adjacent frames separates them slightly and reveals an insert-here `+` — the same interaction as Canva's between-element insert. This is in addition to the add-frame button at the strip's end, which always appends.
-- **Onion skin range is fixed at 2, not user-adjustable** — no range control exists in the UI at all. See the design principle stated at the top of the features doc: Pixi is opinionated, not customizable, and this is the reference example for that principle.
+- **Onion skin range is fixed at 2, not user-adjustable** — no range control exists in the UI at all. See the design principle stated at the top of the features doc: Sprite is opinionated, not customizable, and this is the reference example for that principle.
 
 ## 7. Project Panel (confirmed)
 
@@ -173,9 +173,9 @@ Left to right: a single FPS field (drag left/right to change the value, or click
 
 ## 8. Open Items Carried From Earlier (still unresolved)
 
-Restating from `pixi-features-doc.md` §12 plus new ones from this document, so nothing gets lost:
+Restating from `sprite-features-doc.md` §12 plus new ones from this document, so nothing gets lost:
 
-1. **Resolved, flagging for awareness:** third built-in palette — see the concrete 16-color list in `pixi-design-doc.md` §7.1 or `pixi-features-doc.md` §2.1. This was a default pick made without an explicit follow-up confirmation; revisit if a different palette is wanted.
+1. **Resolved, flagging for awareness:** third built-in palette — see the concrete 16-color list in `sprite-design-doc.md` §7.1 or `sprite-features-doc.md` §2.1. This was a default pick made without an explicit follow-up confirmation; revisit if a different palette is wanted.
 2. Click-away-from-color-picker = eyedropper (stated as an assumption).
 3. Add-chip button glyph (assumed `[+]`).
 4. App launch/first-run behavior — what opens by default given autosave means there's always a "last state."

@@ -1,16 +1,16 @@
-# Pixi — Features Specification
+# Sprite — Features Specification
 
-**Status:** Supporting detail document. `pixi-design-doc.md` is the canonical build spec and consolidates the decisions here — where the two differ, `pixi-design-doc.md` wins. This document is kept for the fuller design rationale and the open-items list it contains. See `INDEX.md` for the complete file relationship.
+**Status:** Supporting detail document. `sprite-design-doc.md` is the canonical build spec and consolidates the decisions here — where the two differ, `sprite-design-doc.md` wins. This document is kept for the fuller design rationale and the open-items list it contains. See `INDEX.md` for the complete file relationship.
 
 **Audience:** Claude Code (autonomous build agent)
 
-**Design principle:** Pixi is opinionated, not customizable. When a feature could be built as a user-adjustable setting or as a single fixed, deliberate choice, default to the fixed choice unless this document explicitly says otherwise. The onion-skin range (§10.1) was originally scoped as adjustable and was deliberately simplified to a fixed value for exactly this reason — treat that as the model for how to resolve similar judgment calls, not as an isolated exception.
+**Design principle:** Sprite is opinionated, not customizable. When a feature could be built as a user-adjustable setting or as a single fixed, deliberate choice, default to the fixed choice unless this document explicitly says otherwise. The onion-skin range (§10.1) was originally scoped as adjustable and was deliberately simplified to a fixed value for exactly this reason — treat that as the model for how to resolve similar judgment calls, not as an isolated exception.
 
 ---
 
 ## 0. What This Document Supersedes (historical context)
 
-The earliest design pass ("v1," not shipped as its own file — its still-valid tech-stack choice was carried forward into `pixi-design-doc.md` §3) specified a discrete-tool editor (Pencil/Eraser/Eyedropper buttons), manual save via `Ctrl+S`, PNG-only export, a fixed snapped-zoom system, and a single always-visible side panel. None of that survives. Specifically, **do not build**:
+The earliest design pass ("v1," not shipped as its own file — its still-valid tech-stack choice was carried forward into `sprite-design-doc.md` §3) specified a discrete-tool editor (Pencil/Eraser/Eyedropper buttons), manual save via `Ctrl+S`, PNG-only export, a fixed snapped-zoom system, and a single always-visible side panel. None of that survives. Specifically, **do not build**:
 
 - The v1 toolbar (New/Open/Save/Undo/Redo buttons) — replaced by the Project panel (§7) and always-on autosave (§9).
 - The v1 side panel (tool selector, swatch pair, 4×16 fixed palette grid, grid checkbox) — replaced by the anchored palette chip bar (§2) plus the modifier-key tool system (§3).
@@ -200,7 +200,7 @@ Three panels (Layers, Timeline, Project) all share one reveal/hide mechanism, an
 
 ### 7.2 Storage model
 
-- Projects are directories of `.pixi` files (one `.pixi` file per canvas/file within the project).
+- Projects are directories of `.sprite` files (one `.sprite` file per canvas/file within the project).
 
 ### 7.3 New-file popup
 
@@ -223,7 +223,7 @@ Reiterating from above for clarity since it replaces v1's launch-time modal enti
 
 ## 9. Undo, Redo, and Autosave
 
-- Undo/redo history is **persisted with the file itself**, up to **50 steps**. Reopening a `.pixi` file later restores its undo history, so previously-made edits from an earlier session can still be undone.
+- Undo/redo history is **persisted with the file itself**, up to **50 steps**. Reopening a `.sprite` file later restores its undo history, so previously-made edits from an earlier session can still be undone.
 - There is no manual save. **The app autosaves continuously** — every change is written to disk (or persisted in the browser storage layer on web) as it happens. This removes the v1 concept of a "dirty" flag and a Save button entirely; nothing in the UI represents "unsaved changes" because that state cannot exist.
 - Undo/redo keybinds (carried over from v1, unchanged): `Ctrl+Z` to undo, `Ctrl+Y` or `Ctrl+Shift+Z` to redo.
 
@@ -242,7 +242,7 @@ Reiterating from above for clarity since it replaces v1's launch-time modal enti
 
 ### 10.1 Onion skinning
 
-- Range is **fixed at 2 frames** in each direction — not user-configurable. Pixi is opinionated rather than customizable; this was originally scoped as an adjustable 1–3 range but that's been deliberately simplified to remove the control surface entirely.
+- Range is **fixed at 2 frames** in each direction — not user-configurable. Sprite is opinionated rather than customizable; this was originally scoped as an adjustable 1–3 range but that's been deliberately simplified to remove the control surface entirely.
 - Ghosted frames are **tinted and faded**: frames before the current one and frames after it use distinct tint colors (e.g., warm tint for previous, cool tint for next), with opacity decreasing as distance from the current frame increases.
 - Onion skin has a toggle between showing the **full composited frame** (all layers) or **only the active layer**, for both the "before" and "after" ghosts.
 
@@ -252,7 +252,7 @@ Reiterating from above for clarity since it replaces v1's launch-time modal enti
 
 ### 11.1 Formats
 
-PNG, JPG, SVG, PDF, JSON, and `.pixi` (the native project file format, i.e. "export" here can also mean producing a standalone `.pixi` outside the project's own storage).
+PNG, JPG, SVG, PDF, JSON, and `.sprite` (the native project file format, i.e. "export" here can also mean producing a standalone `.sprite` outside the project's own storage).
 
 - **PNG**: standard raster export, alpha preserved, at the selected integer scale multiplier (nearest-neighbor upscaling — this is pixel art, no smoothing).
 - **JPG / PDF**: neither format supports alpha. Default fill for transparent pixels is **white**. Clicking the JPG export option a second time toggles the fill to **black**. Right-clicking the JPG option sets the fill to whatever the user's current **secondary color** is. This same toggle/right-click pattern applies identically to **PDF** export.
