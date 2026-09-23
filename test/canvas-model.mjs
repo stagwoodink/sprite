@@ -91,4 +91,8 @@ const before = a.colors.length;
 setPixel(a, -1, 0, '#123456');
 setPixel(a, 0, 0, '#123456', new Uint8Array(W * H));
 assert.equal(a.colors.length, before, 'out-of-bounds/masked write interns nothing');
+
+// a fill that starts outside its mask changes nothing
+const c = fresh(); floodFill(c, 0, 0, '#ff00ff', false, diamond());
+assert.ok(c.pixels.every((v) => v === 0), 'masked-out start fills nothing');
 console.log('canvas-model ok');

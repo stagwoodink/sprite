@@ -302,24 +302,40 @@ export function floodFill(model, startX, startY, colorHex, antialiased = false, 
   const target = model.pixels[startY * stride + startX];
   const fillIdx = colorIndex(model.colors, colorHex);
   if (target === fillIdx) return;
-  const matches = (x, y) => inBounds(model, x, y) && model.pixels[y * stride + x] === target && (!mask || mask[y * model.width + x]);
+  const w = model.width, h = model.height;
 
-  // Flat typed visited/stack, not string-keyed Set/arrays: at 512x512 a
-  // fill can touch 262k cells.
-  const visited = new Uint8Array(model.width * model.height);
-  const stack = [startX, startY];
-  const filled = [];
-  while (stack.length) {
-    const y = stack.pop(), x = stack.pop();
-    if (!matches(x, y) || visited[y * model.width + x]) continue;
-    visited[y * model.width + x] = 1;
-    filled.push([x, y]);
-    stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+  // Flat typed visited/stack of cell indices, not per-cell arrays: at 512x512
+  // a fill can touch 262k cells. A cell is marked when pushed, so it is
+  // pushed at most once and a stack of w*h can never overflow. `visited`
+  // ends up as exactly the filled region, which the antialias pass reuses.
+  const visited = new Uint8Array(w * h);
+  const stack = new Int32Array(w * h);
+  let sp = 0, minX = w, minY = h, maxX = -1, maxY = -1;
+  const push = (x, y) => {
+    const i = y * w + x;
+    if (visited[i] || model.pixels[y * stride + x] !== target || (mask && !mask[i])) return;
+    visited[i] = 1;
+    stack[sp++] = i;
+  };
+  push(startX, startY);
+  while (sp) {
+    const i = stack[--sp], x = i % w, y = (i / w) | 0;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (x + 1 < w) push(x + 1, y);
+    if (x > 0) push(x - 1, y);
+    if (y + 1 < h) push(x, y + 1);
+    if (y > 0) push(x, y - 1);
   }
+  if (maxX < 0) return;
 
-  for (const [x, y] of filled) {
-    if (dither && (x + y) % 2) continue;
-    setPixelIndex(model, x, y, fillIdx, mask);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (!visited[y * w + x] || (dither && (x + y) % 2)) continue;
+      setPixelIndex(model, x, y, fillIdx, mask);
+    }
   }
 
   if (antialiased) {
@@ -327,11 +343,13 @@ export function floodFill(model, startX, startY, colorHex, antialiased = false, 
     // non-matching neighbor gets a partial blend toward that neighbor's
     // original color, approximating an antialiased fill edge.
     const blendAt = blender(model.colors, colorHex);
-    for (const [x, y] of filled) {
-      const neighbors = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
-      for (const [nx, ny] of neighbors) {
-        if (!inBounds(model, nx, ny) || visited[ny * model.width + nx]) continue;
-        blendAt(model, x, y, 0.6);
+    const outside = (x, y) => x >= 0 && y >= 0 && x < w && y < h && !visited[y * w + x];
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (!visited[y * w + x]) continue;
+        for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+          if (outside(nx, ny)) blendAt(model, x, y, 0.6);
+        }
       }
     }
   }
