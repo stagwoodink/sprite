@@ -11,7 +11,16 @@ const THUMB_H = BLOCK * 2; // layer tiles are 2 blocks tall
 // Layer grouping is drag-and-drop only — a layer becomes a group's member
 // by being positioned directly beneath its header (§ ordering.js), same as
 // file collections. No separate "move to group" control.
+// Painted thumbnail canvases from the last render, keyed by layer buffer and
+// reused while the buffer's version, visibility and size are unchanged — the
+// panel rebuilds its rows on every edit, but only the edited layer's pixels
+// need repainting. Rebuilt each render from just the rows shown, so it can't
+// outgrow the layer count.
+let thumbCache = new Map(); // buffer -> { key, canvasEl }
+
 export function renderLayersPanel(container, file, callbacks, focusedGroupId, layerSelection, multiSelection, activeReferenceId) {
+  const scrollTop = container.scrollTop; // a rebuild would otherwise snap the panel back to the top
+  const nextThumbs = new Map();
   container.innerHTML = '';
   const selLo = layerSelection ? Math.min(layerSelection.anchor, layerSelection.to) : -1;
   const selHi = layerSelection ? Math.max(layerSelection.anchor, layerSelection.to) : -1;
@@ -38,8 +47,16 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
 
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'layer-thumb';
-    const canvasEl = document.createElement('canvas');
-    paintThumbnail(canvasEl, file, compositeLayerAt(file, i, file.activeFrameIndex), THUMB_H, { dim: !layer.visible });
+    const buf = file.frames[file.activeFrameIndex].layerPixels[i];
+    const thumbKey = `${buf.v | 0}|${layer.visible}|${file.visibleWidth}x${file.visibleHeight}x${file.canvasWidth}`;
+    let thumb = thumbCache.get(buf);
+    if (!thumb || thumb.key !== thumbKey) {
+      const canvasEl = thumb ? thumb.canvasEl : document.createElement('canvas');
+      paintThumbnail(canvasEl, file, compositeLayerAt(file, i, file.activeFrameIndex), THUMB_H, { dim: !layer.visible });
+      thumb = { key: thumbKey, canvasEl };
+    }
+    nextThumbs.set(buf, thumb);
+    const canvasEl = thumb.canvasEl;
     const eyePip = document.createElement('div');
     eyePip.className = 'eye-pip' + (layer.visible ? '' : ' hidden-indicator');
     thumbWrap.append(canvasEl, eyePip);
@@ -192,6 +209,8 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
   }
 
   container.append(buildReferenceSection(), stack);
+  container.scrollTop = scrollTop;
+  thumbCache = nextThumbs;
 
   // Reference images (references.js) sit apart from the layer stack: they
   // aren't layers, so they can't be selected, painted on, or exported —
