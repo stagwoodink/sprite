@@ -1,11 +1,11 @@
 import { compositeFrame, compositeFrameAt, compositeLayerAt } from './sprite-file.js';
-import { packedToHex } from './canvas-model.js';
 import { encodeFile } from './sprite-format.js';
 import { ensureLoaded } from './persistence.js';
 import { computeArtboardLayout } from './renderer.js';
 import { zipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
 import { encodeGifStream } from './gif-index.js';
+import { pushRects } from './svg-rects.js';
 
 // Export (§14): PNG, GIF, SVG per File/Collection, plus a whole-Project
 // .sprite archive. Scale is an integer upscale, nearest-neighbor — no
@@ -84,17 +84,11 @@ function canvasToBlob(canvasEl, mime) {
   return new Promise((resolve) => canvasEl.toBlob(resolve, mime));
 }
 
-// Hand-rolled: one <rect> per pixel — no library needed at this pixel-grid scale.
+// Hand-rolled — no library needed at this pixel-grid scale.
 function pixelsToSvgString(pixels, w, h, scale) {
-  let rects = '';
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const c = pixels[y * w + x];
-      if (!c) continue;
-      rects += `<rect x="${x * scale}" y="${y * scale}" width="${scale}" height="${scale}" fill="${packedToHex(c)}"/>`;
-    }
-  }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w * scale} ${h * scale}">${rects}</svg>`;
+  const parts = [];
+  pushRects(parts, pixels, w, h, 0, 0, scale);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w * scale} ${h * scale}">${parts.join('')}</svg>`;
 }
 
 // --- download plumbing ---------------------------------------------------
@@ -297,17 +291,9 @@ async function exportCollectionSheet(collectionName, artboards, format, scale, g
 function exportCollectionSheetSvg(collectionName, artboards, scale, gridset) {
   const { cells, layout } = layoutSheetCells(artboards, gridset);
   const w = layout.totalW * scale, h = layout.totalH * scale;
-  let rects = '';
-  for (const { board, x, y } of cells) {
-    for (let py = 0; py < board.height; py++) {
-      for (let px = 0; px < board.width; px++) {
-        const c = board.pixels[py * board.width + px];
-        if (!c) continue;
-        rects += `<rect x="${(x + px) * scale}" y="${(y + py) * scale}" width="${scale}" height="${scale}" fill="${packedToHex(c)}"/>`;
-      }
-    }
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${rects}</svg>`;
+  const parts = [];
+  for (const { board, x, y } of cells) pushRects(parts, board.pixels, board.width, board.height, x, y, scale);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
   return downloadResults([{ path: `${collectionName}.svg`, blob: new Blob([svg], { type: 'image/svg+xml' }) }], `${collectionName}.svg`);
 }
 
