@@ -369,8 +369,8 @@ function drawGhost(ctx, model, ghost, scale, ox, oy, nextCache) {
 // black filling one set of gaps, white the other — so the boundary reads
 // against any background, same reasoning as the brush cursor/grid having no
 // single fixed color that's safe everywhere. `antsPhase` advances once per
-// render call (main.js's animation loop already calls render() every
-// frame), giving the classic marching animation for free.
+// render call (main.js's loop renders every frame while ants are
+// visible, see render()'s return value), giving the classic marching animation.
 const SELECTION_DASH = 4; // screen px per dash segment — constant across zoom, see below
 const SELECTION_DASH_SPEED = 0.5; // screen px of march per frame
 // Dash coordinates here are already screen pixels (scale is baked into
@@ -391,26 +391,29 @@ function selectionAlpha(scale) {
 // Outline every selected pixel's exposed edges (magic wand / rect-select
 // both resolve to a mask) as one continuous path, so the dash pattern flows
 // around the whole boundary instead of restarting at every 1-pixel edge.
-function selectionOutlinePath(selection, scale, ox, oy) {
+// Built once per selection, in model coordinates, and cached on the wrapper
+// (a new mask always gets a new wrapper): pan and zoom only change the
+// transform it is stroked under, so only the dash offset moves per frame.
+function selectionOutlinePath(selection) {
+  if (selection.path) return selection.path;
   const path = new Path2D();
   const { width, height, mask } = selection;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (!mask[y * width + x]) continue;
-      const sx = ox + x * scale, sy = oy + y * scale;
-      if (!mask[(y - 1) * width + x]) { path.moveTo(sx, sy); path.lineTo(sx + scale, sy); }
-      if (!mask[(y + 1) * width + x]) { path.moveTo(sx, sy + scale); path.lineTo(sx + scale, sy + scale); }
-      if (!mask[y * width + (x - 1)]) { path.moveTo(sx, sy); path.lineTo(sx, sy + scale); }
-      if (!mask[y * width + (x + 1)]) { path.moveTo(sx + scale, sy); path.lineTo(sx + scale, sy + scale); }
+      if (!mask[(y - 1) * width + x]) { path.moveTo(x, y); path.lineTo(x + 1, y); }
+      if (!mask[(y + 1) * width + x]) { path.moveTo(x, y + 1); path.lineTo(x + 1, y + 1); }
+      if (!mask[y * width + (x - 1)]) { path.moveTo(x, y); path.lineTo(x, y + 1); }
+      if (!mask[y * width + (x + 1)]) { path.moveTo(x + 1, y); path.lineTo(x + 1, y + 1); }
     }
   }
-  return path;
+  return selection.path = path;
 }
 
 function drawSelection(ctx, selection, scale, ox, oy) {
   const alpha = selectionAlpha(scale);
   if (alpha <= 0) return false;
-  const path = selectionOutlinePath(selection, scale, ox, oy);
+  const path = selectionOutlinePath(selection);
   antsPhase = (antsPhase + SELECTION_DASH_SPEED) % (SELECTION_DASH * 2);
 
   // Difference blend (same trick as the hover crosshair) — a white stroke
@@ -419,9 +422,13 @@ function drawSelection(ctx, selection, scale, ox, oy) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.globalCompositeOperation = 'difference';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([SELECTION_DASH, SELECTION_DASH]);
-  ctx.lineDashOffset = -antsPhase;
+  // Under the model->screen transform, so line width and dashes are divided
+  // by scale to keep their fixed on-screen size.
+  ctx.translate(ox, oy);
+  ctx.scale(scale, scale);
+  ctx.lineWidth = 1 / scale;
+  ctx.setLineDash([SELECTION_DASH / scale, SELECTION_DASH / scale]);
+  ctx.lineDashOffset = -antsPhase / scale;
   ctx.strokeStyle = '#FFFFFF';
   ctx.stroke(path);
   ctx.restore();
