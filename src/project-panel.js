@@ -174,18 +174,18 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   }
 
   const addRow = document.createElement('div');
-  addRow.className = 'tile-bar';
+  addRow.className = 'tile-bar project-add-row';
   // Left click: new file (opens the size picker). Double click: match
   // whatever's most recently been worked on nearby (§ onAddFileCurrent).
   // Right click: new collection, straight away — single-purpose gestures on
   // one button instead of a menu in between.
   const addFileBtn = button({
     glyph: '+', fill: true, className: 'panel-add-btn', title: 'New file (dblclick: match current · right-click: new collection)',
-    onClick: () => openSizePopup(addFileBtn, (w, h, preset) => callbacks.onAddFile(w, h, preset)),
+    onClick: () => openSizePopup(addFileBtn, (w, h, preset) => callbacks.onAddFile(w, h, preset), { onImport: () => callbacks.onImport(addFileBtn) }),
     onContextMenu: (e) => { e.preventDefault(); callbacks.onAddCollection(); },
   });
   addFileBtn.addEventListener('dblclick', () => { closeSlideOut(); callbacks.onAddFileCurrent(); });
-  addRow.append(addFileBtn, button({ glyph: '↓', icon: true, title: 'Import a spritesheet or .sprite project', onClick: (e) => callbacks.onImport(e.currentTarget) }));
+  addRow.append(addFileBtn);
   fileList.append(fileStack);
 
   // `addRow` is a sibling of the scrollable `fileList`, not a child of its
@@ -221,12 +221,14 @@ function buildCapacityMeter(project, callbacks) {
 // ascending order), so the picker's bottom-to-top reading is small-to-large
 // working up from the anchor it slides out of. The bottom row is a custom
 // W x H pair. `onPick(w, h, preset)` — `preset` is null for a custom size.
-export function openSizePopup(anchor, onPick, { onDismiss } = {}) {
+// `onImport`, when given, adds a last "Import" row (new files only).
+export function openSizePopup(anchor, onPick, { onDismiss, onImport } = {}) {
   return openCustomSlideOut(anchor, (bar, close) => {
     for (const preset of [...NEW_FILE_SIZES].reverse()) {
       bar.append(button({ label: preset.label, fill: true, onClick: () => { onPick(preset.w, preset.h, preset); close(); } }));
     }
     bar.append(customSizeRow((w, h) => { onPick(w, h, null); close(); }));
+    if (onImport) bar.append(button({ label: 'Import', fill: true, title: 'Spritesheet or .sprite', onClick: () => { close(); onImport(); } }));
   }, { side: 'up', className: 'size-popup', onDismiss });
 }
 

@@ -75,6 +75,7 @@
      bottom — --pad is that clearance, sized so pad + line + pad lands
      exactly on --block, not a fraction chosen by feel. */
   --block: 1.5em;
+  --meter-h: 4px; /* project capacity meter; the add-file row shrinks by this */
   --pad: 0.25em;
   --panel-width: 9em; /* every side panel is 6 blocks wide */
 
@@ -753,7 +754,11 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .palette-row { display: flex; }
 
 /* ---- Project capacity meter: plain filled rectangle, no gradient ------ */
-.capacity-meter { height: 4px; background: var(--accent-dark); border-top: 1px solid var(--hairline); }
+/* The add-file row gives up the meter's height so the two together stay one
+   block tall, keeping the panel's footer on the grid. */
+.project-add-row { height: calc(var(--block) - var(--meter-h)); }
+.project-add-row .btn { height: 100%; }
+.capacity-meter { height: var(--meter-h); background: var(--accent-dark); border-top: 1px solid var(--hairline); }
 /* min-width: a sliver is always lit, even at 0% load — purely for looks */
 .capacity-fill { height: 100%; min-width: 3px; background: var(--accent); }
 .capacity-meter.full { cursor: pointer; }
