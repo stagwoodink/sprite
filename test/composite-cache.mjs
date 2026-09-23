@@ -29,3 +29,16 @@ assert.equal(second[0], 0, 'erased pixel cleared inside dirty rect');
 assert.notEqual(second[63], 0, 'new pixel painted');
 assert.equal(second, first, 'patched in place');
 console.log('dirty-rect ok');
+
+// group visibility and reordering must invalidate without a revision counter
+const h = createSpriteFile('g', 4, 4);
+const hv = { width: 4, height: 4, stride: 4, pixels: h.frames[0].layerPixels[0], colors: h.colors };
+setPixel(hv, 0, 0, '#333333');
+assert.notEqual(compositeFrameAt(h, 0)[0], 0);
+h.layerGroups[0].visible = false;
+assert.equal(compositeFrameAt(h, 0)[0], 0, 'hiding the layer\'s group hides it');
+h.layerGroups[0].visible = true;
+h.layerGroups[0].order = 5000; // group now sits below the layer: layer leaves it
+h.layerGroups[0].visible = false;
+assert.notEqual(compositeFrameAt(h, 0)[0], 0, 'moving the group past the layer un-groups it');
+console.log('group cache ok');

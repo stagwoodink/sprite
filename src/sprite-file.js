@@ -81,33 +81,80 @@ function blendPacked(base, top, alpha) {
 // structure (dimensions, each layer's visibility/opacity/buffer identity)
 // and the same buffer versions (canvas-model.js touch()) — so pan, zoom,
 // idle redraws and edits to *other* frames all cost one key comparison.
-const compositeCache = new WeakMap(); // frame -> { structKey, versions, out }
+//
+// The key is derived from real state on every call, not a revision counter:
+// the app mutates layer.visible/.opacity/.order directly in several places
+// and a counter would miss them. To keep a hit allocation-free the key is a
+// flat Float64Array — three header slots (w, h, canvasWidth), then per layer
+// [shown ? 1 + opacity : 0, bufferId, buffer version] — filled into a shared
+// scratch and compared element-wise, so no strings, no collisions.
+const compositeCache = new WeakMap(); // frame -> { key, out }
+const HEADER = 3, STRIDE = 3;
+let keyScratch = new Float64Array(HEADER + STRIDE * 32);
+const groupShown = new Map(); // scratch: group id -> visible
+
+// `layer.groupId` is derived by layerOrder() (a sort plus two arrays), which
+// only needs to run when an order or membership actually changed — this
+// remembers the .order of every layer and group, and the objects themselves
+// (an undo can swap in different objects with the same orders).
+const membershipCache = new WeakMap(); // file -> { orders, items }
+function refreshMembership(file) {
+  const { layers, layerGroups } = file;
+  const n = layers.length + layerGroups.length;
+  let entry = membershipCache.get(file);
+  let fresh = !entry || entry.orders.length !== n;
+  if (!fresh) {
+    let i = 0;
+    for (const items of [layerGroups, layers]) {
+      for (const item of items) {
+        if (entry.items[i] !== item || entry.orders[i] !== item.order) { fresh = true; break; }
+        i++;
+      }
+      if (fresh) break;
+    }
+  }
+  if (!fresh) return;
+  layerOrder(file);
+  membershipCache.set(file, { orders: Float64Array.from([...layerGroups, ...layers], (item) => item.order), items: [...layerGroups, ...layers] });
+}
 
 export function compositeFrameAt(file, frameIndex) {
   const w = file.visibleWidth, h = file.visibleHeight;
   const frame = file.frames[frameIndex];
-  // `layer.groupId` is derived, not stored — layerOrder() is what computes
-  // it (as a side effect), and this runs every frame regardless of whether
-  // the layers panel has rendered since the last group/order change, so it
-  // can't rely on that having already happened.
-  layerOrder(file);
-  const shown = file.layers.map((layer) => {
-    const group = layer.groupId && file.layerGroups.find((g) => g.id === layer.groupId);
-    return layer.visible && !(group && !group.visible);
-  });
+  refreshMembership(file);
+  groupShown.clear();
+  for (const g of file.layerGroups) groupShown.set(g.id, g.visible);
   const bufs = frame.layerPixels;
-  const structKey = `${w}x${h}x${file.canvasWidth}|` + file.layers.map((layer, li) => `${shown[li] ? 1 : 0}:${layer.opacity}:${bufferId(bufs[li])}`).join(',');
-  const versions = bufs.map((buf) => buf.v | 0);
+  const n = file.layers.length;
+  const len = HEADER + STRIDE * n;
+  if (keyScratch.length < len) keyScratch = new Float64Array(len * 2);
+  const key = keyScratch;
+  key[0] = w; key[1] = h; key[2] = file.canvasWidth;
+  for (let li = 0; li < n; li++) {
+    const layer = file.layers[li], k = HEADER + STRIDE * li;
+    key[k] = layer.visible && groupShown.get(layer.groupId) !== false ? 1 + layer.opacity : 0;
+    key[k + 1] = bufferId(bufs[li]);
+    key[k + 2] = bufs[li].v | 0;
+  }
 
   const cached = compositeCache.get(frame);
-  if (cached && cached.structKey === structKey && cached.versions.every((v, i) => v === versions[i])) return cached.out;
+  // Structure = every key slot except the buffer versions.
+  let sameStructure = !!cached && cached.key.length === len, sameVersions = sameStructure;
+  if (sameStructure) {
+    for (let k = 0; k < len; k++) {
+      if (cached.key[k] === key[k]) continue;
+      if (k >= HEADER && (k - HEADER) % STRIDE === 2) sameVersions = false;
+      else { sameStructure = sameVersions = false; break; }
+    }
+  }
+  if (sameStructure && sameVersions) return cached.out;
 
   // Same structure, different buffer contents: only the union of the changed
   // buffers' dirty rectangles needs re-walking. Each buffer belongs to one
   // frame, so this cache entry is the sole consumer of its dirty state.
   let x0 = 0, y0 = 0, x1 = w - 1, y1 = h - 1, out = new Uint32Array(w * h);
-  if (cached && cached.structKey === structKey) {
-    const rects = bufs.filter((buf, i) => (buf.v | 0) !== cached.versions[i]).map((buf) => buf.dirty);
+  if (sameStructure) {
+    const rects = bufs.filter((buf, i) => (buf.v | 0) !== cached.key[HEADER + STRIDE * i + 2]).map((buf) => buf.dirty);
     if (rects.every(Array.isArray)) {
       out = cached.out;
       x0 = Math.max(0, Math.min(...rects.map((d) => d[0])));
@@ -119,7 +166,7 @@ export function compositeFrameAt(file, frameIndex) {
   }
   const table = packedTable(file.colors);
   file.layers.forEach((layer, li) => {
-    if (!shown[li]) return;
+    if (!key[HEADER + STRIDE * li]) return;
     const src = bufs[li];
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
@@ -132,7 +179,7 @@ export function compositeFrameAt(file, frameIndex) {
   });
   out.rev = (out.rev | 0) + 1; // lets the renderer skip re-uploading an unchanged composite
   for (const buf of bufs) buf.dirty = null;
-  compositeCache.set(frame, { structKey, versions, out });
+  compositeCache.set(frame, { key: key.slice(0, len), out });
   return out;
 }
 
