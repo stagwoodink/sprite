@@ -126,17 +126,34 @@ export function snapshotPixels(model) {
   return model.pixels.slice();
 }
 
+// A diff side is a flat Uint32Array of [bufferPosition, colorIndex] pairs
+// (8 bytes per changed pixel) — a per-pixel [x, y, hex] array would cost
+// ~50MB per full-canvas edit at 512x512. Indices refer to the file's
+// color table, which only ever appends, so they stay valid for the life of
+// the file. Positions are raw buffer offsets, independent of stride.
 export function diffFromSnapshot(model, snapshot) {
-  const stride = model.stride || model.width;
-  const before = [], after = [];
-  for (let i = 0; i < model.pixels.length; i++) {
-    if (model.pixels[i] !== snapshot[i]) {
-      const x = i % stride, y = Math.floor(i / stride);
-      before.push([x, y, model.colors[snapshot[i]]]);
-      after.push([x, y, model.colors[model.pixels[i]]]);
-    }
+  const pixels = model.pixels;
+  let n = 0;
+  for (let i = 0; i < pixels.length; i++) if (pixels[i] !== snapshot[i]) n++;
+  const before = new Uint32Array(n * 2), after = new Uint32Array(n * 2);
+  let k = 0;
+  for (let i = 0; i < pixels.length; i++) {
+    if (pixels[i] === snapshot[i]) continue;
+    before[k] = after[k] = i;
+    before[k + 1] = snapshot[i];
+    after[k + 1] = pixels[i];
+    k += 2;
   }
   return { before, after };
+}
+
+export function applyDiff(model, side) {
+  const stride = model.stride || model.width;
+  for (let k = 0; k < side.length; k += 2) {
+    const i = side[k];
+    model.pixels[i] = side[k + 1];
+    touch(model.pixels, i % stride, (i / stride) | 0);
+  }
 }
 
 export function hexToRgb(hex) {

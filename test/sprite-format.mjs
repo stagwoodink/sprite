@@ -26,6 +26,19 @@ const { meta, bytes } = encodeFile(f);
 const back = parseFile(JSON.parse(JSON.stringify(meta)), bytes);
 assert.equal(meta.version, 2);
 assert.deepEqual(back.colors, f.colors);
-back.frames.forEach((fr, i) => fr.layerPixels.forEach((buf, li) => assert.deepEqual(buf, f.frames[i].layerPixels[li])));
+back.frames.forEach((fr, i) => fr.layerPixels.forEach((buf, li) => assert.deepEqual(Array.from(buf), Array.from(f.frames[i].layerPixels[li]))));
 assert.equal(packedToHex(compositeFrameAt(back, 1)[4 + 1]).toUpperCase(), getPixel(v, 1, 1));
 console.log('sprite-format ok');
+
+// pixel undo commands survive encode/decode as typed diffs
+import { diffFromSnapshot, applyDiff } from '../src/canvas-model.js';
+const u = createSpriteFile('u', 4, 4);
+const uv = { width: 4, height: 4, stride: 4, pixels: u.frames[0].layerPixels[0], colors: u.colors };
+const snap = uv.pixels.slice();
+setPixel(uv, 2, 1, '#ABCDEF');
+u.undoStack.push({ type: 'pixelEdit', ...diffFromSnapshot(uv, snap) });
+const ub = parseFile(JSON.parse(JSON.stringify(encodeFile(u).meta)), encodeFile(u).bytes);
+assert.equal(ub.undoStack.length, 1);
+applyDiff({ ...uv, pixels: ub.frames[0].layerPixels[0], colors: ub.colors }, ub.undoStack[0].before);
+assert.equal(ub.frames[0].layerPixels[0][6], 0, 'undo diff clears the pixel');
+console.log('undo diff ok');

@@ -1,4 +1,4 @@
-import { setPixel } from './canvas-model.js';
+import { applyDiff } from './canvas-model.js';
 
 const CAP = 50; // §10: 50-step undo stack, persisted as part of the SpriteFile itself.
 
@@ -6,8 +6,8 @@ const CAP = 50; // §10: 50-step undo stack, persisted as part of the SpriteFile
 // separate closure state, so the arrays are exactly what Phase 8 persists to
 // the .sprite file with no extra translation step.
 //
-// Most commands are pixel diffs ({ before, after }: arrays of [x, y, color]
-// triples). Layer structural changes (add/delete/reorder) aren't pixel
+// Most commands are pixel diffs ({ before, after }: see canvas-model.js's
+// diffFromSnapshot for the typed-array shape). Layer structural changes (add/delete/reorder) aren't pixel
 // diffs — they change the shape of file.layers/file.frames itself — so
 // those carry a before/after layer-stack snapshot instead, tagged
 // `type: 'layers'` — see snapshotLayers for why that's cheap.
@@ -50,7 +50,7 @@ export function undo(file, model) {
   const command = file.undoStack.pop();
   if (!command) return false;
   if (command.type === 'layers') applyLayerSnapshot(file, command.before);
-  else for (const [x, y, color] of command.before) setPixel(model, x, y, color);
+  else applyDiff(model, command.before);
   file.redoStack.push(command);
   return true;
 }
@@ -59,7 +59,7 @@ export function redo(file, model) {
   const command = file.redoStack.pop();
   if (!command) return false;
   if (command.type === 'layers') applyLayerSnapshot(file, command.after);
-  else for (const [x, y, color] of command.after) setPixel(model, x, y, color);
+  else applyDiff(model, command.after);
   file.undoStack.push(command);
   return true;
 }

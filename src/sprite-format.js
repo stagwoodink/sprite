@@ -9,13 +9,17 @@ import { createColorTable, colorIndex } from './canvas-model.js';
 export const FORMAT_VERSION = 2;
 
 // In-memory File -> { meta, bytes }. Redo is session-only (§10). Structural
-// ('layers') undo commands carry whole-state buffer snapshots, so only the
-// pixel commands after the last one are kept — earlier pixel commands
-// predate that layer shape and could not be replayed against it anyway.
+// ('layers') undo commands carry whole-stack snapshots, so only the pixel
+// commands after the last one are kept — earlier pixel commands predate that
+// layer shape and could not be replayed against it anyway. Each kept
+// command's before/after typed arrays follow the layer buffers in `bytes`,
+// with only their length (`n`, in words) left in the JSON.
 export function encodeFile(file) {
   const { frames, undoStack, ...rest } = file;
   const cells = file.canvasWidth * file.canvasHeight;
-  const bytes = new Uint8Array(frames.length * file.layers.length * cells * 2);
+  const kept = undoStack.slice(undoStack.findLastIndex((c) => c.type === 'layers') + 1);
+  const layerBytes = frames.length * file.layers.length * cells * 2;
+  const bytes = new Uint8Array(layerBytes + kept.reduce((sum, c) => sum + c.before.byteLength * 2, 0));
   let offset = 0;
   for (const frame of frames) {
     for (const buf of frame.layerPixels) {
@@ -23,8 +27,14 @@ export function encodeFile(file) {
       offset += cells * 2;
     }
   }
-  const lastStructural = undoStack.findLastIndex((c) => c.type === 'layers');
-  const meta = { ...rest, version: FORMAT_VERSION, frameCount: frames.length, undoStack: undoStack.slice(lastStructural + 1), redoStack: [] };
+  const commands = kept.map(({ before, after, ...cmd }) => {
+    for (const side of [before, after]) {
+      bytes.set(new Uint8Array(side.buffer, side.byteOffset, side.byteLength), offset);
+      offset += side.byteLength;
+    }
+    return { ...cmd, n: before.length };
+  });
+  const meta = { ...rest, version: FORMAT_VERSION, frameCount: frames.length, undoStack: commands, redoStack: [] };
   return { meta, bytes };
 }
 
@@ -39,15 +49,20 @@ export function parseFile(meta, bytes) {
 function decodeV2({ frameCount, ...meta }, bytes) {
   const cells = meta.canvasWidth * meta.canvasHeight;
   let offset = 0;
+  // slice() copies into a fresh, aligned ArrayBuffer, so each typed view
+  // owns its memory and offsets in `bytes` needn't be aligned.
+  const take = (Type, count) => {
+    const size = count * Type.BYTES_PER_ELEMENT;
+    const out = new Type(bytes.slice(offset, offset + size).buffer);
+    offset += size;
+    return out;
+  };
   const frames = Array.from({ length: frameCount }, () => ({
-    layerPixels: meta.layers.map(() => {
-      const buf = new Uint16Array(bytes.slice(offset, offset + cells * 2).buffer);
-      offset += cells * 2;
-      return buf;
-    }),
+    layerPixels: meta.layers.map(() => take(Uint16Array, cells)),
   }));
+  const undoStack = meta.undoStack.map(({ n, ...cmd }) => ({ ...cmd, before: take(Uint32Array, n), after: take(Uint32Array, n) }));
   delete meta.version;
-  return { ...meta, frames };
+  return { ...meta, frames, undoStack };
 }
 
 function migrateV1(file) {
