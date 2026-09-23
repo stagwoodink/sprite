@@ -267,6 +267,15 @@ function layoutSheetCells(artboards, gridset) {
   return { cells, layout };
 }
 
+// One blit per board instead of a fillRect per pixel, like the live renderer.
+export function drawSheetCells(ctx, cells, scale, onProgress) {
+  ctx.imageSmoothingEnabled = false;
+  cells.forEach(({ board, x, y }, i) => {
+    ctx.drawImage(pixelsToCanvas(board.pixels, board.width, board.height, 1, null), x * scale, y * scale, board.width * scale, board.height * scale);
+    onProgress((i + 1) / cells.length * 0.6);
+  });
+}
+
 async function exportCollectionSheet(collectionName, artboards, format, scale, gridset, onProgress) {
   const { cells, layout } = layoutSheetCells(artboards, gridset);
   const w = layout.totalW, h = layout.totalH;
@@ -274,18 +283,7 @@ async function exportCollectionSheet(collectionName, artboards, format, scale, g
   canvasEl.width = w * scale;
   canvasEl.height = h * scale;
   const ctx = canvasEl.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-  cells.forEach(({ board, x, y }, i) => {
-    for (let py = 0; py < board.height; py++) {
-      for (let px = 0; px < board.width; px++) {
-        const c = board.pixels[py * board.width + px];
-        if (!c) continue;
-        ctx.fillStyle = packedToHex(c);
-        ctx.fillRect((x + px) * scale, (y + py) * scale, scale, scale);
-      }
-    }
-    onProgress((i + 1) / cells.length * 0.6);
-  });
+  drawSheetCells(ctx, cells, scale, onProgress);
   if (format === 'gif') {
     const words = new Uint32Array(ctx.getImageData(0, 0, w * scale, h * scale).data.buffer);
     const bytes = encodeGif([words], w * scale, h * scale, 1, 0, (f) => onProgress(0.6 + f * 0.3));
