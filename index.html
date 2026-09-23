@@ -34,6 +34,20 @@
     <div id="tool-tag"></div>
     <div id="kb-focus-ring"></div>
   </div>
+  <script>
+    // A failed startup otherwise leaves a blank page with the reason only in
+    // the console; print the first error on the page (click to dismiss).
+    for (const type of ['error', 'unhandledrejection']) {
+      window.addEventListener(type, (e) => {
+        const reason = e.reason || e.error;
+        const text = (reason && reason.stack) || (reason && reason.message) || e.message || String(reason);
+        const box = document.getElementById('startup-error') || document.body.appendChild(Object.assign(document.createElement('pre'), { id: 'startup-error' }));
+        box.style.cssText = 'position:fixed;inset:0 0 auto 0;z-index:99999;margin:0;padding:8px;max-height:50vh;overflow:auto;background:#7A0C18;color:#fff;font:12px monospace;white-space:pre-wrap;cursor:pointer';
+        box.textContent += (box.textContent ? '\n\n' : '') + text;
+        box.onclick = () => box.remove();
+      });
+    }
+  </script>
   <script type="module" src="src/main.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
