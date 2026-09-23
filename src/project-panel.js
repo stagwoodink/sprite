@@ -202,8 +202,9 @@ function buildCapacityMeter(project, callbacks) {
   const meter = document.createElement('div');
   meter.className = 'capacity-meter';
   const { pixelBytes, referenceBytes } = projectLoadBreakdown(project);
-  const mb = Math.round((pixelBytes + referenceBytes) / 1048576);
-  hoverTip(meter, `Capacity ${Math.round(load * 100)}% · ${mb}MB`);
+  const bytes = pixelBytes + referenceBytes;
+  const size = bytes >= 1048576 ? Math.round(bytes / 1048576) + 'MB' : Math.round(bytes / 1024) + 'KB';
+  hoverTip(meter, `Capacity ${Math.round(load * 100)}% · ${size}`);
   const fill = document.createElement('div');
   fill.className = 'capacity-fill';
   fill.style.width = Math.min(100, load * 100) + '%';
