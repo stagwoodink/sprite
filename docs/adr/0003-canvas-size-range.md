@@ -15,3 +15,7 @@ Storing typed buffers forced a second, deeper consequence: the memory footprint 
 Finally: every pan, zoom, and idle frame currently re-composites the entire visible canvas (the loop at `main.js:735`), even when nothing changed. At 512² this is a 262,144-pixel RGBA write per frame. Add a **composited-frame cache**, held in `file._compositeCache` (stripped from saves alongside the redo stack), invalidated whenever the canvas or any layer changes, then re-composited only on first access after invalidation. Dirty-rect tracking (record the changed bounding box per edit, re-walk only that region) is part of the same step — idle panning and zooming then cost one blit.
 
 Together, these changes (v2 format, typed-array buffers, delta undo, composited cache) permit the 512×512 range to function responsively on low-end hardware while maintaining the performance-first design philosophy pinned in the project memory.
+
+## Amendment: ceiling lowered to 256×256
+
+The 512×512 ceiling was reduced to 256×256, and the preset picker now stops at Game Boy DMG (160×144). Sizes up to 256×256 remain available through the custom fields, which snap any larger typed value down to 256. The reason is animation: frame memory multiplies with canvas area, and at 512² a 100-frame, 4-layer animation is already about 200MB. At 256² the same animation is about 50MB, so users can animate freely without hitting a frame limit. The other decisions in this record (typed buffers, v2 format, delta undo, composite cache) are unchanged.

@@ -277,7 +277,7 @@ Reveal behavior: hovering the **left edge** slides this panel in; mousing away s
 ### 13.2 Creating things
 
 - Clicking the project's `+`: opens a slide-out bar with a text cursor already active; type a name, hit `Return` to create and switch into the new project.
-- Clicking the file list's `+`: opens a **popup** (not a modal — the rest of the UI stays interactive/visible around it) prompting canvas size selection: one of the presets (`6x6, 9x9, 16x16, 24x24, 32x32, 64x64, Pico-8, Game Boy DMG, 256x256, 512x512`) or a custom width × height (Tab between the two fields; height mirrors width until edited; 6×6 minimum, 512×512 maximum, non-square allowed). Pico-8 (128×128) and Game Boy DMG (160×144) also swap the Project's palette to match. *(Revised: this section originally allowed presets only and deliberately dropped custom sizing — see `docs/adr/0003-canvas-size-range.md`.)*
+- Clicking the file list's `+`: opens a **popup** (not a modal — the rest of the UI stays interactive/visible around it) prompting canvas size selection: one of the presets (`6x6, 9x9, 16x16, 24x24, 32x32, 64x64, Pico-8, Game Boy DMG`) or a custom width × height (Tab between the two fields; height mirrors width until edited; 6×6 minimum, 256×256 maximum; larger typed values snap to 256, non-square allowed). Pico-8 (128×128) and Game Boy DMG (160×144) also swap the Project's palette to match. *(Revised: this section originally allowed presets only and deliberately dropped custom sizing — see `docs/adr/0003-canvas-size-range.md`.)*
 
 ### 13.3 Navigating and editing
 
@@ -416,4 +416,4 @@ Note the deliberate overload of `Backspace`/`Delete`, `Arrows`, and `+` across c
 
 ## 20. Non-Goals (unchanged in spirit from v1)
 
-Sprite is still aimed at small-scale, rapid pixel art — not large sprite sheets, tilemaps, or general-purpose image editing. Nothing in this document should be read as inviting scope beyond what's written here (e.g., no plugin/scripting system, no canvas larger than 512×512, no non-integer zoom snapping unless specified).
+Sprite is still aimed at small-scale, rapid pixel art — not large sprite sheets, tilemaps, or general-purpose image editing. Nothing in this document should be read as inviting scope beyond what's written here (e.g., no plugin/scripting system, no canvas larger than 256×256, no non-integer zoom snapping unless specified).
