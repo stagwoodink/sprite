@@ -28,7 +28,7 @@ const CROSSHAIR_COLOR = '#FFFFFF';
 const ONION_BEFORE_TINT = '#BE1425';
 const ONION_AFTER_TINT = '#3366FF';
 
-export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry = 'off', selection, onionFrames, brushCursor, cursorPos, canvasBg = 'checker', appBg = 'black' }) {
+export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry = 'off', references, selection, onionFrames, brushCursor, cursorPos, canvasBg = 'checker', appBg = 'black' }) {
   const { scale, ox, oy } = computeViewport(model, viewW, viewH);
   const w = model.width * scale;
   const h = model.height * scale;
@@ -59,6 +59,8 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
   if (onionFrames) {
     for (const ghost of onionFrames) drawGhost(ctx, model, ghost, scale, ox, oy);
   }
+
+  if (references) drawReferences(ctx, references, scale, ox, oy, w, h);
 
   drawPixels(ctx, model, scale, ox, oy, w, h);
 
@@ -431,6 +433,29 @@ function rulerAnchor(scale, ox, oy, viewW, viewH) {
 // once its own coordinate is actually within the canvas, so that overshoot
 // never paints a highlight stripe into the ruler/app-background margin
 // beyond where the canvas ends.
+// Reference images (references.js), behind the pixels. 'fit' shows the
+// whole image contained inside the canvas; 'full' shows it at 1 image pixel
+// per canvas pixel, off to the right of the canvas (stacked left to right).
+// Both ride the same pan/zoom as the sprite, and neither is clipped to it.
+const REFERENCE_GAP = 2; // canvas px between full-size references
+function drawReferences(ctx, references, scale, ox, oy, w, h) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  let nextX = ox + w + REFERENCE_GAP * scale;
+  for (const { mode, bitmap } of references) {
+    if (mode === 'full') {
+      const dw = bitmap.width * scale;
+      ctx.drawImage(bitmap, nextX, oy, dw, bitmap.height * scale);
+      nextX += dw + REFERENCE_GAP * scale;
+    } else {
+      const k = Math.min(w / bitmap.width, h / bitmap.height);
+      const dw = bitmap.width * k, dh = bitmap.height * k;
+      ctx.drawImage(bitmap, ox + (w - dw) / 2, oy + (h - dh) / 2, dw, dh);
+    }
+  }
+  ctx.restore();
+}
+
 // Hairline through the canvas centre for each active mirror axis. Same
 // 'difference' convention as the grid and crosshair, so it inverts whatever
 // is beneath instead of vanishing against a matching color.

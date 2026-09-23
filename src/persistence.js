@@ -71,6 +71,7 @@ export async function loadProject(backend, projectId) {
   files.forEach((file, i) => {
     file.redoStack = [];
     file.layerGroups ||= [];
+    file.references ||= [];
     file.order ??= (i + 1) * 1000;
     file.layers.forEach((layer, li) => { layer.order ??= (li + 1) * 1000; });
     file.layerGroups.forEach((g, gi) => { g.order ??= (gi + 1) * 1000; });

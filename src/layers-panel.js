@@ -4,13 +4,14 @@ import { BLOCK } from './grid.js';
 import { button, makeReorderable, startInlineEdit } from './ui.js';
 import { layerOrder, compositeLayerAt } from './sprite-file.js';
 import { visibleOrder } from './ordering.js';
+import { referencesOf, isResolved } from './references.js';
 
 const THUMB_H = BLOCK * 2; // layer tiles are 2 blocks tall
 
 // Layer grouping is drag-and-drop only — a layer becomes a group's member
 // by being positioned directly beneath its header (§ ordering.js), same as
 // file collections. No separate "move to group" control.
-export function renderLayersPanel(container, file, callbacks, focusedGroupId, layerSelection, multiSelection) {
+export function renderLayersPanel(container, file, callbacks, focusedGroupId, layerSelection, multiSelection, activeReferenceId) {
   container.innerHTML = '';
   const selLo = layerSelection ? Math.min(layerSelection.anchor, layerSelection.to) : -1;
   const selHi = layerSelection ? Math.max(layerSelection.anchor, layerSelection.to) : -1;
@@ -190,5 +191,37 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     }
   }
 
-  container.append(stack);
+  container.append(buildReferenceSection(), stack);
+
+  // Reference images (references.js) sit apart from the layer stack: they
+  // aren't layers, so they can't be selected, painted on, or exported —
+  // there's simply nothing here to select. A row's ⤢ (or `:`) flips it
+  // between fit-to-canvas and full size off to the right.
+  function buildReferenceSection() {
+    const section = document.createElement('div');
+    section.className = 'reference-section';
+    const header = document.createElement('div');
+    header.className = 'layer-group-header tile';
+    const title = document.createElement('div');
+    title.className = 'layer-label';
+    title.textContent = 'Reference';
+    header.append(title, button({ glyph: '+', icon: true, title: 'Add a reference image', onClick: () => callbacks.onImportReference() }));
+
+    section.append(header);
+    for (const ref of referencesOf(file)) {
+      const row = document.createElement('div');
+      row.className = 'layer-row tile reveal-on-hover' + (ref.id === activeReferenceId ? ' selected' : '');
+      const label = document.createElement('div');
+      label.className = 'layer-label';
+      label.textContent = isResolved(ref) ? ref.name : `${ref.name} (click to relink)`;
+      row.append(
+        label,
+        button({ glyph: '⤢', icon: true, className: 'btn--reveal', title: 'Fit to canvas / full size (:)', onClick: (e) => { e.stopPropagation(); callbacks.onToggleReferenceMode(ref.id); } }),
+        button({ glyph: '✕', icon: true, className: 'btn--reveal', title: 'Remove reference', onClick: (e) => { e.stopPropagation(); callbacks.onRemoveReference(ref.id); } }),
+      );
+      row.addEventListener('click', () => callbacks.onSelectReference(ref.id));
+      section.append(row);
+    }
+    return section;
+  }
 }

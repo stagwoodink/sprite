@@ -120,6 +120,15 @@ function createFsaBackend(rootHandle) {
   };
 }
 
+// Reference images are never copied into a project: a Chromium file handle
+// to the user's own file is kept here (handles are structured-cloneable),
+// under its own key in the same store as the folder grant.
+export const refHandles = {
+  save: (id, handle) => idbRequest(IDB_HANDLE_STORE, 'readwrite', (s) => s.put(handle, `ref:${id}`)),
+  load: (id) => idbRequest(IDB_HANDLE_STORE, 'readonly', (s) => s.get(`ref:${id}`)),
+  delete: (id) => idbRequest(IDB_HANDLE_STORE, 'readwrite', (s) => s.delete(`ref:${id}`)),
+};
+
 // One-time "connect a folder" grant (ui-design-system §3.1). The handle is
 // cached in IndexedDB so it can be re-requested (not re-prompted from
 // scratch) on the next visit — the browser still requires a user gesture to

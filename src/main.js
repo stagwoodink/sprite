@@ -35,6 +35,7 @@ import { decodeImage, bitmapPixels } from './image-import.js';
 import { detectGrid, buildSheetFile } from './spritesheet.js';
 import { askSheetGrid } from './spritesheet-panel.js';
 import { paletteNameFromFile } from './palette-parse.js';
+import { addReference, removeReference, resolveReference, drawableReferences, referencesOf } from './references.js';
 import { exportFile, exportCollection, exportProjectSprite, onExportProgress } from './export.js';
 import { unzipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 import { SHAPE_OUTLINES, constrainSquare } from './shapes.js';
@@ -55,6 +56,7 @@ versionTab.classList.add('panel');
 toolTag.classList.add('panel');
 
 const uiPrefs = loadUiPrefs();
+let activeReferenceId = null; // the reference `:` acts on: the one last added or clicked
 
 // App icon, left of the name — static (not itself clickable), same
 // `.version-tab-icon` treatment the tool tag's zoom glyph uses. Real glyph
@@ -516,6 +518,9 @@ function bindActiveFile() {
   model.stride = file.canvasWidth;
   model.pixels = activePixels(file);
   model.colors = file.colors;
+  // Linked references reload lazily from their file handles; each finishing
+  // decode just asks for a fresh canvas frame.
+  for (const ref of referencesOf(file)) resolveReference(ref).then((loaded) => { if (loaded) draw(); });
 }
 bindActiveFile();
 
@@ -748,7 +753,7 @@ function renderCanvas() {
   const onionFrames = computeOnionFrames(file);
   const brushCursor = { mode: (inputController && inputController.getMode()) || 'place', size: brushSize };
   render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
-    showGrid, showRuler, symmetry: paintOptions.symmetry, hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos, canvasBg: canvasBgCycler.get(), appBg: appBgCycler.get(),
+    showGrid, showRuler, symmetry: paintOptions.symmetry, references: drawableReferences(file), hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos, canvasBg: canvasBgCycler.get(), appBg: appBgCycler.get(),
   });
   updateToolTag();
 }
@@ -1281,6 +1286,14 @@ function redrawLayersPanel() {
     onOpacityChange: (i, value) => { file.layers[i].opacity = value; renderCanvas(); },
     onOpacityCommit: () => { redrawLayersPanel(); autosave(); },
     onAddGroup: () => { addLayerGroup(file); redrawLayersPanel(); autosave(); },
+    onImportReference: () => importReference(),
+    onSelectReference: (id) => {
+      activeReferenceId = id;
+      const ref = referencesOf(file).find((r) => r.id === id);
+      resolveReference(ref, { interactive: true }).finally(() => draw());
+    },
+    onToggleReferenceMode: (id) => toggleReferenceMode(id),
+    onRemoveReference: (id) => { removeReference(file, id); if (activeReferenceId === id) activeReferenceId = null; draw(); autosave(); },
     // Both can change what's actually composited (a deleted group's members
     // re-render at full visibility; a hidden group's members stop
     // rendering), so a full draw() — which also redraws this panel — not
@@ -1292,7 +1305,41 @@ function redrawLayersPanel() {
       draw(); autosave();
     },
     onChange: () => { redrawLayersPanel(); autosave(); },
-  }, focusedGroupId(), layerSelection, multiLayerSelection);
+  }, focusedGroupId(), layerSelection, multiLayerSelection, activeReferenceId);
+}
+
+function toggleReferenceMode(id = activeReferenceId) {
+  const ref = referencesOf(getActiveFile(project)).find((r) => r.id === id) || referencesOf(getActiveFile(project)).at(-1);
+  if (!ref) return;
+  ref.mode = ref.mode === 'fit' ? 'full' : 'fit';
+  draw(); autosave();
+}
+
+// Chromium's picker hands back a file handle, which lets the reference
+// persist across sessions; anywhere else it's a plain File and the
+// reference lasts until reload.
+async function importReference() {
+  try {
+    if (window.showOpenFilePicker) {
+      const [handle] = await window.showOpenFilePicker({ types: [{ description: 'Images', accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif'] } }] });
+      await addReferenceFrom(await handle.getFile(), handle);
+    } else {
+      pickFile('image/*', (f) => addReferenceFrom(f, null));
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') { console.error('Reference import failed:', err); flashTip(err.message); }
+  }
+}
+
+async function addReferenceFrom(image, handle) {
+  try {
+    const ref = await addReference(getActiveFile(project), image, handle);
+    activeReferenceId = ref.id;
+    draw(); autosave();
+  } catch (err) {
+    console.error('Reference import failed:', err);
+    flashTip(err.message);
+  }
 }
 
 // Shift+click a layer (§ layers-panel.js buildLayerRow): select it and
@@ -1907,6 +1954,7 @@ function endShape() {
 // Each function owns the whole keyboard while `focusedPanel` points at it.
 
 function dispatchCanvas(e) {
+  if (e.key === ':' && !e.repeat && !activeGroupId) { toggleReferenceMode(); return; }
   // Read-only group grid (§ project panel group select): the canvas isn't
   // showing the active file's own pixel space, so every paint/select/shape
   // keyboard tool below would edit a file the user can't even see. Zoom and
@@ -2077,6 +2125,7 @@ function dispatchTimeline(e) {
 
 function dispatchLayers(e) {
   const file = getActiveFile(project);
+  if (e.key === ':' && !e.repeat) { toggleReferenceMode(); return; }
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     e.preventDefault();
     if (e.repeat) return;

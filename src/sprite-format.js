@@ -51,7 +51,9 @@ export function encodeFile(file, { withBytes = true } = {}) {
     }
     return { ...cmd, n: before.length };
   });
-  const meta = { ...rest, version: FORMAT_VERSION, frameCount: frames.length, undoStack: commands, redoStack: [] };
+  // Session-only references (no file handle to relink them by) aren't persisted.
+  const references = (file.references || []).filter((r) => r.linked);
+  const meta = { ...rest, references, version: FORMAT_VERSION, frameCount: frames.length, undoStack: commands, redoStack: [] };
   return { meta, bytes };
 }
 

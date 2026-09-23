@@ -385,6 +385,7 @@ async function exportProjectSpriteImpl(project, onProgress) {
   };
   project.files.forEach((file, i) => {
     const { meta, bytes } = encodeFile(file);
+    delete meta.references; // reference images never leave the app
     files[`${file.name}.sprite`] = new TextEncoder().encode(JSON.stringify(meta));
     files[`${file.name}.sprite.bin`] = bytes;
     onProgress((i + 1) / project.files.length * 0.5);
