@@ -12,16 +12,27 @@ const IDB_NAME = 'sprite-vfs';
 const IDB_STORE = 'entries';
 const IDB_HANDLE_STORE = 'fsa-handle';
 
+// One shared connection: opening per operation costs an async round trip
+// before the real work starts, and one autosave issues dozens. Dropped when
+// the browser closes it or another tab needs a version upgrade, so a dead
+// connection is never handed out again.
+let idbPromise = null;
 function openIdb() {
-  return new Promise((resolve, reject) => {
+  return idbPromise ||= new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_NAME, 1);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
       if (!db.objectStoreNames.contains(IDB_HANDLE_STORE)) db.createObjectStore(IDB_HANDLE_STORE);
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const drop = () => { idbPromise = null; db.close(); };
+      db.onclose = drop;
+      db.onversionchange = drop;
+      resolve(db);
+    };
+    req.onerror = () => { idbPromise = null; reject(req.error); };
   });
 }
 
