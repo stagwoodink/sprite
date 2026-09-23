@@ -35,6 +35,7 @@ import { decodeImage, bitmapPixels } from './image-import.js';
 import { detectGrid, buildSheetFile } from './spritesheet.js';
 import { askSheetGrid } from './spritesheet-panel.js';
 import { paletteNameFromFile } from './palette-parse.js';
+import { isImageFile } from './image-import.js';
 import { addReference, removeReference, resolveReference, drawableReferences, referencesOf } from './references.js';
 import { exportFile, exportCollection, exportProjectSprite, onExportProgress } from './export.js';
 import { unzipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
@@ -930,6 +931,8 @@ function redrawProjectPanel() {
       autosave();
     },
     onAddFile: (w, h, preset) => commitNewFile(w, h, preset),
+    // The panel's import button: a spritesheet (new File) or a whole .sprite project.
+    onImport: (anchor) => pickFile('image/*,.sprite,.json', (f) => (isImageFile(f) ? importSpritesheet(f, { mode: 'frames', anchor }) : importProjectFile(f))),
     onSplitProject: () => splitProject(),
     // "Current" (bottom of the New File size picker): same size as
     // whichever File was most recently worked on in the collection this
@@ -1171,40 +1174,34 @@ async function splitProject() {
 // before that format existed. Routed through saveProject+loadProject
 // rather than switched to directly, so an imported project picks up the
 // same field defaults/migrations every other saved project gets on load.
-function importProject() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.sprite,.json,application/json';
-  input.addEventListener('change', async () => {
-    const file = input.files && input.files[0];
-    if (!file) return;
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B; // 'PK' — zip local-file-header signature
-      let data;
-      if (isZip) {
-        const entries = unzipSync(bytes);
-        const decode = (name) => JSON.parse(new TextDecoder().decode(entries[name]));
-        const meta = decode('project.json');
-        data = {
-          name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex,
-          collections: meta.collections, files: meta.fileNames.map((name) => parseFile(decode(`${name}.sprite`), entries[`${name}.sprite.bin`])),
-        };
-      } else {
-        data = JSON.parse(new TextDecoder().decode(bytes));
-        data.files = data.files.map((f) => parseFile(f, null));
-      }
-      // Fresh id — importing an exported copy of a still-open (or
-      // previously-imported) project shouldn't collide with it in the registry.
-      const imported = { ...data, id: crypto.randomUUID() };
-      await saveProject(backend, imported);
-      const p = await loadProject(backend, imported.id);
-      if (p) await switchToProject(p);
-    } catch (err) {
-      console.error('Import failed — not a project archive/JSON file:', err);
+const importProject = () => pickFile('.sprite,.json,application/json', importProjectFile);
+
+async function importProjectFile(file) {
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B; // 'PK' — zip local-file-header signature
+    let data;
+    if (isZip) {
+      const entries = unzipSync(bytes);
+      const decode = (name) => JSON.parse(new TextDecoder().decode(entries[name]));
+      const meta = decode('project.json');
+      data = {
+        name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex,
+        collections: meta.collections, files: meta.fileNames.map((name) => parseFile(decode(`${name}.sprite`), entries[`${name}.sprite.bin`])),
+      };
+    } else {
+      data = JSON.parse(new TextDecoder().decode(bytes));
+      data.files = data.files.map((f) => parseFile(f, null));
     }
-  });
-  input.click();
+    // Fresh id — importing an exported copy of a still-open (or
+    // previously-imported) project shouldn't collide with it in the registry.
+    const imported = { ...data, id: crypto.randomUUID() };
+    await saveProject(backend, imported);
+    const p = await loadProject(backend, imported.id);
+    if (p) await switchToProject(p);
+  } catch (err) {
+    console.error('Import failed — not a project archive/JSON file:', err);
+  }
 }
 
 async function newProject() {
@@ -1251,6 +1248,62 @@ async function importSpritesheet(file, { mode = 'frames', anchor } = {}) {
     flashTip(err.message);
   }
 }
+
+// --- File drag-and-drop -------------------------------------------------
+// Each panel is an unambiguous target (the `drop` event fires on the element
+// under the pointer): Colors takes palette files and images (extract);
+// Layers takes images (reference); Canvas takes images (reference) and
+// .sprite projects; Projects takes images (spritesheet -> new File) and
+// .sprite projects. Timeline isn't a target — it has a button instead.
+// Hovering a drag over a panel (or its edge) focuses it, which reveals it.
+const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+
+// Handles must be requested synchronously inside the drop event, so this
+// collects the promises first; the caller awaits them afterward.
+function droppedEntries(dataTransfer) {
+  return [...dataTransfer.items].filter((item) => item.kind === 'file').map((item) => {
+    const handle = item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : null;
+    const file = item.getAsFile();
+    return Promise.resolve(handle).then((h) => ({ file, handle: h && h.kind === 'file' ? h : null })).catch(() => ({ file, handle: null }));
+  });
+}
+
+async function handleDrop(target, pending) {
+  const isProject = (f) => /\.(sprite|json)$/i.test(f.name);
+  for (const { file, handle } of await Promise.all(pending)) {
+    if (!file) continue;
+    const image = isImageFile(file);
+    if (target === 'colors' && (image || /\.(gpl|hex|pal|txt)$/i.test(file.name))) palette.importFile(file).catch((err) => { console.error('Palette import failed:', err); flashTip(err.message); });
+    else if ((target === 'layers' || target === 'canvas') && image) await addReferenceFrom(file, handle);
+    else if (target === 'projects' && image) await importSpritesheet(file, { mode: 'frames', anchor: projectPanel });
+    else if ((target === 'canvas' || target === 'projects') && isProject(file)) await importProjectFile(file);
+  }
+}
+
+const DROP_ZONES = { colors: [paletteBar, 'palette-trigger'], layers: [layersPanel, 'layers-trigger'], projects: [projectPanel, 'project-trigger'], canvas: [canvas, null] };
+for (const [name, [el, triggerId]] of Object.entries(DROP_ZONES)) {
+  const zones = [el, triggerId && document.getElementById(triggerId)].filter(Boolean);
+  for (const zone of zones) {
+    zone.addEventListener('dragenter', (e) => {
+      if (!hasFiles(e)) return;
+      if (name !== 'canvas' && focusedPanel !== name) setFocus(name);
+    });
+    zone.addEventListener('dragleave', (e) => {
+      if (name !== 'canvas' && focusedPanel === name && !zones.some((z) => z.contains(e.relatedTarget))) setFocus('canvas');
+    });
+    zone.addEventListener('dragover', (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    zone.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      const pending = droppedEntries(e.dataTransfer);
+      if (focusedPanel !== 'canvas') setFocus('canvas');
+      handleDrop(name, pending);
+    });
+  }
+}
+// A drop anywhere else must not navigate the tab to the dropped file.
+window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', (e) => { if (hasFiles(e)) e.preventDefault(); });
 
 function openProjectPicker(anchor) {
   const options = [
@@ -1432,6 +1485,7 @@ function redrawTimelinePanel() {
   const file = getActiveFile(project);
   renderTimelinePanel(timelineBar, file, playback, {
     onSetFps: (fps) => { playback.fps = fps; if (playback.playing) startPlayback(); },
+    onImportSheet: (anchor) => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor })),
     onToggleOnion: () => { playback.onionSkin = !playback.onionSkin; draw(); },
     onToggleOnionSource: () => { playback.onionLayerOnly = !playback.onionLayerOnly; draw(); },
     onSelect: (i) => { file.activeFrameIndex = i; bindActiveFile(); draw(); }, // selection persists across frame switches (§9.3)

@@ -251,6 +251,8 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
       }));
     }
 
+    container.append(button({ glyph: '↓', icon: true, className: 'palette-import', title: 'Import a palette file or image', onClick: pickPaletteFile }));
+
     layoutChips(viewport, row);
   }
 

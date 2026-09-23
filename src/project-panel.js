@@ -185,7 +185,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     onContextMenu: (e) => { e.preventDefault(); callbacks.onAddCollection(); },
   });
   addFileBtn.addEventListener('dblclick', () => { closeSlideOut(); callbacks.onAddFileCurrent(); });
-  addRow.append(addFileBtn);
+  addRow.append(addFileBtn, button({ glyph: '↓', icon: true, title: 'Import a spritesheet or .sprite project', onClick: (e) => callbacks.onImport(e.currentTarget) }));
   fileList.append(fileStack);
 
   // `addRow` is a sibling of the scrollable `fileList`, not a child of its
