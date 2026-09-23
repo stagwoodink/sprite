@@ -83,7 +83,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
       flashTip(`Palette library is full (${MAX_SAVED}) — your edits to this palette weren't saved`);
     }
     state.name = next.name;
-    state.chips = [...next.chips];
+    state.chips = next.chips.slice(0, MAX_CHIPS);
     state.primary = state.chips[0];
     render();
     onChange(state);
