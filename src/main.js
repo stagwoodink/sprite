@@ -1,5 +1,6 @@
 import { setPixel, getPixel, touch, paintAt, floodFill, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
 import { parseFile } from './sprite-format.js';
+import { paintOptions } from './paint-options.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
 import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView } from './viewport.js';
@@ -201,7 +202,7 @@ function updateToolTag() {
     toolLabel.hidden = false;
     const modeLabel = MODE_LABELS[inputController && inputController.getMode()] || 'Place';
     const size = brushSize;
-    toolLabel.textContent = hoverTip || `${size}px ${modeLabel}`;
+    toolLabel.textContent = hoverTip || `${size}px ${modeLabel}${paintOptions.dither ? ' (dither)' : ''}`;
   }
   primarySwatch.hidden = false;
   const scale = (viewState.zoom || fitScale(model, rect.width, rect.height));
@@ -516,6 +517,7 @@ bindActiveFile();
 
 let inputController = null;
 let showGrid = uiPrefs.showGrid;
+paintOptions.dither = uiPrefs.dither;
 let showRuler = uiPrefs.showRuler;
 // Shared step order for every checker/solid backdrop in the app (the
 // single-file canvas's own `u`, its app-wide `Shift+U` chrome, and the
@@ -1759,7 +1761,7 @@ const arrowRepeater = createHoldRepeater(arrowTick);
 // antialiased brush for free without their callers needing to know that.
 function stampCurrentTool(x, y, erase = false) {
   const snap = snapshotPixels(model);
-  paintAt(model, x, y, { size: brushSize, antialiased: held.alt, erase, color: colors.primary(), mask: selectionMask });
+  paintAt(model, x, y, { ...paintOptions, size: brushSize, antialiased: held.alt, erase, color: colors.primary(), mask: selectionMask });
   const { before, after } = diffFromSnapshot(model, snap);
   if (before.length) history.commit({ type: 'pixelEdit', before, after });
 }
@@ -1773,11 +1775,11 @@ function fillCurrentTool(x, y) {
   if (selectionMask) {
     for (let py = 0; py < model.height; py++) {
       for (let px = 0; px < model.width; px++) {
-        if (selectionMask[py * model.width + px]) setPixel(model, px, py, colors.primary());
+        if (selectionMask[py * model.width + px] && !(paintOptions.dither && (px + py) % 2)) setPixel(model, px, py, colors.primary());
       }
     }
   } else {
-    floodFill(model, x, y, colors.primary());
+    floodFill(model, x, y, colors.primary(), false, undefined, paintOptions.dither);
   }
   const { before, after } = diffFromSnapshot(model, snap);
   if (before.length) history.commit({ type: 'fill', before, after });
@@ -1961,6 +1963,7 @@ function dispatchCanvas(e) {
   if (e.key === '-' && !e.repeat) { zoomTo(1); return; }
   if (e.key === '=' && !e.repeat) { fitView(); return; }
   if (e.key === '_' && !e.repeat) { zoomStep(-1); return; }
+  if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) { paintOptions.dither = !paintOptions.dither; uiPrefs.dither = paintOptions.dither; saveUiPrefs(uiPrefs); draw(); return; }
   if (e.key === 'g' && !e.shiftKey) { showGrid = !showGrid; uiPrefs.showGrid = showGrid; saveUiPrefs(uiPrefs); draw(); return; }
   if (e.key === 'G' && e.shiftKey) { showRuler = !showRuler; uiPrefs.showRuler = showRuler; saveUiPrefs(uiPrefs); draw(); return; }
   if (e.key === 'u' && e.ctrlKey) { e.preventDefault(); cycleBothBg(); return; }

@@ -199,12 +199,15 @@ export function blendPixel(model, x, y, colorHex, alpha, mask) {
 // Antialiased stamp: soft circular brush, alpha falling off from center.
 // `size` is the same NxN unit the plain square brush uses (§8) — radius is
 // derived from it so both tools share one brush-size value.
-export function stampBrush(model, cx, cy, size, colorHex, mask) {
+// `dither` paints only cells where (x + y) is even — a 50% checkerboard
+// anchored to the canvas origin, so separate strokes line up. Off cells are
+// skipped, not erased.
+export function stampBrush(model, cx, cy, size, colorHex, mask, dither = false) {
   const r = Math.max(0.5, size / 2);
   for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
     for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
       const d = Math.hypot(x - cx, y - cy);
-      if (d > r) continue;
+      if (d > r || (dither && (x + y) % 2)) continue;
       const alpha = r <= 0.5 ? 1 : Math.max(0, Math.min(1, 1 - d / r));
       blendPixel(model, x, y, colorHex, alpha, mask);
     }
@@ -224,11 +227,11 @@ export function stampSquare(model, cx, cy, size, colorHex, mask) {
 // The one place a brush stamp is decided, shared by the mouse (input.js)
 // and keyboard (main.js) paint paths so anything that changes how a cell
 // gets painted (symmetry, dither) is written once. Erase is always a hard
-// square; Paint (`antialiased`) is the soft circular brush; otherwise Place,
-// a hard-edged square. `color` null/erase both write transparent.
-export function paintAt(model, x, y, { size, antialiased = false, erase = false, color, mask }) {
+// square; Paint (`antialiased`) is the soft circular brush, the only one
+// `dither` applies to; otherwise Place, a hard-edged square. `color` null/erase both write transparent.
+export function paintAt(model, x, y, { size, antialiased = false, erase = false, color, mask, dither = false }) {
   if (erase) stampSquare(model, x, y, size, null, mask);
-  else if (antialiased) stampBrush(model, x, y, size, color, mask);
+  else if (antialiased) stampBrush(model, x, y, size, color, mask, dither);
   else stampSquare(model, x, y, size, color, mask);
 }
 
@@ -236,7 +239,7 @@ export function paintAt(model, x, y, { size, antialiased = false, erase = false,
 // clicked pixel's color are replaced outright. `mask` (active selection)
 // also bounds the fill's spread, not just which pixels get written — a
 // selection is a hard wall the flood can't leak through.
-export function floodFill(model, startX, startY, colorHex, antialiased = false, mask) {
+export function floodFill(model, startX, startY, colorHex, antialiased = false, mask, dither = false) {
   if (!inBounds(model, startX, startY)) return;
   const stride = model.stride || model.width;
   const target = model.pixels[startY * stride + startX];
@@ -257,6 +260,7 @@ export function floodFill(model, startX, startY, colorHex, antialiased = false, 
   }
 
   for (const [x, y] of filled) {
+    if (dither && (x + y) % 2) continue;
     setPixel(model, x, y, colorHex, mask);
   }
 

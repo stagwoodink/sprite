@@ -1,6 +1,7 @@
 import { paintAt, linePixels, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { computeViewport, screenToPixel } from './viewport.js';
 import { cursorForMode } from './cursors.js';
+import { paintOptions } from './paint-options.js';
 
 // Mouse-only interaction (CONTEXT.md: keyboard-first control scheme rebuild
 // — the keyboard side owns tool/brush-size selection now). Two distinct
@@ -36,7 +37,7 @@ export function createInputController(canvas, model, colors, onPlace, history, g
   }
 
   function placeAt(x, y, antialiased) {
-    paintAt(model, x, y, { size: getBrushSize(), antialiased, color: colors.primary(), mask: getSelectionMask() });
+    paintAt(model, x, y, { ...paintOptions, size: getBrushSize(), antialiased, color: colors.primary(), mask: getSelectionMask() });
   }
 
   function eraseAt(x, y) {
