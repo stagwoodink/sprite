@@ -1,4 +1,4 @@
-import { createColorTable, packedTable, bufferId } from './canvas-model.js';
+import { createColorTable, packedTable, bufferId, blendPacked } from './canvas-model.js';
 import { computeMembership, moveBlock, nextOrder } from './ordering.js';
 
 // SpriteFile / Layer / Frame data model (design-doc §5).
@@ -63,17 +63,6 @@ export function activePixels(file) {
 // packed-RGBA Uint32Array (canvas-model.js's hexToPacked), 0 = transparent.
 export function compositeFrame(file) {
   return compositeFrameAt(file, file.activeFrameIndex);
-}
-
-// Source-over of packed `top` at `alpha` onto packed `base`, matching
-// canvas-model.js's blendColors (same rounding, same alpha edge cases).
-function blendPacked(base, top, alpha) {
-  if (alpha >= 1 || !base) return top;
-  if (alpha <= 0) return base;
-  const r = Math.round((base & 255) + ((top & 255) - (base & 255)) * alpha);
-  const g = Math.round(((base >> 8) & 255) + (((top >> 8) & 255) - ((base >> 8) & 255)) * alpha);
-  const b = Math.round(((base >> 16) & 255) + (((top >> 16) & 255) - ((base >> 16) & 255)) * alpha);
-  return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
 }
 
 // Per-frame composite cache. A WeakMap keyed by the frame object, so it

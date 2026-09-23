@@ -182,26 +182,45 @@ export function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
 }
 
-// Source-over composite of `top` at `alpha` onto `base` (either may be null
-// = transparent). Pure — used both to bake a blended pixel into a model
-// in-place (blendPixel) and to composite layers for display (sprite-file.js).
-export function blendColors(base, top, alpha) {
+// Source-over of packed `top` at `alpha` onto packed `base` (0 = transparent),
+// rounding each channel. Shared by display compositing (sprite-file.js) and
+// painted blending here, so the two can never drift apart.
+export function blendPacked(base, top, alpha) {
   if (alpha >= 1 || !base) return top;
   if (alpha <= 0) return base;
-  const b = hexToRgb(base), t = hexToRgb(top);
-  return rgbToHex(
-    b.r + (t.r - b.r) * alpha,
-    b.g + (t.g - b.g) * alpha,
-    b.b + (t.b - b.b) * alpha,
-  );
+  const r = Math.round((base & 255) + ((top & 255) - (base & 255)) * alpha);
+  const g = Math.round(((base >> 8) & 255) + (((top >> 8) & 255) - ((base >> 8) & 255)) * alpha);
+  const b = Math.round(((base >> 16) & 255) + (((top >> 16) & 255) - ((base >> 16) & 255)) * alpha);
+  return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
 }
 
+// Blends in packed-integer space instead of hex strings. `blender(colors,
+// topHex)` resolves the top colour once; each blendAt call then reads the
+// pixel's index, blends, and maps the result back to an index through a
+// per-blender memo — a soft brush yields only a handful of distinct results,
+// so the hex round-trip happens once per result, not once per pixel.
 // Baking the blend into a resolved color (rather than storing alpha per
 // pixel) keeps the model a flat grid of solid-or-transparent colors, so
 // repeated re-renders never re-blend against the same pixel twice.
+function blender(colors, topHex) {
+  const top = hexToPacked(topHex);
+  const table = packedTable(colors);
+  const memo = new Map();
+  return (model, x, y, alpha, mask) => {
+    if (!inBounds(model, x, y)) return;
+    const at = y * (model.stride || model.width) + x;
+    const from = model.pixels[at];
+    // A colour interned earlier in this same operation isn't in `table` yet.
+    const base = !from ? 0 : from < table.length ? table[from] : hexToPacked(colors[from]);
+    const blended = blendPacked(base, top, alpha);
+    let idx = memo.get(blended);
+    if (idx === undefined) memo.set(blended, idx = colorIndex(colors, packedToHex(blended)));
+    setPixelIndex(model, x, y, idx, mask);
+  };
+}
+
 export function blendPixel(model, x, y, colorHex, alpha, mask) {
-  if (!inBounds(model, x, y)) return;
-  setPixel(model, x, y, blendColors(getPixel(model, x, y), colorHex, alpha), mask);
+  blender(model.colors, colorHex)(model, x, y, alpha, mask);
 }
 
 // Antialiased stamp: soft circular brush, alpha falling off from center.
@@ -212,12 +231,13 @@ export function blendPixel(model, x, y, colorHex, alpha, mask) {
 // skipped, not erased.
 export function stampBrush(model, cx, cy, size, colorHex, mask, dither = false) {
   const r = Math.max(0.5, size / 2);
+  const blendAt = blender(model.colors, colorHex);
   for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
     for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
       const d = Math.hypot(x - cx, y - cy);
       if (d > r || (dither && (x + y) % 2)) continue;
       const alpha = r <= 0.5 ? 1 : Math.max(0, Math.min(1, 1 - d / r));
-      blendPixel(model, x, y, colorHex, alpha, mask);
+      blendAt(model, x, y, alpha, mask);
     }
   }
 }
@@ -306,11 +326,12 @@ export function floodFill(model, startX, startY, colorHex, antialiased = false, 
     // Soften the fill's outer boundary: any filled pixel touching a
     // non-matching neighbor gets a partial blend toward that neighbor's
     // original color, approximating an antialiased fill edge.
+    const blendAt = blender(model.colors, colorHex);
     for (const [x, y] of filled) {
       const neighbors = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
       for (const [nx, ny] of neighbors) {
         if (!inBounds(model, nx, ny) || visited[ny * model.width + nx]) continue;
-        blendPixel(model, x, y, colorHex, 0.6);
+        blendAt(model, x, y, 0.6);
       }
     }
   }
