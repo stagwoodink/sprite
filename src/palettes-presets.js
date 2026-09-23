@@ -26,5 +26,5 @@ export const PRESETS = {
   },
 };
 
-export const DEFAULT_PRESET = 'pico8';
-export const MAX_CHIPS = 32;
+export const DEFAULT_PRESET = 'stagwood';
+export const MAX_CHIPS = 256;

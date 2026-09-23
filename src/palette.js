@@ -42,11 +42,12 @@ function openPresetPanel(anchor, onLoad, onNewPalette, onDelete) {
   return result && result.el;
 }
 
-// Above this many chips, the row stops stretching chips to fill the bar
-// and switches to a fixed-size scrollable window instead — 16 full chips
-// visible plus at least a quarter-chip peek on each edge, as a "there's
-// more this way" affordance, scrolled with the wheel.
-const MAX_VISIBLE_CHIPS = 16;
+// Up to this many chips, the row stretches them to fill the bar. Beyond it
+// the row switches to a fixed-size scrollable window instead — 16 full
+// chips visible plus at least a quarter-chip peek on each edge, as a
+// "there's more this way" affordance, scrolled with the wheel.
+const INLINE_CHIPS = 32;
+const PAGE_CHIPS = 16;
 const PEEK_FRACTION = 0.25; // per side
 
 // Palette belongs to the Project (§4, §7.2). `initial` seeds it from a
@@ -60,7 +61,8 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     primary: preset.chips[0],
   };
   nameLegacyPalette(state);
-  let scrollPx = 0; // pixel offset into the chip track, only used above MAX_VISIBLE_CHIPS
+  let scrollPx = 0; // pixel offset into the chip track, only used above INLINE_CHIPS
+  let chipWidthPx = 0; // 0 while every chip is inline (nothing scrolls)
 
   // True when the working palette differs from the saved/built-in entry it
   // came from — the only time switching away saves anything, which is what
@@ -228,7 +230,8 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
   // overflow/scrollbars, and chips never spill past the bar's own edge.
   function layoutChips(viewport, row) {
     const count = state.chips.length;
-    if (count <= MAX_VISIBLE_CHIPS) {
+    if (count <= INLINE_CHIPS) {
+      chipWidthPx = 0;
       row.style.width = '100%';
       row.querySelectorAll('.chip').forEach((chip) => { chip.style.flex = '1 1 0'; });
       row.style.transform = 'none';
@@ -237,7 +240,8 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     }
 
     const viewportWidth = viewport.clientWidth;
-    const chipWidth = viewportWidth / (MAX_VISIBLE_CHIPS + 2 * PEEK_FRACTION);
+    const chipWidth = viewportWidth / (PAGE_CHIPS + 2 * PEEK_FRACTION);
+    chipWidthPx = chipWidth;
     const trackWidth = chipWidth * count;
     row.style.width = trackWidth + 'px';
     row.querySelectorAll('.chip').forEach((chip) => { chip.style.flex = `0 0 ${chipWidth}px`; });
@@ -267,8 +271,11 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     // than copying fields, so main.js's `project.palette` stays the same
     // object this module reads/mutates.
     setState(newState) { state = newState; nameLegacyPalette(state); render(); },
+    // `i` counts from the first chip currently scrolled into view, so the
+    // digit keys always address what's on screen.
     setPrimaryByIndex(i) {
-      if (state.chips[i]) { state.primary = state.chips[i]; render(); onChange(state); }
+      const chip = state.chips[i + (chipWidthPx ? Math.round(scrollPx / chipWidthPx) : 0)];
+      if (chip) { state.primary = chip; render(); onChange(state); }
     },
     loadPreset,
     // Colors-panel keyboard scheme: cycle/add/remove the primary chip
