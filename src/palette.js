@@ -3,6 +3,8 @@ import { openColorPicker } from './color-picker.js';
 import { openCustomSlideOut } from './slide-out.js';
 import { button, attachNativeDragReorder, flashTip } from './ui.js';
 import { parsePalette, paletteNameFromFile } from './palette-parse.js';
+import { extractPalette } from './quantize.js';
+import { decodeImage, bitmapPixels, isImageFile } from './image-import.js';
 import { loadLibrary, addPalette, removePalette, renamePalette, MAX_SAVED } from './palette-library.js';
 
 const BUILTIN_NAMES = Object.values(PRESETS).map((p) => p.name);
@@ -97,10 +99,20 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     removePalette(name);
     if (state.name === name) { state.name = null; onChange(state); }
   };
-  // Reads a .gpl/.hex/.pal file into a new library palette named after the
-  // file, and switches to it. Nothing is destroyed, so no undo entry.
+  // A .gpl/.hex/.pal file, or an image to extract up to 32 colors from,
+  // becomes a new library palette named after the file, and is switched to.
+  // Nothing is destroyed, so no undo entry.
   async function importFile(file) {
-    const chips = parsePalette(new TextDecoder().decode(await file.arrayBuffer()));
+    let chips;
+    if (isImageFile(file)) {
+      // Small sources are scanned exactly (pixel art round-trips); big
+      // photos are downscaled during decode so the scan stays cheap.
+      const bitmap = await decodeImage(file, { longEdge: 512, abovePixels: 1_000_000 });
+      chips = extractPalette(bitmapPixels(bitmap).data);
+      bitmap.close();
+    } else {
+      chips = parsePalette(new TextDecoder().decode(await file.arrayBuffer()));
+    }
     if (!chips.length) { flashTip(`No colors found in ${file.name}`); return; }
     const name = paletteNameFromFile(file.name);
     switchTo({ name, chips });
@@ -112,8 +124,8 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
   function pickPaletteFile() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.gpl,.hex,.pal,.txt';
-    input.addEventListener('change', () => { if (input.files[0]) importFile(input.files[0]).catch((err) => console.error('Palette import failed:', err)); });
+    input.accept = '.gpl,.hex,.pal,image/*';
+    input.addEventListener('change', () => { if (input.files[0]) importFile(input.files[0]).catch((err) => { console.error('Palette import failed:', err); flashTip(err.message); }); });
     input.click();
   }
 
