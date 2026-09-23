@@ -185,13 +185,21 @@ onHoverTip((text) => { hoverTip = text; updateToolTag(); });
 // cells. A button's own hoverTip still wins if somehow both are set.
 let groupHoverTip = null;
 
+// The tool tag updates on every render, so it reads a cached canvas box
+// (refreshed by resize()) rather than forcing a layout each time, and only
+// touches the DOM when a value actually changed.
+let canvasRect = canvas.getBoundingClientRect();
+let swatchColor = null;
+const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
+const setHidden = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden; };
+
 function updateToolTag() {
-  const rect = canvas.getBoundingClientRect();
+  const rect = canvasRect;
   // An export in progress takes over the label slot with the progress bar
   // (already shown/hidden by the onExportProgress subscription above) —
   // nothing else competes for it while that's up.
   if (!exportBar.hidden) {
-    toolLabel.hidden = true;
+    setHidden(toolLabel, true);
   } else if (activeGroupId) {
     // The group grid (§ project panel group select) has no active tool or
     // color — a hovered button's tip is still worth showing there, but the
@@ -199,22 +207,23 @@ function updateToolTag() {
     // editing, and the zoom % needs to read the grid's own camera, not the
     // single-file canvas's.
     const tip = hoverTip || groupHoverTip;
-    toolLabel.hidden = !tip; // nothing to show between artboards — don't render an empty tip section
-    toolLabel.textContent = tip || '';
-    primarySwatch.hidden = true;
+    setHidden(toolLabel, !tip); // nothing to show between artboards — don't render an empty tip section
+    setText(toolLabel, tip || '');
+    setHidden(primarySwatch, true);
     const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
-    zoomLabel.textContent = Math.round(scale * 100) + '%';
+    setText(zoomLabel, Math.round(scale * 100) + '%');
     return;
   } else {
-    toolLabel.hidden = false;
+    setHidden(toolLabel, false);
     const modeLabel = MODE_LABELS[inputController && inputController.getMode()] || 'Place';
     const size = brushSize;
-    toolLabel.textContent = hoverTip || `${size}px ${modeLabel}${paintOptions.dither ? ' (dither)' : ''}${paintOptions.symmetry !== 'off' ? ' (mirror)' : ''}`;
+    setText(toolLabel, hoverTip || `${size}px ${modeLabel}${paintOptions.dither ? ' (dither)' : ''}${paintOptions.symmetry !== 'off' ? ' (mirror)' : ''}`);
   }
-  primarySwatch.hidden = false;
+  setHidden(primarySwatch, false);
   const scale = (viewState.zoom || fitScale(model, rect.width, rect.height));
-  zoomLabel.textContent = Math.round(scale * 100) + '%';
-  primarySwatch.style.background = colors.primary();
+  setText(zoomLabel, Math.round(scale * 100) + '%');
+  const primary = colors.primary();
+  if (primary !== swatchColor) primarySwatch.style.background = swatchColor = primary;
 }
 
 // Corner-tag hide/show state — `~` (Global) pins/unpins both at once.
@@ -751,6 +760,7 @@ function commitLayerChange(file, mutate) {
 }
 
 function resize() {
+  canvasRect = canvas.getBoundingClientRect();
   canvas.width = canvas.clientWidth * devicePixelRatio;
   canvas.height = canvas.clientHeight * devicePixelRatio;
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
