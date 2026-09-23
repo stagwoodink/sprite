@@ -245,6 +245,8 @@ function customSizeRow(onSubmit) {
   };
   const w = field('W'), h = field('H');
   let hEdited = false;
+  // Typing past the ceiling snaps the text itself down to it.
+  for (const el of [w, h]) el.addEventListener('input', () => { if (Number(el.value) > MAX_CANVAS) el.value = MAX_CANVAS; });
   h.addEventListener('input', () => { hEdited = true; });
   w.addEventListener('input', () => { if (!hEdited) h.value = w.value; });
   const submit = (e) => {

@@ -136,11 +136,11 @@ export function deleteFile(project, index) {
 // New-File size presets, ascending by area. The two console names carry a
 // `palette` key (palettes-presets.js): choosing one also swaps the Project's
 // palette to match, the point of the name collision with Palette Presets.
-// 512x512 is the ceiling because it's the largest size whose SVG export
-// (one <rect> per pixel) still fits the 25MB export warning gate — see
-// docs/adr/0003-canvas-size-range.md.
+// The picker stops at Game Boy DMG; the custom fields go up to 256x256 (the
+// ceiling, chosen so long animations stay cheap: frame memory scales with
+// canvas area) — see docs/adr/0003-canvas-size-range.md.
 export const MIN_CANVAS = 6;
-export const MAX_CANVAS = 512;
+export const MAX_CANVAS = 256;
 
 export const NEW_FILE_SIZES = [
   { label: '6x6', w: 6, h: 6 },
@@ -151,8 +151,6 @@ export const NEW_FILE_SIZES = [
   { label: '64x64', w: 64, h: 64 },
   { label: 'Pico-8', w: 128, h: 128, palette: 'pico8' },
   { label: 'Game Boy DMG', w: 160, h: 144, palette: 'dmg' },
-  { label: '256x256', w: 256, h: 256 },
-  { label: '512x512', w: 512, h: 512 },
 ];
 
 export function clampCanvasSize(n) {
