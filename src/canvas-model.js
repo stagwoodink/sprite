@@ -99,6 +99,15 @@ export function setPixel(model, x, y, colorHex, mask) {
   touch(model.pixels, x, y);
 }
 
+let nextBufferId = 1;
+
+// Stable identity for a layer buffer (an expando, like `v` and `dirty`
+// below) — lets the composite cache and the persistence layer recognise
+// "the same buffer" across structural edits without holding references.
+export function bufferId(pixels) {
+  return pixels.id ??= nextBufferId++;
+}
+
 // Change tracking for sprite-file.js's composite cache. Every write to a
 // layer buffer bumps its `v` and grows its dirty rectangle (`dirty` =
 // [x0, y0, x1, y1], or 'all' when the extent is unknown), so a cached

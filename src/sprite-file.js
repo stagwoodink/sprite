@@ -1,4 +1,4 @@
-import { createColorTable, packedTable } from './canvas-model.js';
+import { createColorTable, packedTable, bufferId } from './canvas-model.js';
 import { computeMembership, moveBlock, nextOrder } from './ordering.js';
 
 // SpriteFile / Layer / Frame data model (design-doc §5).
@@ -82,7 +82,6 @@ function blendPacked(base, top, alpha) {
 // and the same buffer versions (canvas-model.js touch()) — so pan, zoom,
 // idle redraws and edits to *other* frames all cost one key comparison.
 const compositeCache = new WeakMap(); // frame -> { structKey, versions, out }
-let nextBufferId = 1;
 
 export function compositeFrameAt(file, frameIndex) {
   const w = file.visibleWidth, h = file.visibleHeight;
@@ -97,7 +96,7 @@ export function compositeFrameAt(file, frameIndex) {
     return layer.visible && !(group && !group.visible);
   });
   const bufs = frame.layerPixels;
-  const structKey = `${w}x${h}x${file.canvasWidth}|` + file.layers.map((layer, li) => `${shown[li] ? 1 : 0}:${layer.opacity}:${bufs[li].id ??= nextBufferId++}`).join(',');
+  const structKey = `${w}x${h}x${file.canvasWidth}|` + file.layers.map((layer, li) => `${shown[li] ? 1 : 0}:${layer.opacity}:${bufferId(bufs[li])}`).join(',');
   const versions = bufs.map((buf) => buf.v | 0);
 
   const cached = compositeCache.get(frame);

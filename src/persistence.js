@@ -1,5 +1,5 @@
 import { resumeFolder, createDefaultBackend } from './storage.js';
-import { encodeFile, parseFile, FORMAT_VERSION } from './sprite-format.js';
+import { encodeFile, parseFile, bufferSignature, FORMAT_VERSION } from './sprite-format.js';
 
 // Debounced write — autosave fires after every committed EditCommand, but
 // batched against rapid-fire commits (e.g. end-of-stroke) rather than
@@ -76,6 +76,12 @@ export async function loadProject(backend, projectId) {
     file.layerGroups.forEach((g, gi) => { g.order ??= (gi + 1) * 1000; });
   });
   collections.forEach((c, i) => { c.order ??= (i + 1) * 1000; });
+  // What's on disk now is what was just read, so the first autosave of a
+  // freshly opened project needn't rewrite every File.
+  files.forEach((file) => {
+    const { meta } = encodeFile(file, { withBytes: false });
+    lastWritten.set(file, { path: `${projectId}/${file.name}`, sig: bufferSignature(file), json: JSON.stringify(meta) });
+  });
   return { id: projectId, name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex, collections, files };
 }
 
@@ -96,20 +102,45 @@ export async function deleteProject(backend, projectId) {
 // buffers that aren't there yet.
 const BIN_SUFFIX = '.bin';
 
+// What each File / project.json last wrote, so an autosave rewrites only
+// what changed: drawing one pixel in a 10-File project used to re-serialize
+// all ten. The binary sidecar is the expensive part, gated on the cheap
+// bufferSignature; the small JSON is compared as text, which also catches
+// edits that touch no pixels (layer visibility, renames). Not persisted, so
+// a cold start (or a rename, which changes the path) just writes once.
+const lastWritten = new WeakMap(); // File -> { path, sig, json }
+const lastProjectJson = new WeakMap(); // project -> string
+
+// Returns whether anything was written.
 async function writeFile(backend, projectId, file) {
-  const { meta, bytes } = encodeFile(file);
-  await backend.write([projectId, file.name + '.sprite' + BIN_SUFFIX], bytes);
+  const path = `${projectId}/${file.name}`;
+  const last = lastWritten.get(file);
+  const sig = bufferSignature(file);
+  const sameBuffers = last && last.path === path && last.sig === sig;
+  const { meta, bytes } = encodeFile(file, { withBytes: !sameBuffers });
+  const json = JSON.stringify(meta);
+  if (sameBuffers && last.json === json) return false;
+  if (!sameBuffers) await backend.write([projectId, file.name + '.sprite' + BIN_SUFFIX], bytes);
   await backend.write([projectId, file.name + '.sprite'], meta);
+  lastWritten.set(file, { path, sig, json });
+  return true;
 }
 
 export async function saveProject(backend, project) {
-  await backend.write([project.id, 'project.json'], {
+  const projectJson = {
     name: project.name,
     palette: project.palette,
     activeFileIndex: project.activeFileIndex,
     collections: project.collections,
     fileNames: project.files.map((f) => f.name + '.sprite'),
-  });
-  await Promise.all(project.files.map((file) => writeFile(backend, project.id, file)));
-  await touchRegistry(backend, project);
+  };
+  const serialized = JSON.stringify(projectJson);
+  let wrote = false;
+  if (lastProjectJson.get(project) !== serialized) {
+    await backend.write([project.id, 'project.json'], projectJson);
+    lastProjectJson.set(project, serialized);
+    wrote = true;
+  }
+  const results = await Promise.all(project.files.map((file) => writeFile(backend, project.id, file)));
+  if (wrote || results.includes(true)) await touchRegistry(backend, project);
 }

@@ -1,4 +1,4 @@
-import { createColorTable, colorIndex } from './canvas-model.js';
+import { createColorTable, colorIndex, bufferId } from './canvas-model.js';
 
 // .sprite v2: the File's JSON `meta` (everything except pixels) plus one raw
 // binary sidecar holding every layer buffer back to back, frame-major then
@@ -14,23 +14,40 @@ export const FORMAT_VERSION = 2;
 // layer shape and could not be replayed against it anyway. Each kept
 // command's before/after typed arrays follow the layer buffers in `bytes`,
 // with only their length (`n`, in words) left in the JSON.
-export function encodeFile(file) {
+// What must change for a File's binary sidecar to need rewriting: any
+// buffer's identity or version, the color table's size, or the undo stack.
+// Cheap enough to compute on every autosave, unlike encoding the buffers.
+export function bufferSignature(file) {
+  const undo = file.undoStack;
+  return [
+    file.colors.length, undo.length, undo.length ? undo[undo.length - 1].before.length : 0,
+    ...file.frames.flatMap((frame) => frame.layerPixels.map((buf) => `${bufferId(buf)}.${buf.v | 0}`)),
+  ].join(',');
+}
+
+// `withBytes: false` skips building the sidecar (bytes: null) — for an
+// autosave that already knows the buffers haven't changed.
+export function encodeFile(file, { withBytes = true } = {}) {
   const { frames, undoStack, ...rest } = file;
   const cells = file.canvasWidth * file.canvasHeight;
   const kept = undoStack.slice(undoStack.findLastIndex((c) => c.type === 'layers') + 1);
   const layerBytes = frames.length * file.layers.length * cells * 2;
-  const bytes = new Uint8Array(layerBytes + kept.reduce((sum, c) => sum + c.before.byteLength * 2, 0));
+  const bytes = withBytes ? new Uint8Array(layerBytes + kept.reduce((sum, c) => sum + c.before.byteLength * 2, 0)) : null;
   let offset = 0;
-  for (const frame of frames) {
-    for (const buf of frame.layerPixels) {
-      new Uint16Array(bytes.buffer, offset, cells).set(buf);
-      offset += cells * 2;
+  if (withBytes) {
+    for (const frame of frames) {
+      for (const buf of frame.layerPixels) {
+        new Uint16Array(bytes.buffer, offset, cells).set(buf);
+        offset += cells * 2;
+      }
     }
   }
   const commands = kept.map(({ before, after, ...cmd }) => {
-    for (const side of [before, after]) {
-      bytes.set(new Uint8Array(side.buffer, side.byteOffset, side.byteLength), offset);
-      offset += side.byteLength;
+    if (withBytes) {
+      for (const side of [before, after]) {
+        bytes.set(new Uint8Array(side.buffer, side.byteOffset, side.byteLength), offset);
+        offset += side.byteLength;
+      }
     }
     return { ...cmd, n: before.length };
   });
