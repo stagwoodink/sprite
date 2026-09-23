@@ -3,7 +3,7 @@
 // compared against the value the pre-optimisation implementation produced.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createColorTable, paintAt, floodFill } from '../src/canvas-model.js';
+import { createColorTable, paintAt, floodFill, setPixel, setPixelIndex, colorIndex } from '../src/canvas-model.js';
 import { maskFromWand } from '../src/selection.js';
 
 const W = 16, H = 12, STRIDE = 20; // stride != width: a shrunk canvas
@@ -81,4 +81,14 @@ for (const [name, run] of Object.entries(cases)) {
   if (process.env.PRINT) console.log(`  '${name}': '${h}',`);
   else assert.equal(h, GOLDEN[name], name);
 }
+
+// setPixelIndex writes what setPixel would, and a rejected setPixel never grows the table
+const a = fresh(), b = fresh();
+setPixel(a, 2, 3, '#abcdef');
+setPixelIndex(b, 2, 3, colorIndex(b.colors, '#abcdef'));
+assert.equal(hash(a), hash(b));
+const before = a.colors.length;
+setPixel(a, -1, 0, '#123456');
+setPixel(a, 0, 0, '#123456', new Uint8Array(W * H));
+assert.equal(a.colors.length, before, 'out-of-bounds/masked write interns nothing');
 console.log('canvas-model ok');

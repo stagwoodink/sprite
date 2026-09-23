@@ -93,9 +93,17 @@ export function getPixel(model, x, y) {
 // internal selection transforms (move/flip/rotate) omit it since they must
 // write outside the mask's old position.
 export function setPixel(model, x, y, colorHex, mask) {
+  // Checked before resolving so a rejected write never interns a colour.
+  if (!inBounds(model, x, y) || (mask && !mask[y * model.width + x])) return;
+  setPixelIndex(model, x, y, colorIndex(model.colors, colorHex), mask);
+}
+
+// setPixel for a caller that already resolved the colour: a stamp or fill
+// resolves once instead of hashing an uppercased string per cell.
+export function setPixelIndex(model, x, y, idx, mask) {
   if (!inBounds(model, x, y)) return;
   if (mask && !mask[y * model.width + x]) return;
-  model.pixels[y * (model.stride || model.width) + x] = colorIndex(model.colors, colorHex);
+  model.pixels[y * (model.stride || model.width) + x] = idx;
   touch(model.pixels, x, y);
 }
 
@@ -217,9 +225,10 @@ export function stampBrush(model, cx, cy, size, colorHex, mask, dither = false) 
 // Plain (hard-edged) square brush stamp: 1x1, 2x2, 3x3, and so on.
 export function stampSquare(model, cx, cy, size, colorHex, mask) {
   const half = Math.floor(size / 2);
+  const idx = colorIndex(model.colors, colorHex);
   for (let y = cy - half; y < cy - half + size; y++) {
     for (let x = cx - half; x < cx - half + size; x++) {
-      setPixel(model, x, y, colorHex, mask);
+      setPixelIndex(model, x, y, idx, mask);
     }
   }
 }
@@ -271,7 +280,8 @@ export function floodFill(model, startX, startY, colorHex, antialiased = false, 
   if (!inBounds(model, startX, startY)) return;
   const stride = model.stride || model.width;
   const target = model.pixels[startY * stride + startX];
-  if (target === colorIndex(model.colors, colorHex)) return;
+  const fillIdx = colorIndex(model.colors, colorHex);
+  if (target === fillIdx) return;
   const matches = (x, y) => inBounds(model, x, y) && model.pixels[y * stride + x] === target && (!mask || mask[y * model.width + x]);
 
   // Flat typed visited/stack, not string-keyed Set/arrays: at 512x512 a
@@ -289,7 +299,7 @@ export function floodFill(model, startX, startY, colorHex, antialiased = false, 
 
   for (const [x, y] of filled) {
     if (dither && (x + y) % 2) continue;
-    setPixel(model, x, y, colorHex, mask);
+    setPixelIndex(model, x, y, fillIdx, mask);
   }
 
   if (antialiased) {

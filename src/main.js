@@ -1,4 +1,4 @@
-import { setPixel, getPixel, touch, paintAt, floodFill, mirroredPoints, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
+import { setPixel, setPixelIndex, colorIndex, getPixel, touch, paintAt, floodFill, mirroredPoints, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
 import { parseFile } from './sprite-format.js';
 import { paintOptions, SYMMETRY_CYCLE } from './paint-options.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
@@ -1982,9 +1982,10 @@ const stampRepeater = createHoldRepeater(() => stampCurrentTool(currentCursor().
 function fillCurrentTool(x, y) {
   const snap = snapshotPixels(model);
   if (selectionMask) {
+    const idx = colorIndex(model.colors, colors.primary());
     for (let py = 0; py < model.height; py++) {
       for (let px = 0; px < model.width; px++) {
-        if (selectionMask[py * model.width + px] && !(paintOptions.dither && (px + py) % 2)) setPixel(model, px, py, colors.primary());
+        if (selectionMask[py * model.width + px] && !(paintOptions.dither && (px + py) % 2)) setPixelIndex(model, px, py, idx);
       }
     }
   } else {
@@ -2064,7 +2065,8 @@ function updateShapePreview(endpoint) {
   const { x: x0, y: y0 } = shapeState.anchor;
   let { x: x1, y: y1 } = endpoint || currentCursor();
   if (held.shift) [x1, y1] = constrainSquare(x0, y0, x1, y1);
-  for (const [x, y] of SHAPE_OUTLINES[shapeState.key](x0, y0, x1, y1)) setPixel(model, x, y, colors.primary(), selectionMask);
+  const idx = colorIndex(model.colors, colors.primary());
+  for (const [x, y] of SHAPE_OUTLINES[shapeState.key](x0, y0, x1, y1)) setPixelIndex(model, x, y, idx, selectionMask);
   renderCanvas();
 }
 function endShape() {
