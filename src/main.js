@@ -504,6 +504,12 @@ const autosave = debounce(() => saveProject(backend, project).catch((err) => con
 });
 autosave();
 
+// The debounce can be several seconds on a large canvas, so flush right
+// away when the tab is hidden or closed rather than lose the last edits.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveProject(backend, project).catch((err) => console.error('Autosave failed:', err));
+});
+
 // `model` is a stable view object; switching files/layers/frames re-points
 // model.pixels at that combination's array in place (same reference the
 // SpriteFile stores) rather than rebuilding every module that holds `model`.
