@@ -201,9 +201,9 @@ function buildCapacityMeter(project, callbacks) {
   const load = projectLoad(project);
   const meter = document.createElement('div');
   meter.className = 'capacity-meter';
-  const { pixelBytes, referenceBytes, files } = projectLoadBreakdown(project);
+  const { pixelBytes, referenceBytes } = projectLoadBreakdown(project);
   const mb = (n) => (n / 1048576).toFixed(1) + 'MB';
-  meter.title = `Project capacity: ${Math.round(load * 100)}% (${files} files, ${mb(pixelBytes)} pixels, ${mb(referenceBytes)} references)`;
+  meter.title = `Project capacity: ${Math.round(load * 100)}% (${mb(pixelBytes)} pixels, ${mb(referenceBytes)} references)`;
   const fill = document.createElement('div');
   fill.className = 'capacity-fill';
   fill.style.width = Math.min(100, load * 100) + '%';

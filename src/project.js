@@ -159,27 +159,27 @@ export function clampCanvasSize(n) {
 }
 
 // --- Capacity meter (§ project panel) ---------------------------------
-// A Project's cost is canvas area x layers x frames summed over its Files —
-// its total pixel-buffer bytes, plus its loaded reference bitmaps — but a crowd of tiny Files still
-// costs DOM and thumbnail work the byte count can't see, so the meter shows
-// whichever budget is closer to full. Both budgets are tuned to keep a
-// 4GB low-end machine responsive. Advisory only: nothing here ever blocks.
+// A Project's cost is its actual data: canvas area x layers x frames summed
+// over its Files (their pixel-buffer bytes), plus its loaded reference
+// bitmaps. File count is deliberately not a term: an unloaded File is a
+// small JSON stub and a row of text, so a crowd of tiny Files costs almost
+// nothing. The budget is tuned to keep a 4GB low-end machine responsive.
+// Advisory only: nothing here ever blocks.
 const BYTE_BUDGET = 256 * 1024 * 1024;
-const FILE_BUDGET = 64;
 
-// The two budgets' raw inputs, so the meter can say which one is filling.
+// The inputs, so the meter can say what is filling it.
 export function projectLoadBreakdown(project) {
   let pixelBytes = 0, referenceByteCount = 0;
   for (const f of project.files) {
     pixelBytes += f.canvasWidth * f.canvasHeight * 2 * f.layers.length * f.frames.length;
     referenceByteCount += referenceBytes(f);
   }
-  return { pixelBytes, referenceBytes: referenceByteCount, files: project.files.length };
+  return { pixelBytes, referenceBytes: referenceByteCount };
 }
 
 export function projectLoad(project) {
-  const { pixelBytes, referenceBytes: refs, files } = projectLoadBreakdown(project);
-  return Math.max((pixelBytes + refs) / BYTE_BUDGET, files / FILE_BUDGET);
+  const { pixelBytes, referenceBytes: refs } = projectLoadBreakdown(project);
+  return (pixelBytes + refs) / BYTE_BUDGET;
 }
 
 // Promotes each non-empty Collection to its own Project named after it;
