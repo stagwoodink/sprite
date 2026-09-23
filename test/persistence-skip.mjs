@@ -143,5 +143,15 @@ assert.ok(victimKeys.length > 2, 'the file has meta plus several chunks stored')
 await deleteStoredFile(backend, 'p', victim);
 assert.equal([...store.keys()].some((k) => k.startsWith('p/a.sprite')), false, 'meta and every chunk removed');
 assert.equal(listed.length, 0, 'no store scan for a file this session wrote');
+// an unloaded (stub) file is deleted by name too, chunks included
+const sleeper = (await loadProject(backend, 'q')).files[0];
+await saveProject(backend, { ...project, id: 'q2', files: [sleeper] });
+const inQ2 = [...store.keys()].filter((k) => k.startsWith('q2/old.sprite'));
+assert.ok(inQ2.length > 2);
+await unloadIdle(backend, { id: 'q2', files: [sleeper] }, () => false, { keep: 0, idleMs: 0 });
+assert.equal(!!sleeper._stub, true, 'stubbed');
+await deleteStoredFile(backend, 'q2', sleeper);
+assert.equal([...store.keys()].some((k) => k.startsWith('q2/old.sprite')), false, 'a stub\'s chunks are removed too');
+assert.equal(listed.length, 0, 'still no store scan');
 backend.list = listing;
 console.log('persistence-skip ok');

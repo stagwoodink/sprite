@@ -274,8 +274,12 @@ async function writeFile(backend, projectId, file) {
 export async function deleteStoredFile(backend, projectId, file) {
   const base = `${file.name}.sprite`;
   const last = lastWritten.get(file);
-  const names = last
-    ? [base, ...[...last.chunkSigs.keys()].map((name) => `${base}.${name}`)]
+  // A stub keeps no chunk signatures, but its frames still name their buffers.
+  const chunks = file._stub
+    ? file.frames.flatMap(({ id, buffers }) => buffers.map((cid) => chunkName(id, cid)))
+    : last && [...last.chunkSigs.keys()];
+  const names = chunks
+    ? [base, ...chunks.map((name) => `${base}.${name}`)]
     : (await backend.list([projectId])).filter((n) => n === base || n.startsWith(base + '.'));
   await Promise.all(names.map((n) => backend.delete([projectId, n])));
 }
