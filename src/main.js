@@ -570,6 +570,23 @@ function bindActiveFile() {
   // decode just asks for a fresh canvas frame.
   for (const ref of referencesOf(file)) resolveReference(ref).then((loaded) => { if (loaded) draw(); });
 }
+
+// Reopen on the canvas that was open, at the zoom and pan it had. Kept in
+// localStorage (uiPrefs), which a page unload can write synchronously; the
+// project's own save is async and may not finish before the tab goes away.
+const savedView = uiPrefs.view;
+if (savedView && savedView.projectId === project.id && project.files[savedView.fileIndex]) {
+  project.activeFileIndex = savedView.fileIndex;
+  viewState.zoom = savedView.zoom ? snapScale(savedView.zoom) : null; // may have been saved on another display
+  viewState.panX = savedView.panX || 0;
+  viewState.panY = savedView.panY || 0;
+}
+function rememberView() {
+  uiPrefs.view = { projectId: project.id, fileIndex: project.activeFileIndex, zoom: viewState.zoom, panX: viewState.panX, panY: viewState.panY };
+  saveUiPrefs(uiPrefs);
+}
+window.addEventListener('pagehide', rememberView);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') rememberView(); });
 bindActiveFile();
 
 let inputController = null;
