@@ -8,4 +8,5 @@ spec/
 snaps/
 docs/
 *.md
+!README.md
 mise.toml
