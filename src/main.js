@@ -410,45 +410,14 @@ for (const name of PANEL_CYCLE) {
   if (trigger) { trigger.addEventListener('mouseenter', onHoverEnter); trigger.addEventListener('mouseleave', onHoverLeave); }
 }
 
-// #kb-focus-ring (index.html) is a single <body>-level element kept in
-// sync with whichever panel currently owns the keyboard, rather than a
-// class/::after on the panel itself — see the CSS rule's own comment for
-// why. Tracks position/size every frame (not just once, or on a resize
-// event) so it stays glued to the panel through its open/close width or
-// height transition too, not just its resting state. The loop starts only
-// while a panel actually is focused and stops the moment focus leaves, so
-// it costs nothing the rest of the time.
-const kbFocusRing = document.getElementById('kb-focus-ring');
-let focusRingFrame = null;
-// Rounding to a whole CSS pixel isn't actually enough: `devicePixelRatio`
-// itself is very often not a clean integer (OS display scaling, browser
-// zoom slightly off 100% — 1.015625 is a real observed value, not a typo),
-// so a "whole" CSS pixel still isn't a whole *device* pixel there. Two
-// edges of the same border can each land on a different fractional device
-// pixel and get anti-aliased by a different amount, rendering as two
-// visibly different shades of the exact same color. Snapping to the
-// nearest device pixel (round in device-pixel space, convert back to CSS
-// px) — not just the nearest CSS pixel — is what actually guarantees every
-// edge is crisp and identical regardless of zoom or display scaling.
-function snapToDevicePixel(cssPx) {
-  const dpr = window.devicePixelRatio || 1;
-  return Math.round(cssPx * dpr) / dpr;
-}
-
+// The panel that owns the keyboard wears an accent outline (`.kb-focused`).
+// It is drawn by the panel itself, not by a floating element tracking its
+// rect: a separate fixed element landed on fractional device pixels at
+// display scales like 1.25x and rendered as an anti-aliased smear (26% / 100% /
+// 75% red across three pixels, measured from a screenshot), while an outline
+// is pixel-snapped with the panel's own border box, so the two can't disagree.
 function syncFocusRing() {
-  cancelAnimationFrame(focusRingFrame);
-  const el = PANEL_EL[focusedPanel];
-  if (!el) { kbFocusRing.style.display = 'none'; return; }
-  kbFocusRing.style.display = 'block';
-  (function track() {
-    const r = el.getBoundingClientRect();
-    const left = snapToDevicePixel(r.left), top = snapToDevicePixel(r.top);
-    kbFocusRing.style.left = left + 'px';
-    kbFocusRing.style.top = top + 'px';
-    kbFocusRing.style.width = (snapToDevicePixel(r.right) - left) + 'px';
-    kbFocusRing.style.height = (snapToDevicePixel(r.bottom) - top) + 'px';
-    focusRingFrame = requestAnimationFrame(track);
-  })();
+  for (const [name, el] of Object.entries(PANEL_EL)) el.classList.toggle('kb-focused', name === focusedPanel);
 }
 
 // The read-only group grid (§ project panel group select) has no colors,

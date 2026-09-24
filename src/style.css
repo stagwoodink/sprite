@@ -150,7 +150,6 @@
 
   /* Layering */
   --z-base: 0;
-  --z-focus: 10000;
   --z-label: 20;
   --z-modal: 2000;
   --z-panel: 10;
@@ -642,26 +641,9 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .frame-tile--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 /* Layers-panel Shift+Up/Down multi-select — same red outline convention. */
 .layer-row--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
-/* Focus-based control scheme: Ctrl+Arrow (or Tab-cycle) hairline on
-   whichever panel currently owns the keyboard. A CSS class + ::after on the
-   panel itself isn't enough — `.panel-overlay`'s own z-index caps it to
-   that panel's local stacking context, so any *other* overlay (a slide-out
-   menu, the keybind-help modal, the drag ghost, the color-picker preview —
-   every one of them a separate <body>-level sibling with its own z-index)
-   can still paint over it. This is instead one dedicated element, also a
-   <body>-level sibling, kept above literally everything else in the app
-   (the highest z-index anywhere else here is 3000) and repositioned by
-   main.js's syncFocusRing() every frame while a panel is focused — plain
-   position/size, no ::after, so nothing about it is scoped inside any
-   panel's own stacking context to begin with. */
-#kb-focus-ring {
-  display: none;
-  position: fixed;
-  z-index: var(--z-focus);
-  pointer-events: none;
-  border: var(--stroke-strong) solid var(--accent);
-  box-sizing: border-box;
-}
+/* Focus-based control scheme: Ctrl+Arrow (or Tab-cycle) ring on whichever panel
+   currently owns the keyboard (main.js's syncFocusRing). */
+.kb-focused { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 .frame-tile canvas { display: block; height: calc(var(--block) * 2); width: auto; image-rendering: pixelated; }
 
 .frame-delete {
