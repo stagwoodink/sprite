@@ -966,6 +966,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .icon--lift { transform: translateY(calc(var(--icon-px) / -2)); }
 /* the app icon sits two device pixels low */
 .icon--lift-2 { transform: translateY(calc(var(--icon-px) * -1)); }
+/* the version tag's icons all sit a device pixel higher; `translate` adds to the lifts above rather than replacing them */
+#version-tab .icon { translate: 0 calc(var(--icon-px) / -2); }
 .btn:hover .icon--heart { background: var(--accent); }
 .icon--new { transform: translateY(calc(var(--icon-px) / -2)); } /* its top row is empty: lift it so the drawing centres */
 .icon--inline { display: inline-block; vertical-align: baseline; --icon-px: calc(var(--font-body) / 16); }
@@ -1315,11 +1317,14 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
      1, so the label is deliberately vertically centered against the
      thumbnail rather than pinned 1em from the top. */
   padding: 0 var(--pad);
-  color: var(--text-primary);
   box-shadow: inset 0 var(--border-width) 0 var(--black-a10); /* §4.3: 10% black, label column only */
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.layer-row.selected .layer-label { color: var(--text-primary); }
+/* Names are dim until their row is hovered, selected, or being renamed. */
+.file-row-name, .layer-label, .project-name { color: var(--text-secondary); }
+.tile:hover .file-row-name, .tile:hover .layer-label, .project-header:hover .project-name,
+.tile.selected .file-row-name, .tile.active .file-row-name, .tile.selected .layer-label, .tile.active .layer-label, .project-header.active .project-name,
+.file-row-name[contenteditable="true"], .layer-label[contenteditable="true"], .project-name[contenteditable="true"] { color: var(--text-primary); }
 
