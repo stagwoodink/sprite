@@ -245,11 +245,17 @@
   height: var(--block);
   background: var(--bg-elevated);
   cursor: pointer;
-  border-bottom: var(--border-width) solid var(--hairline);
+  box-shadow: inset 0 calc(var(--border-width) * -1) 0 var(--hairline);
 }
 .tile:hover { background: var(--bg-hover); }
-.tile.selected, .tile.active { background: var(--accent); color: var(--text-primary); }
+/* A selected row has no edge lines at all: a line left on the accent fill reads
+   as a red stripe under or over the row's controls. (Edge lines here are inset
+   shadows, not borders, so they take no space: an edge on one side only would
+   pull the text half a pixel off centre.) */
+.tile.selected, .tile.active { background: var(--accent); color: var(--text-primary); box-shadow: none; border-top-width: 0; border-bottom-width: 0; }
 .tile--tall { height: calc(var(--block) * 2); }
+/* A button in a tall row (layers) fills its height instead of staying one block. */
+.tile--tall > .btn { height: auto; }
 /* Pointer-based reorder feedback (see makeReorderable in ui.js): the row
    being dragged fades in place (the floating .drag-ghost is what actually
    tracks the cursor), the row it's currently over shows an accent edge as
@@ -895,7 +901,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   display: flex;
   align-items: stretch;
   height: var(--block);
-  border-top: var(--border-width) solid var(--hairline); /* divider from the file list above it */
+  box-shadow: inset 0 var(--border-width) 0 var(--hairline); /* divider from the file list above it */
 }
 /* Not a `.tile` (it's the one fixed row, never a selectable list item), so
    it needs its own copy of the same red "this row owns the open menu"
@@ -928,7 +934,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   overflow-y: auto;
 }
 .file-stack { margin-top: auto; }
-.file-row { border-bottom: var(--border-width) solid var(--black-a10); overflow: hidden; }
+.file-row { box-shadow: inset 0 calc(var(--border-width) * -1) 0 var(--black-a10); overflow: hidden; }
 /* Nested under a collection/group header: indent the handle and name (not
    the trailing resize/export buttons), so a nested file visibly sits inside
    its collection instead of reading as just another top-level row. */
@@ -1020,7 +1026,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* Bottom-anchored (§ open-project-panel.js): title comes after the list in
    DOM order, so its divider needs to face the other way: a line above it
    (from the list it's now under), not below. */
-#open-project-panel .side-panel-title { border-bottom: none; border-top: var(--border-width) solid var(--hairline); }
+#open-project-panel .side-panel-title { box-shadow: inset 0 var(--border-width) 0 var(--hairline); }
 /* No drag-handle on these rows (unlike file rows, whose handle supplies
    the name's left clearance): needs its own. */
 #open-project-panel .file-row-name { padding-left: var(--pad); }
@@ -1033,7 +1039,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   padding: var(--pad);
   color: var(--text-secondary);
   text-transform: uppercase;
-  border-bottom: var(--border-width) solid var(--hairline);
+  box-shadow: inset 0 calc(var(--border-width) * -1) 0 var(--hairline);
 }
 /* No padding/gap of its own: the panel is flush, and every child here is
    already a block-sized (or block-row) element that carries its own
@@ -1236,6 +1242,12 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    the name double-click-renames): don't imply otherwise with the pointer
    cursor .tile sets generically for selectable rows. */
 .collection-header, .layer-group-header { cursor: default; }
+/* A light line above and a shadow line below, so a header reads as a raised
+   divider between the rows it groups instead of one more row. Inset shadows,
+   not borders: a border would push the text down inside the row. */
+.collection-header, .layer-group-header {
+  box-shadow: inset 0 var(--border-width) 0 var(--panel-edge-highlight), inset 0 calc(var(--border-width) * -1) 0 var(--panel-edge-shadow);
+}
 
 .layer-thumb {
   position: relative;
@@ -1245,6 +1257,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   border-top: var(--border-width) solid var(--black-a30); /* §4.3: 30% black, thumbnail column only */
 }
 .layer-thumb canvas { display: block; height: 100%; width: auto; image-rendering: pixelated; }
+/* Same reason as .tile.selected: on the accent fill that edge reads as a dark red stripe. */
+.tile.selected .layer-thumb, .tile.active .layer-thumb { border-top-width: 0; }
 
 .eye-pip {
   position: absolute;
@@ -1286,7 +1300,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
      thumbnail rather than pinned 1em from the top. */
   padding: 0 var(--pad);
   color: var(--text-primary);
-  border-top: var(--border-width) solid var(--black-a10); /* §4.3: 10% black, label column only */
+  box-shadow: inset 0 var(--border-width) 0 var(--black-a10); /* §4.3: 10% black, label column only */
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
