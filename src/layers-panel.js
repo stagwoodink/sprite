@@ -9,11 +9,11 @@ import { openSlideOut } from './slide-out.js';
 
 const THUMB_H = BLOCK * 2; // layer tiles are 2 blocks tall
 
-// Layer grouping is drag-and-drop only — a layer becomes a group's member
+// Layer grouping is drag-and-drop only: a layer becomes a group's member
 // by being positioned directly beneath its header (§ ordering.js), same as
 // file collections. No separate "move to group" control.
 // Painted thumbnail canvases from the last render, keyed by layer buffer and
-// reused while the buffer's version, visibility and size are unchanged — the
+// reused while the buffer's version, visibility and size are unchanged: the
 // panel rebuilds its rows on every edit, but only the edited layer's pixels
 // need repainting. Rebuilt each render from just the rows shown, so it can't
 // outgrow the layer count.
@@ -26,7 +26,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
   const selLo = layerSelection ? Math.min(layerSelection.anchor, layerSelection.to) : -1;
   const selHi = layerSelection ? Math.max(layerSelection.anchor, layerSelection.to) : -1;
 
-  // Anchored to the bottom of the panel, not the top — a stack of layers
+  // Anchored to the bottom of the panel, not the top: a stack of layers
   // reads more naturally sitting at the floor than floating at the ceiling.
   const stack = document.createElement('div');
   stack.className = 'layer-stack';
@@ -77,7 +77,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     });
 
     // Hover-revealed vertical slider, OVERLAID on the thumbnail's right edge
-    // (not pushing it over) — drag the pip up/down to change opacity, no
+    // (not pushing it over): drag the pip up/down to change opacity, no
     // right-click/menu needed. A % readout appears to its left while dragging.
     const opacitySlider = document.createElement('div');
     opacitySlider.className = 'opacity-slider';
@@ -140,10 +140,10 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     row.append(thumbWrap, handle, label, del);
     row.addEventListener('click', (e) => {
       // Shift/Alt-click build a multi-layer selection instead of switching
-      // the active layer — same pattern as the file list's rows.
+      // the active layer: same pattern as the file list's rows.
       if (e.shiftKey) { callbacks.onShiftSelectLayer(i); return; }
       if (e.altKey) { callbacks.onAltSelectLayer(i); return; }
-      // Same no-op guard as the file list — onSelect re-renders this
+      // Same no-op guard as the file list: onSelect re-renders this
       // panel, which was destroying `label` mid-double-click.
       if (i === file.activeLayerIndex && !multiSelection) return;
       callbacks.onSelect(i);
@@ -202,7 +202,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     return row;
   }
 
-  // Ascending order = top-to-bottom in the panel (§ ordering.js) — the
+  // Ascending order = top-to-bottom in the panel (§ ordering.js): the
   // reverse of `file.layers`' own bottom-to-top compositing order, so this
   // reads front-to-back same as before, just off the derived combined view
   // instead of iterating the raw array backwards.
@@ -223,7 +223,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
   thumbCache = nextThumbs;
 
   // Reference images (references.js) sit apart from the layer stack: they
-  // aren't layers, so they can't be selected, painted on, or exported —
+  // aren't layers, so they can't be selected, painted on, or exported:
   // there's simply nothing here to select. A row's ⤢ (or `:`) flips it
   // between fit-to-canvas and full size off to the right.
   function buildReferenceSection() {

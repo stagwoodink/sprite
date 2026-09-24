@@ -72,7 +72,7 @@ export function maskFromPolygon(model, points) {
   return mask;
 }
 
-// Every pixel matching a color, anywhere on the layer — not just one
+// Every pixel matching a color, anywhere on the layer: not just one
 // contiguous region (that's the magic wand). Triggered by Shift+clicking a
 // palette chip.
 export function maskFromColor(model, colorHex) {

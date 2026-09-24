@@ -1,6 +1,6 @@
 // Streaming GIF encoding over packed-RGBA composites (canvas-model.js's
 // hexToPacked). Holds one frame's index array at a time, never every frame's
-// RGBA at once — at scale 4 and 100 frames that was gigabytes.
+// RGBA at once: at scale 4 and 100 frames that was gigabytes.
 
 const MAX_COLORS = 256;
 const SAMPLE_FRAMES = 8; // frames fed to the quantizer when the colours don't fit

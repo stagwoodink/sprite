@@ -21,7 +21,7 @@ export function pickFile(accept, onFile) {
   input.click();
 }
 
-// A transient message in the corner tool tag — the app's one non-modal way
+// A transient message in the corner tool tag: the app's one non-modal way
 // to say "that didn't happen, and why" without a dialog.
 export function flashTip(text, ms = 3000) {
   if (!hoverTipListener) return;
@@ -30,8 +30,8 @@ export function flashTip(text, ms = 3000) {
 }
 
 // Shared button primitive (design system: Button/Tile/Tile-bar/Panel).
-// Every clickable control in the app — icon button, text button, tab,
-// toggle — is one of these, so hover/active/focus/selected states and
+// Every clickable control in the app: icon button, text button, tab,
+// toggle: is one of these, so hover/active/focus/selected states and
 // sizing live in one CSS rule (`.btn` in style.css) instead of being
 // reimplemented per feature with its own markup and colors.
 export function button({ glyph, label, title, icon = false, fill = false, selected = false, active = false, disabled = false, className = '', onClick, onContextMenu } = {}) {
@@ -40,7 +40,7 @@ export function button({ glyph, label, title, icon = false, fill = false, select
     .filter(Boolean).join(' ');
   // `glyph` is usually a plain string, but a caller that needs a styled
   // sub-element (e.g. a smaller font-size span for a glyph that reads too
-  // big at the button's own font-size) can pass a Node instead — appended
+  // big at the button's own font-size) can pass a Node instead: appended
   // as-is rather than stringified into textContent.
   if (glyph instanceof Node) el.append(glyph);
   else el.textContent = glyph != null ? glyph : label;
@@ -56,14 +56,14 @@ export function button({ glyph, label, title, icon = false, fill = false, select
   return el;
 }
 
-// Edits `el`'s own text in place via `contenteditable` — no swap to an
+// Edits `el`'s own text in place via `contenteditable`: no swap to an
 // `<input>`, so nothing about its look (font, background, padding) changes,
 // only that it becomes typable. Commits (trimmed; an empty value is
 // treated as "keep the original" by the caller) on Enter/blur, reverts on
 // Escape. Shared by every renameable label (project name, file name,
 // layer name) instead of each re-implementing the same dance.
 export function startInlineEdit(el, initial, onCommit) {
-  if (el.isContentEditable) return; // already editing — a stray extra click/dblclick shouldn't restart it
+  if (el.isContentEditable) return; // already editing: a stray extra click/dblclick shouldn't restart it
   el.contentEditable = 'true';
   el.spellcheck = false;
   el.focus();
@@ -94,7 +94,7 @@ export function startInlineEdit(el, initial, onCommit) {
   el.addEventListener('blur', onBlur, { once: true });
 }
 
-// A floating copy of `row` that follows the cursor while dragging — the
+// A floating copy of `row` that follows the cursor while dragging: the
 // original stays in place (dimmed via .dragging) as the "this is where it
 // came from" reference, the ghost is "this is what you're holding."
 // `<canvas>` content doesn't survive cloneNode (it's rendered pixels, not
@@ -116,16 +116,16 @@ function createGhost(row) {
   return ghost;
 }
 
-// Pointer-based drag-to-reorder for a list of rows — press the handle,
+// Pointer-based drag-to-reorder for a list of rows: press the handle,
 // drag over a sibling row to swap places (the rows between lift out of
 // the way to open a gap), drag past `boundsEl`'s edge to remove, release
 // to drop. Every reorderable list (file rows, layer rows) uses this one
 // implementation instead of native HTML5 drag-and-drop, which requires
 // the browser to recognize a drag gesture from a mousedown+move before
-// dragstart even fires — unreliable to trigger from a small handle across
+// dragstart even fires: unreliable to trigger from a small handle across
 // browsers/platforms, and prone to silently doing nothing.
 //
-// `index` is the row's real array index (not its DOM position — a list
+// `index` is the row's real array index (not its DOM position: a list
 // can render in a different order than its array, e.g. the layers panel
 // lists top-of-stack first). `listEl` scopes the sibling-shift query to
 // this row's own list; `boundsEl` is what "dragged off the panel" means
@@ -150,7 +150,7 @@ export function makeReorderable(handle, row, index, { listEl, boundsEl, onReorde
 
     // Captured once, at drag start: the shift preview is about visual
     // position (who slides up/down to open a gap), which is independent
-    // of array index — a list can render in a different order than its
+    // of array index: a list can render in a different order than its
     // array (the layers panel lists top-of-stack first, so a *higher*
     // array index sits *above* in the DOM, the reverse of the file list).
     const orderedRows = Array.from(listEl.querySelectorAll('[data-reorder-index]'));
@@ -236,14 +236,14 @@ function clearShiftPreview(items) {
 
 // Native HTML5 drag-and-drop reorder for a horizontal or vertical strip of
 // equal-size sibling elements (palette's chip row, timeline's frame strip).
-// A different mechanism from makeReorderable above on purpose — that one
+// A different mechanism from makeReorderable above on purpose: that one
 // exists specifically because native DnD is unreliable to trigger from a
 // small handle; a whole chip/frame tile is a large, unambiguous drag
 // target, so native DnD's other native perks (drag-image, OS-level cursor
 // feedback) are worth having here instead.
 //
 // dragstart marks the source; dragover previews the live shift; the actual
-// reorder commits on dragend rather than drop — a live shift-preview can
+// reorder commits on dragend rather than drop: a live shift-preview can
 // move the dragged element's own siblings out from under the pointer, so
 // whatever the browser resolves as the drop target at drop-time can be
 // stale or missing a listener, while dragend always fires on the dragged
@@ -253,13 +253,13 @@ function clearShiftPreview(items) {
 // module-level singleton here, the same way slide-out.js tracks its one
 // open popup.
 //
-// `getItems()` returns the current sibling elements in order — called
+// `getItems()` returns the current sibling elements in order: called
 // fresh at drag start, since the caller's own list can change between
 // drags. `axis`: 'x' for a horizontal strip, 'y' for vertical.
 // `containerEl` + `onRemove`, given together: dragging an item out past
 // `containerEl`'s bounds and releasing removes it instead of reordering
 // (the caller's own `onRemove` decides whether that's currently allowed,
-// e.g. never dropping below one remaining item — this helper doesn't know
+// e.g. never dropping below one remaining item: this helper doesn't know
 // or care what "removed" means beyond calling it back).
 let dragReorderState = null;
 
@@ -280,7 +280,7 @@ export function attachNativeDragReorder(itemEl, index, { getItems, axis = 'x', o
   });
 
   // 'drag' fires continuously (unlike 'dragover', which only fires over
-  // valid drop targets) — the only way to flag "pulled outside the strip"
+  // valid drop targets): the only way to flag "pulled outside the strip"
   // with a visible cue before release.
   if (containerEl && onRemove) {
     itemEl.addEventListener('drag', (e) => {

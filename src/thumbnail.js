@@ -1,5 +1,5 @@
 // Shared checkerboard + pixel-content thumbnail painter, used by both the
-// layers panel (§4.2) and the timeline's frame strip (§6) — "frames and
+// layers panel (§4.2) and the timeline's frame strip (§6): "frames and
 // layer thumbnails share this treatment since they're visually the same
 // kind of object."
 const CHECKER_LIGHT = '#DEDEDE';

@@ -10,7 +10,7 @@ native+wasm target doubled the persistence surface (three storage backends: nati
 `std::fs`, browser File System Access API, IndexedDB fallback) for a project that
 only ever needed to ship as a web app.
 
-Decision: rebuild as a plain JavaScript/HTML/CSS web app — Canvas2D for pixel
+Decision: rebuild as a plain JavaScript/HTML/CSS web app: Canvas2D for pixel
 rendering, DOM/CSS for panel chrome, no framework, no build step, no native target.
 This drops the `std::fs` backend entirely (§1 item 5 / ADR 0001 now describes the
 full, only persistence story) and gives the UI panels real component boundaries

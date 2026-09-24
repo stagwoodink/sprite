@@ -1,5 +1,5 @@
 // Shared zoom/pan state for the canvas viewport (§6). A single module-level
-// object rather than threading params through render()/input — this app
+// object rather than threading params through render()/input: this app
 // only ever shows one canvas at a time.
 //
 // zoom: null means "fit to window" (recomputed on every resize); a number
@@ -13,7 +13,7 @@ export function resetView() {
 }
 
 // Same shape, for the read-only group grid's own camera (§ project panel
-// group select) — panning/zooming a collection as a whole is independent of
+// group select): panning/zooming a collection as a whole is independent of
 // wherever the single-file canvas's own view happens to be.
 export const groupViewState = { zoom: null, panX: 0, panY: 0 };
 

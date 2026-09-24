@@ -1,5 +1,5 @@
 // Zero-build PWA offline cache. No precache manifest to keep in sync with
-// src/*.js by hand — cache-as-you-go instead. Network-first (not
+// src/*.js by hand: cache-as-you-go instead. Network-first (not
 // cache-first): this is an actively-edited project with no build step or
 // filename hashing to bust a stale cache automatically, so a cache-first
 // strategy would keep serving yesterday's JS/CSS to every returning tab
@@ -21,11 +21,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Only the app's own static files are worth intercepting at all — a plain
+// Only the app's own static files are worth intercepting at all: a plain
 // GET for a page/script/style/data/manifest file, same origin, no query
 // string. A local dev server commonly also serves something that looks
 // nothing like that (a long-poll or SSE request for its own auto-reload
-// mechanism, e.g.) — routing one of those through `fetch()`+`cache.put()`
+// mechanism, e.g.): routing one of those through `fetch()`+`cache.put()`
 // below, built for a normal one-shot response, can hang the whole
 // connection or throw against a stream that never ends. Leaving the event
 // alone entirely (no `respondWith`) for anything outside this shape lets

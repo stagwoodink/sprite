@@ -5,7 +5,7 @@
 // Project/File model) never need to know which one is active.
 //
 // Path = an array of segments, e.g. ['MyProject', 'icon.sprite'].
-// `write` takes either a JSON-able value or a Uint8Array (stored raw — the
+// `write` takes either a JSON-able value or a Uint8Array (stored raw: the
 // binary pixel sidecars); binary entries are read back with `readBytes`.
 
 const IDB_NAME = 'sprite-vfs';
@@ -142,7 +142,7 @@ export const refHandles = {
 
 // One-time "connect a folder" grant (ui-design-system §3.1). The handle is
 // cached in IndexedDB so it can be re-requested (not re-prompted from
-// scratch) on the next visit — the browser still requires a user gesture to
+// scratch) on the next visit: the browser still requires a user gesture to
 // re-confirm permission, this just avoids losing which folder was chosen.
 export async function connectFolder() {
   if (!window.showDirectoryPicker) return null;
@@ -160,7 +160,7 @@ export async function resumeFolder() {
   return createFsaBackend(handle);
 }
 
-// Falls back silently to IndexedDB (§1 item 5) — this is the default backend
+// Falls back silently to IndexedDB (§1 item 5): this is the default backend
 // until/unless the user explicitly connects a folder.
 export function createDefaultBackend() {
   return createIndexedDbBackend();

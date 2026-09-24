@@ -3,7 +3,7 @@
 // (http/https/fs/crypto), no npm install, no build step.
 //
 // localhost is already a "secure context" in every browser even over plain
-// http — that's what IndexedDB/ES modules need, not an actual TLS cert. So
+// http: that's what IndexedDB/ES modules need, not an actual TLS cert. So
 // this defaults to http. Pass --https for a self-signed cert instead (the
 // browser will still show an untrusted-certificate warning to click past,
 // since it's not signed by a real CA).
@@ -84,5 +84,5 @@ fs.watch(ROOT, { recursive: true }, (_, filename) => {
 server.listen(PORT, () => {
   const scheme = USE_HTTPS ? 'https' : 'http';
   console.log(`Serving ${ROOT} at ${scheme}://localhost:${PORT}/ (auto-reload on save)`);
-  if (USE_HTTPS) console.log('Self-signed cert — click through the browser warning once.');
+  if (USE_HTTPS) console.log('Self-signed cert: click through the browser warning once.');
 });

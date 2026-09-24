@@ -3,7 +3,7 @@ import { paletteNameFromFile } from './palette-parse.js';
 import { refHandles } from './storage.js';
 
 // Reference images: drawing aids shown behind the art, never part of the
-// document. The image itself is never stored in the .sprite — a reference
+// document. The image itself is never stored in the .sprite: a reference
 // is a { id, name, mode, linked } record on `file.references`, and (on
 // Chromium) a FileSystemFileHandle to the user's own file kept in IndexedDB
 // (storage.js refHandles). Elsewhere there is no handle, so the reference
@@ -52,7 +52,7 @@ export function releaseReferences(file) {
 }
 
 // Decoded size (RGBA) of a File's loaded reference bitmaps, for the capacity
-// meter — approximate, that meter is advisory.
+// meter: approximate, that meter is advisory.
 export function referenceBytes(file) {
   return referencesOf(file).reduce((sum, ref) => {
     const bitmap = bitmaps.get(ref.id);
@@ -63,7 +63,7 @@ export function referenceBytes(file) {
 // Loads the bitmap for a linked reference from its handle. Without an
 // active permission grant this stays unresolved (`interactive` = called from
 // a click, so the browser may prompt). A moved/renamed/deleted source just
-// leaves it unresolved — never fails the File load.
+// leaves it unresolved: never fails the File load.
 export async function resolveReference(ref, { interactive = false } = {}) {
   if (!ref.linked || bitmaps.has(ref.id) || resolving.has(ref.id)) return false;
   resolving.add(ref.id);

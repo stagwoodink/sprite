@@ -1,8 +1,8 @@
 // HSL-square + hue-slider + hex-field slide-out (design-doc §7.2,
 // ui-design-system §1: 0px corners, flat, dark chrome). Opened on Alt+click
-// of a chip. Per CONTEXT.md's "Slide-Out Context Bar" vocabulary — every
+// of a chip. Per CONTEXT.md's "Slide-Out Context Bar" vocabulary: every
 // secondary control surface slides out from the element that triggered it,
-// not a floating dropdown — this slides up from the chip rather than
+// not a floating dropdown: this slides up from the chip rather than
 // appearing as a fixed popup.
 import { openCustomSlideOut } from './slide-out.js';
 
@@ -59,7 +59,7 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
 
   // Slides out flush above the chip (the palette bar docks to the bottom
   // edge), centered horizontally on it with the chevron pointing down at it
-  // — openCustomSlideOut's own positioning (anchor-relative on the primary
+  //: openCustomSlideOut's own positioning (anchor-relative on the primary
   // axis, viewport-clamped on the cross axis) doesn't center on the anchor,
   // so that's overridden right after appending.
   const result = openCustomSlideOut(anchorEl, (popup) => {
@@ -131,11 +131,11 @@ export function openColorPicker(anchorEl, initialHex, onChange) {
   });
 
   // Colors-panel keyboard scheme: arrows nudge s/l, Alt+Left/Right nudge
-  // hue, Enter/Escape close — reuses the same `s`/`l`/`h`/`commit`/
+  // hue, Enter/Escape close: reuses the same `s`/`l`/`h`/`commit`/
   // `paintSquare` state the pointer-drag path above already maintains.
   // openCustomSlideOut's outside-click dismiss doesn't know about this
   // extra listener, so `onDismiss` (fired only on that path, not on a
-  // deliberate close) removes it too — otherwise it'd keep intercepting
+  // deliberate close) removes it too: otherwise it'd keep intercepting
   // arrow keys after the popup's already gone.
   const STEP = 0.03;
   function onKeyDown(e) {

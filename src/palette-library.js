@@ -1,6 +1,6 @@
 // Global named-palette library: palettes the user has saved, shared by every
 // Project. Lives in localStorage beside the other per-browser prefs
-// (ui-prefs.js) — a source you load *from*: a Project keeps its own copy of
+// (ui-prefs.js): a source you load *from*: a Project keeps its own copy of
 // whatever it loaded, so deleting an entry here can't reach into a Project.
 const KEY = 'sprite-palettes';
 export const MAX_SAVED = 30;
@@ -18,7 +18,7 @@ function save(library) {
   try { localStorage.setItem(KEY, JSON.stringify(library)); } catch { /* ignore quota/availability */ }
 }
 
-// "Name", then "Name 2", "Name 3" — never a "1" suffix on the first
+// "Name", then "Name 2", "Name 3": never a "1" suffix on the first
 // instance (DECISIONS.md).
 function uniqueName(taken, base) {
   let name = base, n = 2;

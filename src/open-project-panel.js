@@ -1,17 +1,17 @@
 import { button } from './ui.js';
 
-// Open Project panel — a docked side panel next to Project (same treatment
+// Open Project panel: a docked side panel next to Project (same treatment
 // as Export, § export-panel.js), not a floating slide-out menu: switching
 // projects is a real navigation action with its own list, not a one-off
 // pick from a handful of buttons. `projects` is the registry list (each
 // `{ id, name, updatedAt }`) minus the one currently open; `onSelect` gets
 // one entry when its row is clicked, `onDelete` when its hover-revealed
 // delete button is, `onNew` when the "nothing to open yet" fill button is
-// (shown only when `projects` is empty — otherwise New already lives in
+// (shown only when `projects` is empty: otherwise New already lives in
 // the project menu itself, no need to duplicate it here).
 //
 // Bottom-anchored, same as the Project panel's own file list (.file-list/
-// .file-stack — reused here directly, not reinvented): the row stack sits
+// .file-stack: reused here directly, not reinvented): the row stack sits
 // at the floor of the scrollable area, and the title comes last in the
 // panel itself, so it reads at the very bottom rather than as a header.
 export function renderOpenProjectPanel(container, projects, onSelect, onDelete, onNew) {

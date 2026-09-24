@@ -18,7 +18,7 @@ function runs(occupied) {
 // occupied runs between them are the cells. Returns { cellW, cellH, margin,
 // spacing } or null when the sheet isn't evenly gridded that way (cells of
 // differing size, different margin/spacing per axis, a single cell, or no
-// transparent gutters at all) — the caller then asks the user.
+// transparent gutters at all): the caller then asks the user.
 export function detectGrid(data, w, h) {
   const cols = new Uint8Array(w), rows = new Uint8Array(h);
   for (let y = 0; y < h; y++) {
@@ -39,7 +39,7 @@ export function detectGrid(data, w, h) {
   return { cellW: x.size, cellH: y.size, margin: x.start, spacing: x.count > 1 ? x.gap : y.gap };
 }
 
-// Builds a new SpriteFile from the sheet's cells — as Frames (one Layer, a
+// Builds a new SpriteFile from the sheet's cells: as Frames (one Layer, a
 // Frame per cell) or Layers (one Frame, a Layer per cell). Pixels snap to
 // `chips` by nearest RGB rather than extracting a new palette: extraction is
 // its own explicit act, and importing must not repaint anything else.

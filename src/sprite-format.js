@@ -3,8 +3,8 @@ import { createColorTable, colorIndex, bufferId } from './canvas-model.js';
 // .sprite v4: the File's JSON `meta` (everything except pixels) plus binary
 // chunks, each written independently so an autosave rewrites only what
 // changed:
-//   one chunk per layer buffer — canvasWidth*canvasHeight Uint16 indices
-//     into `meta.colors` — named `frame-<frameId>-<bufferChunkId>`, both ids
+//   one chunk per layer buffer: canvasWidth*canvasHeight Uint16 indices
+//     into `meta.colors`: named `frame-<frameId>-<bufferChunkId>`, both ids
 //     stable across saves; `meta.frames` lists each frame's id and its
 //     buffers' chunk ids in layer order.
 // Undo history is session-only and never saved (`undoStack` is written

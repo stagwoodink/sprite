@@ -1,5 +1,5 @@
 // Pure pixel-buffer math shared by every {width, height, pixels, stride,
-// colors} view — main.js binds this shape to whichever layer+frame is
+// colors} view: main.js binds this shape to whichever layer+frame is
 // currently active. `pixels` is a Uint16Array of indices into `colors`, the
 // owning File's color table (index 0 = transparent). The public API stays
 // hex-based; indices never leak past this module except through the raw
@@ -7,7 +7,7 @@
 // `stride` (row length in the backing array) defaults to `width`;
 // it differs after a canvas shrink, where the visible window (width/height)
 // is a top-left crop of a wider logical buffer (§13.4) rather than a
-// same-size copy — this lets that crop stay a view, not a copy.
+// same-size copy: this lets that crop stay a view, not a copy.
 export function inBounds(model, x, y) {
   return x >= 0 && y >= 0 && x < model.width && y < model.height;
 }
@@ -89,7 +89,7 @@ export function getPixel(model, x, y) {
 }
 
 // `mask` (optional, full-canvas boolean array) restricts the write to inside
-// an active selection — every user-facing place/paint/erase tool passes it;
+// an active selection: every user-facing place/paint/erase tool passes it;
 // internal selection transforms (move/flip/rotate) omit it since they must
 // write outside the mask's old position.
 export function setPixel(model, x, y, colorHex, mask) {
@@ -110,7 +110,7 @@ export function setPixelIndex(model, x, y, idx, mask) {
 let nextBufferId = 1;
 
 // Stable identity for a layer buffer (an expando, like `v` and `dirty`
-// below) — lets the composite cache and the persistence layer recognise
+// below): lets the composite cache and the persistence layer recognise
 // "the same buffer" across structural edits without holding references.
 export function bufferId(pixels) {
   return pixels.id ??= nextBufferId++;
@@ -144,7 +144,7 @@ export function snapshotPixels(model) {
 }
 
 // A diff side is a flat Uint32Array of [bufferPosition, colorIndex] pairs
-// (8 bytes per changed pixel) — a per-pixel [x, y, hex] array would cost
+// (8 bytes per changed pixel): a per-pixel [x, y, hex] array would cost
 // ~50MB per full-canvas edit at 512x512. Indices refer to the file's
 // color table, which only ever appends, so they stay valid for the life of
 // the file. Positions are raw buffer offsets, independent of stride.
@@ -197,7 +197,7 @@ export function blendPacked(base, top, alpha) {
 // Blends in packed-integer space instead of hex strings. `blender(colors,
 // topHex)` resolves the top colour once; each blendAt call then reads the
 // pixel's index, blends, and maps the result back to an index through a
-// per-blender memo — a soft brush yields only a handful of distinct results,
+// per-blender memo: a soft brush yields only a handful of distinct results,
 // so the hex round-trip happens once per result, not once per pixel.
 // Baking the blend into a resolved color (rather than storing alpha per
 // pixel) keeps the model a flat grid of solid-or-transparent colors, so
@@ -224,9 +224,9 @@ export function blendPixel(model, x, y, colorHex, alpha, mask) {
 }
 
 // Antialiased stamp: soft circular brush, alpha falling off from center.
-// `size` is the same NxN unit the plain square brush uses (§8) — radius is
+// `size` is the same NxN unit the plain square brush uses (§8): radius is
 // derived from it so both tools share one brush-size value.
-// `dither` paints only cells where (x + y) is even — a 50% checkerboard
+// `dither` paints only cells where (x + y) is even: a 50% checkerboard
 // anchored to the canvas origin, so separate strokes line up. Off cells are
 // skipped, not erased.
 export function stampBrush(model, cx, cy, size, colorHex, mask, dither = false) {
@@ -294,7 +294,7 @@ export function paintAt(model, x, y, { size, antialiased = false, erase = false,
 
 // Plain (non-antialiased) flood fill: all 4-connected pixels matching the
 // clicked pixel's color are replaced outright. `mask` (active selection)
-// also bounds the fill's spread, not just which pixels get written — a
+// also bounds the fill's spread, not just which pixels get written: a
 // selection is a hard wall the flood can't leak through.
 export function floodFill(model, startX, startY, colorHex, antialiased = false, mask, dither = false) {
   if (!inBounds(model, startX, startY)) return;

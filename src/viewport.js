@@ -8,9 +8,9 @@ export function fitScale(model, viewW, viewH) {
 }
 
 // Zoom in until at least MIN_VISIBLE_PX canvas pixels still span the
-// shorter viewport dimension — past that, scrolling/panning stops being
+// shorter viewport dimension: past that, scrolling/panning stops being
 // useful (nothing left to navigate to within view). Never below the scale
-// that fills the viewport in at least one direction, though — for a small
+// that fills the viewport in at least one direction, though: for a small
 // canvas that scale can exceed this cap outright, and the user must always
 // be able to zoom in that far.
 const MIN_VISIBLE_PX = 16;
@@ -20,7 +20,7 @@ export function maxZoomScale(model, viewW, viewH) {
   return Math.max(capScale, fillScale);
 }
 
-// How far out the user can manually zoom (wheel, End) — further than plain
+// How far out the user can manually zoom (wheel, End): further than plain
 // fit-to-window, down to about a 200px on-screen footprint (on request),
 // whichever of the two is smaller. fitScale() itself stays floored at 1:1
 // for the default/reset view; this is only the clamp for active zooming.
@@ -28,8 +28,8 @@ const MIN_ZOOM_TARGET_PX = 200;
 export function minZoomScale(model, viewW, viewH) {
   const rawFit = Math.min(viewW / model.width, viewH / model.height);
   const targetScale = MIN_ZOOM_TARGET_PX / Math.max(model.width, model.height);
-  // Cap at 1 (100%) so a small sprite — whose 200px footprint target would
-  // otherwise sit above 1:1 — never loses the ability to zoom out to 100%.
+  // Cap at 1 (100%) so a small sprite: whose 200px footprint target would
+  // otherwise sit above 1:1: never loses the ability to zoom out to 100%.
   return Math.min(rawFit, targetScale, 1);
 }
 
@@ -46,7 +46,7 @@ export function regionView(model, viewW, viewH, b) {
 }
 
 // `state` defaults to the single-file canvas's own pan/zoom, but takes any
-// { zoom, panX, panY } shape — the read-only group grid (main.js) reuses
+// { zoom, panX, panY } shape: the read-only group grid (main.js) reuses
 // this same fit/pan math for its own camera over `groupViewState` instead.
 export function computeViewport(model, viewW, viewH, state = viewState) {
   const fit = fitScale(model, viewW, viewH);

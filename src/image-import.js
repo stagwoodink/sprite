@@ -1,7 +1,7 @@
 // Shared image decode for every feature that reads a user-supplied picture
 // (palette extraction, spritesheet import, reference layers). Decoded size
-// is width * height * 4 regardless of file size — a 2MB JPEG can be 48MB of
-// RGBA — so the byte cap alone bounds nothing; callers also pass a
+// is width * height * 4 regardless of file size: a 2MB JPEG can be 48MB of
+// RGBA: so the byte cap alone bounds nothing; callers also pass a
 // `longEdge` and the decode itself downscales (off the main thread, before
 // the full-size bitmap is ever held).
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;

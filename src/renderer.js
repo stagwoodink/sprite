@@ -2,14 +2,14 @@ import { hexToRgb } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
 import { snapFontSize } from './pixel-snap.js';
 
-// Shared solid-color set for every backdrop in the app — the app-wide
+// Shared solid-color set for every backdrop in the app: the app-wide
 // chrome background (Shift+U/Ctrl+U), the sprite's own backdrop (`u`,
-// alongside its 4th "checker" option), and the group grid's own — same
+// alongside its 4th "checker" option), and the group grid's own: same
 // three colors and keys (main.js's BG_STEPS/GROUP_APP_BG_STEPS) everywhere,
 // so "the canvas and app backdrop are the same color" is a plain string
 // comparison, not two separate vocabularies mapped onto each other.
 // Pinned to the official Sprite UI palette (style.css's --gray-0..13 ramp,
-// spec/ui-colors.png) rather than pure black/white — darkest step (gray-13)
+// spec/ui-colors.png) rather than pure black/white: darkest step (gray-13)
 // and second-brightest (gray-1, one step in from pure white gray-0).
 const SHADE_BLACK = '#1B1A19'; // --gray-13
 const SHADE_GREY = '#808080';
@@ -17,8 +17,8 @@ const SHADE_WHITE = '#F3F2F1'; // --gray-1
 const BG_SOLID = { black: SHADE_BLACK, grey: SHADE_GREY, white: SHADE_WHITE };
 const CHECKER_LIGHT = '#DEDEDE';
 const CHECKER_DARK = '#CFCFCF';
-const CHECKER_CELL = 4; // canvas pixels per checker square — an 8x8 sprite reads as a 2x2 checkerboard
-const GROUP_CHECKER_CELL = 24; // screen px per square — big and chunky, legible at any zoom (not tied to sprite size)
+const CHECKER_CELL = 4; // canvas pixels per checker square: an 8x8 sprite reads as a 2x2 checkerboard
+const GROUP_CHECKER_CELL = 24; // screen px per square: big and chunky, legible at any zoom (not tied to sprite size)
 const GRID_ALPHA = 0.35;
 const GRID_MIN_SPACING_PX = 6; // never draw grid lines closer together than this on screen
 const RULER_THICKNESS = 16;
@@ -38,7 +38,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
 
   // The transparency checkerboard is a base layer for the whole scene,
   // pixel-aligned to the canvas's own grid (not just drawn within the
-  // sprite's bounds) — Shift+U's "checker" backdrop and `u`'s "checker"
+  // sprite's bounds): Shift+U's "checker" backdrop and `u`'s "checker"
   // canvas backdrop are then just "leave this alone" instead of each
   // computing their own separately-aligned pattern, so the two can never
   // drift out of sync with each other or with the sprite itself.
@@ -49,7 +49,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
     ctx.fillRect(0, 0, viewW, viewH);
   }
 
-  // [U] cycles the sprite's own backdrop — checker (shows transparency: the
+  // [U] cycles the sprite's own backdrop: checker (shows transparency: the
   // base layer above, re-exposed here if the app backdrop just covered it),
   // or a solid white/grey/black matte to preview against a flat background.
   if (canvasBg === 'checker') {
@@ -79,7 +79,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
     // individually, and coarser as the canvas shrinks.
     const step = gridStep(scale);
 
-    // 'difference' composite inverts whatever is under each line segment —
+    // 'difference' composite inverts whatever is under each line segment:
     // no single fixed color read against every cell, unlike a single
     // whole-canvas-average color that goes invisible on any cell matching
     // that average (e.g. white lines over white background).
@@ -107,7 +107,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
       ctx.save();
       ctx.globalAlpha = alpha;
       // Follows the same eased trail as the brush cursor (main.js's
-      // animateCursor), not the raw hover position — a tiny, deliberate
+      // animateCursor), not the raw hover position: a tiny, deliberate
       // lag/follow on the highlight for character, not just an instant snap.
       const anchor = rulerAnchor(scale, ox, oy, viewW, viewH);
       const trailPixel = cursorPos && { x: Math.round(cursorPos.x), y: Math.round(cursorPos.y) };
@@ -120,7 +120,7 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
   const marching = !!selection && drawSelection(ctx, selection, scale, ox, oy);
 
   if (brushCursor && cursorPos) {
-    // `cursorPos` is the eased trail, not the raw hover pixel — it can lag
+    // `cursorPos` is the eased trail, not the raw hover pixel: it can lag
     // outside the sprite bounds near an edge before it catches up, so clip
     // rather than trust it to stay in range on its own. Only ever shows
     // within the sprite itself, never over the app background margin.
@@ -136,19 +136,19 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
 
 // Read-only overview of every File in a Collection (§ project panel group
 // select), tiled into a grid of small artboards instead of one editable
-// canvas — no grid lines, ruler, selection, brush cursor, or onion-skinning,
+// canvas: no grid lines, ruler, selection, brush cursor, or onion-skinning,
 // since nothing here is editable. Cell size and gap are in *world* units
 // (model pixels), laid out once by computeArtboardLayout; render applies one
-// shared scale/pan across every cell — a camera over the whole board, not
+// shared scale/pan across every cell: a camera over the whole board, not
 // each artboard fit independently to its own slot.
-const ARTBOARD_GAP = 4; // world px between cells — same value both axes, so the grid reads even
+const ARTBOARD_GAP = 4; // world px between cells: same value both axes, so the grid reads even
 
 // `gridset`, when given, wraps after that many columns (a Collection's own
 // preference, § project panel group select) instead of the default
 // auto square-ish layout. `gap` defaults to the on-screen grid's own
 // spacing but is a real parameter (not just the module constant) so
-// export.js's collection sheet export — which wants a fixed, unscaled 2px
-// gap regardless of what the live view uses — can reuse this exact same
+// export.js's collection sheet export: which wants a fixed, unscaled 2px
+// gap regardless of what the live view uses: can reuse this exact same
 // column/row math instead of duplicating it.
 export function computeArtboardLayout(artboards, gridset, gap = ARTBOARD_GAP) {
   if (!artboards.length) return { cols: 0, rows: 0, cellW: 0, cellH: 0, stepX: 0, stepY: 0, totalW: 0, totalH: 0 };
@@ -182,14 +182,14 @@ export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'blac
     const ox = cellX + ((layout.cellW - board.width) / 2) * scale;
     const oy = cellY + ((layout.cellH - board.height) / 2) * scale;
 
-    // No per-artboard fill — every artboard is transparent, showing the one
+    // No per-artboard fill: every artboard is transparent, showing the one
     // shared backdrop (`appBg`, filled once above) straight through.
     drawBoard(ctx, board, ox, oy, w, h);
   });
 }
 
-// Screen-space hit test for renderArtboardGrid's own layout — which
-// artboard index (if any) contains (x, y) — computed with the identical
+// Screen-space hit test for renderArtboardGrid's own layout: which
+// artboard index (if any) contains (x, y): computed with the identical
 // geometry the render itself uses, so a click always lands on what it
 // visually looks like it's over (double-click-to-open, § main.js). -1 if
 // none. Options must match whatever the grid was actually rendered with.
@@ -213,7 +213,7 @@ export function hitTestArtboardGrid(viewW, viewH, artboards, { scale = 1, panX =
 }
 
 // Difference-blend against a mid-gray background produces a result that's
-// itself mid-gray (|255-128| = 127 ≈ 128) — barely distinguishable from what
+// itself mid-gray (|255-128| = 127 ≈ 128): barely distinguishable from what
 // it's sitting on. Only a narrow band around 128 is actually a problem
 // (extremes invert cleanly), so it's cheaper to special-case that band than
 // to replace the blend everywhere.
@@ -245,7 +245,7 @@ function cursorLuma(model, pos, canvasBg) {
 // inverts whatever color is beneath it, rather than a fixed color that
 // could vanish against a similar background. `pos` is fractional (the
 // eased/trailing display position, not necessarily the exact hovered
-// pixel) — main.js's animation loop owns that easing, this just draws
+// pixel): main.js's animation loop owns that easing, this just draws
 // wherever it's told.
 function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy, luma) {
   if (mode !== 'place' && mode !== 'paint') return;
@@ -286,8 +286,8 @@ function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy, luma) {
 // Repeating 2x2-cell tile (light/dark/dark/light), built once as a
 // CanvasPattern. `cellPx` defaults to the single-file canvas's density
 // (CHECKER_CELL); the group grid's screen-space backdrop passes a bigger
-// value — "big and chunky", legible at any zoom since it's not tied to any
-// one sprite's resolution — via its own cached pattern instead of reusing
+// value: "big and chunky", legible at any zoom since it's not tied to any
+// one sprite's resolution: via its own cached pattern instead of reusing
 // this one at the wrong size. Caching the pattern, not just the tile,
 // spares a createPattern allocation per fill, up to twice per render.
 const checkerPatterns = new Map(); // cellPx -> CanvasPattern
@@ -311,7 +311,7 @@ function getCheckerPattern(ctx, cellPx = CHECKER_CELL) {
 // pinned to the canvas's own pixel grid: translating/scaling the context by
 // the same (ox, oy, scale) the sprite itself is drawn with before filling
 // means the pattern's cell boundaries land exactly on canvas-pixel
-// boundaries, at any destination rect — the whole viewport (the app
+// boundaries, at any destination rect: the whole viewport (the app
 // backdrop) or just the canvas's own bounds (the canvas backdrop) tile
 // identically and seamlessly, because it's literally the same fill.
 function fillCheckerboard(ctx, scale, ox, oy, destX, destY, destW, destH, cellPx) {
@@ -326,7 +326,7 @@ function fillCheckerboard(ctx, scale, ox, oy, destX, destY, destW, destH, cellPx
 
 // Onion skinning (§12.3): ghost frames tint toward red (before) or blue
 // (after) with opacity falling off by distance, fixed range 2 in each
-// direction — no range control exists in the UI.
+// direction: no range control exists in the UI.
 // The tinted canvas is cached per source (`ghost.key`) until its `rev`, side
 // or the model size changes, so a ghost costs a blit per frame and a rebuild
 // per edit. Distance only sets the blit's alpha, so it isn't part of the
@@ -339,7 +339,7 @@ function drawGhost(ctx, model, ghost, scale, ox, oy, nextCache) {
   if (!entry || entry.stamp !== stamp) {
     const tint = hexToRgb(ghost.side === 'before' ? ONION_BEFORE_TINT : ONION_AFTER_TINT);
     // Tint every pixel halfway toward the ghost color in one bulk pass over
-    // an ImageData, then one scaled blit — not a fillRect per pixel, which
+    // an ImageData, then one scaled blit: not a fillRect per pixel, which
     // at 512x512 was a quarter-million draw calls per frame.
     const source = ghost.pixels();
     const img = new ImageData(model.width, model.height);
@@ -366,17 +366,17 @@ function drawGhost(ctx, model, ghost, scale, ox, oy, nextCache) {
   ctx.restore();
 }
 
-// Marching ants. Two dash passes exactly one dash-length out of phase —
-// black filling one set of gaps, white the other — so the boundary reads
+// Marching ants. Two dash passes exactly one dash-length out of phase:
+// black filling one set of gaps, white the other: so the boundary reads
 // against any background, same reasoning as the brush cursor/grid having no
 // single fixed color that's safe everywhere. `antsPhase` advances once per
 // render call (main.js's loop renders every frame while ants are
 // visible, see render()'s return value), giving the classic marching animation.
-const SELECTION_DASH = 4; // screen px per dash segment — constant across zoom, see below
+const SELECTION_DASH = 4; // screen px per dash segment: constant across zoom, see below
 const SELECTION_DASH_SPEED = 0.5; // screen px of march per frame
 // Dash coordinates here are already screen pixels (scale is baked into
 // every point, not applied via ctx.scale), so a fixed dash size holds
-// steady on screen at any zoom — until the sprite itself is so small on
+// steady on screen at any zoom: until the sprite itself is so small on
 // screen that a fixed-size dash would swamp it more than outline it, where
 // it fades out instead of blocking the view.
 const ANTS_FULL_SCALE = 4; // model-px -> screen-px scale at/above which ants are fully opaque
@@ -417,7 +417,7 @@ function drawSelection(ctx, selection, scale, ox, oy) {
   const path = selectionOutlinePath(selection);
   antsPhase = (antsPhase + SELECTION_DASH_SPEED) % (SELECTION_DASH * 2);
 
-  // Difference blend (same trick as the hover crosshair) — a white stroke
+  // Difference blend (same trick as the hover crosshair): a white stroke
   // always fully inverts whatever's underneath, so the boundary reads on
   // any background without needing separate black/white dash passes.
   ctx.save();
@@ -436,7 +436,7 @@ function drawSelection(ctx, selection, scale, ox, oy) {
   return true;
 }
 
-// Same step progression the grid uses (§6): 1 -> 4 -> 16 -> ... — ticks/
+// Same step progression the grid uses (§6): 1 -> 4 -> 16 -> ...: ticks/
 // gridlines agree on where lines fall, and ruler number labels use a
 // second, coarser threshold so the text itself never overlaps.
 function gridStep(scale, minSpacing = GRID_MIN_SPACING_PX) {
@@ -446,7 +446,7 @@ function gridStep(scale, minSpacing = GRID_MIN_SPACING_PX) {
 }
 
 // Keyed off the canvas's own on-screen footprint (screen px), not `scale`
-// (model-px -> screen-px ratio) — minZoomScale never lets `scale` drop
+// (model-px -> screen-px ratio): minZoomScale never lets `scale` drop
 // below 1, so a scale-based fade never triggered at all, but a *small
 // sprite* still renders a tiny on-screen footprint even at that closest
 // allowed zoom-out. Below ~3 ruler-thicknesses of footprint the bars start
@@ -471,11 +471,11 @@ function rulerAnchor(scale, ox, oy, viewW, viewH) {
   };
 }
 
-// Highlight bar through the hovered pixel's row and column — a difference
+// Highlight bar through the hovered pixel's row and column: a difference
 // blend so it stays visible no matter what color sits underneath (same
 // trick as the brush cursor). `hoverPixel` here is the eased cursor trail
 // (main.js's displayCursorPos), which can briefly sit just outside the
-// sprite's bounds near an edge before it catches up — each axis only draws
+// sprite's bounds near an edge before it catches up: each axis only draws
 // once its own coordinate is actually within the canvas, so that overshoot
 // never paints a highlight stripe into the ruler/app-background margin
 // beyond where the canvas ends.
@@ -547,7 +547,7 @@ function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX 
   ctx.font = snapFontSize(16, window.devicePixelRatio || 1) + 'px m3x6, monospace'; // 16 device px multiples only: see pixel-snap.js
   ctx.textBaseline = 'top';
 
-  // Bar length matches the visible portion of the sprite — which is just
+  // Bar length matches the visible portion of the sprite: which is just
   // its own width/height when the sprite fits in the viewport ("attached
   // to the canvas"), and clamps to the full viewport span once the sprite
   // is bigger than the viewport in that direction ("floats independently").
@@ -585,7 +585,7 @@ function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX 
 
 // Reused 1:1 offscreen buffer for the sprite's pixel content. A single
 // drawImage() blit (nearest-neighbor, imageSmoothingEnabled off) has no
-// seams between pixels at any zoom — tiling one fillRect per pixel does:
+// seams between pixels at any zoom: tiling one fillRect per pixel does:
 // adjacent same-color rects can leave hairline gaps between them from
 // sub-pixel rasterization once devicePixelRatio scaling isn't a clean
 // integer, which read as a phantom grid even with the real grid off.
@@ -593,7 +593,7 @@ let pixelBuffer = null;
 let pixelBufferCtx = null;
 let pixelBufferSource = null; // { pixels, rev } the buffer currently holds, so an unchanged composite isn't re-uploaded every frame
 
-// Rebuilds the shared offscreen buffer with `model`'s own pixels — split out
+// Rebuilds the shared offscreen buffer with `model`'s own pixels: split out
 // from the blit below so a caller (the artboard grid's glow effect) can blit
 // the same built buffer twice in one pass (once blurred, once sharp)
 // without re-walking the pixel grid twice.

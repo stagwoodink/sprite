@@ -6,7 +6,7 @@ export function createLayer(name = 'Layer 1', order = 1000) {
   return { name, visible: true, opacity: 1, order };
 }
 
-// A group is purely organizational — a label member layers can be nested
+// A group is purely organizational: a label member layers can be nested
 // under in the panel by position (§ ordering.js). It composites nothing of
 // its own; its `visible` flag just gates whether its members render at all.
 export function createLayerGroup(name, order) {
@@ -19,7 +19,7 @@ export function createFrame(layerCount, pixelCount) {
   return { layerPixels: Array.from({ length: layerCount }, () => new Uint16Array(pixelCount)) };
 }
 
-// Every Layer must belong to a Group — there's no "ungrouped" state — so
+// Every Layer must belong to a Group: there's no "ungrouped" state: so
 // the very first Layer also creates the very first Group. Ascending
 // `.order` is top-to-bottom in the panel (§ layerOrder below), so the
 // group (order 1000) sits above its one member (order 2000).
@@ -39,13 +39,13 @@ export function createSpriteFile(name, width, height) {
     undoStack: [],
     redoStack: [],
     // Stamped fresh on creation, then again on every commit (undo.js's
-    // commitCommand) — a never-edited file still has a valid timestamp to
+    // commitCommand): a never-edited file still has a valid timestamp to
     // compare against (§ project.js's mostRecentFileIn).
     updatedAt: Date.now(),
   };
 }
 
-// The combined, order-sorted [groups + layers] view — the one source of
+// The combined, order-sorted [groups + layers] view: the one source of
 // truth for both panel display order and layer→group membership
 // (§ ordering.js), same pattern as project.js's `projectOrder`.
 export function layerOrder(file) {
@@ -58,7 +58,7 @@ export function activePixels(file) {
 }
 
 // All visible layers of the active frame, flattened bottom-to-top into one
-// buffer for display (§11) — drawing still targets the single active
+// buffer for display (§11): drawing still targets the single active
 // layer's own array via activePixels(), this is display-only. Output is a
 // packed-RGBA Uint32Array (canvas-model.js's hexToPacked), 0 = transparent.
 export function compositeFrame(file) {
@@ -68,14 +68,14 @@ export function compositeFrame(file) {
 // Per-frame composite cache. A WeakMap keyed by the frame object, so it
 // never reaches serialization and dies with the frame. A hit needs the same
 // structure (dimensions, each layer's visibility/opacity/buffer identity)
-// and the same buffer versions (canvas-model.js touch()) — so pan, zoom,
+// and the same buffer versions (canvas-model.js touch()): so pan, zoom,
 // idle redraws and edits to *other* frames all cost one key comparison.
 //
 // The key is derived from real state on every call, not a revision counter:
 // the app mutates layer.visible/.opacity/.order directly in several places
 // and a counter would miss them. To keep a hit allocation-free the key is a
-// flat Float64Array — three header slots (w, h, canvasWidth), then per layer
-// [shown ? 1 + opacity : 0, bufferId, buffer version] — filled into a shared
+// flat Float64Array: three header slots (w, h, canvasWidth), then per layer
+// [shown ? 1 + opacity : 0, bufferId, buffer version]: filled into a shared
 // scratch and compared element-wise, so no strings, no collisions.
 const compositeCache = new WeakMap(); // frame -> { key, out }
 const HEADER = 3, STRIDE = 3;
@@ -83,7 +83,7 @@ let keyScratch = new Float64Array(HEADER + STRIDE * 32);
 const groupShown = new Map(); // scratch: group id -> visible
 
 // `layer.groupId` is derived by layerOrder() (a sort plus two arrays), which
-// only needs to run when an order or membership actually changed — this
+// only needs to run when an order or membership actually changed: this
 // remembers the .order of every layer and group, and the objects themselves
 // (an undo can swap in different objects with the same orders).
 const membershipCache = new WeakMap(); // file -> { orders, items }
@@ -172,12 +172,12 @@ export function compositeFrameAt(file, frameIndex) {
   return out;
 }
 
-// One layer's own pixels at one frame, at its own opacity — everything
+// One layer's own pixels at one frame, at its own opacity: everything
 // else ignored (§ export.js's per-layer breakdown export). This app's
 // pixel model has no true alpha channel (a cell is one solid color or
 // nothing), so a partially-opaque layer exported alone paints solid,
 // exactly as it already would if it were the only visible layer on-canvas
-// — hence no opacity term here at all.
+//: hence no opacity term here at all.
 export function compositeLayerAt(file, layerIndex, frameIndex) {
   return cropToVisible(file, file.frames[frameIndex].layerPixels[layerIndex]);
 }
@@ -196,7 +196,7 @@ function cropToVisible(file, fullPixels, out = new Uint32Array(file.visibleWidth
 // Onion-skin ghost source for one frame (§12.3): either the full composite
 // or just the active layer, toggleable. Returns an identity (`key`) and a
 // change counter (`rev`) so the renderer can keep the tinted result between
-// frames, plus `pixels()`, which only runs on a cache miss — layer-only mode
+// frames, plus `pixels()`, which only runs on a cache miss: layer-only mode
 // crops into one shared scratch buffer the caller must consume immediately.
 let cropScratch = null;
 export function ghostSource(file, frameIndex, activeLayerOnly) {
@@ -218,7 +218,7 @@ export function ghostSource(file, frameIndex, activeLayerOnly) {
 }
 
 // A new layer must land INSIDE some group (every Layer belongs to a Group
-// — no ungrouped state), so its order sits between that group's header and
+//: no ungrouped state), so its order sits between that group's header and
 // its current first member. Defaults to the topmost group when no groupId
 // is given (e.g. no group currently focused in the Layers panel).
 function orderInGroup(file, groupId) {
@@ -268,14 +268,14 @@ export function deleteLayerGroup(file, groupId) {
   }
 }
 
-// Moves whatever sits at `fromPos` in `layerOrder(file)` to `toPos` — a
-// layer, or a group header (which brings its member layers with it) —
+// Moves whatever sits at `fromPos` in `layerOrder(file)` to `toPos`: a
+// layer, or a group header (which brings its member layers with it):
 // then re-syncs `file.layers`/`frame.layerPixels`/`activeLayerIndex` to
 // match, since (unlike files) a layer's array position *is* its
 // compositing order, not just a display detail.
 // Ascending `.order` = top-to-bottom in the panel, but `file.layers`
 // array order is bottom-to-top (index 0 composites first/at the back,
-// last index on top) — so the derived array is the reverse of order.
+// last index on top): so the derived array is the reverse of order.
 export function moveLayerItem(file, fromPos, toPos) {
   const combined = layerOrder(file);
   moveBlock(combined, fromPos, toPos);
@@ -317,7 +317,7 @@ export function reorderFrame(file, from, to) {
 }
 
 // Resizing larger grows the logical buffer from center; resizing smaller only
-// shrinks the *visible* window — pixels outside it are preserved in the
+// shrinks the *visible* window: pixels outside it are preserved in the
 // logical buffer so growing back out later restores them intact (§13.4).
 export function resizeCanvas(file, newVisibleW, newVisibleH) {
   const needsGrow = newVisibleW > file.canvasWidth || newVisibleH > file.canvasHeight;

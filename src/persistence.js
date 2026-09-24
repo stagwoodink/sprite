@@ -2,7 +2,7 @@ import { resumeFolder, createDefaultBackend } from './storage.js';
 import { releaseReferences } from './references.js';
 import { encodeFile, encodeStubMeta, stubFile, parseFile, chunkName, FORMAT_VERSION } from './sprite-format.js';
 
-// Debounced write — autosave fires after every committed EditCommand, but
+// Debounced write: autosave fires after every committed EditCommand, but
 // batched against rapid-fire commits (e.g. end-of-stroke) rather than
 // writing mid-stroke (§18).
 // `ms` may be a function, re-read on every call, for a delay that depends
@@ -29,7 +29,7 @@ export async function chooseBackend() {
   return fsa || createDefaultBackend();
 }
 
-// Every saved project gets its own [projectId, ...] subtree — the registry
+// Every saved project gets its own [projectId, ...] subtree: the registry
 // (a flat list at the backend root, outside any project's own subtree) is
 // the index of what's out there, so "Open Project" doesn't need to load
 // every project's full data just to list their names.
@@ -77,9 +77,9 @@ export async function loadProject(backend, projectId) {
   }
   if (!files.length) return null;
   const collections = meta.collections || [];
-  // Redo stack is session-only, never persisted (§10) — reopening starts
+  // Redo stack is session-only, never persisted (§10): reopening starts
   // empty. `layerGroups` and every `.order` field are newer than some
-  // already-saved projects — default rather than crash on an old one.
+  // already-saved projects: default rather than crash on an old one.
   // (Stale `collectionId`/`groupId` fields from the pre-ordering.js model
   // are harmless leftovers: membership is derived fresh from `.order` on
   // every read now, never read back off those fields.)
@@ -122,7 +122,7 @@ async function readFile(backend, projectId, fileName, raw) {
     chunks.set('bin', await backend.readBytes([projectId, fileName + '.bin']));
   }
   for (const [key, bytes] of chunks) {
-    if (!bytes && key !== 'bin') console.error(`Missing pixel data (${key}) for "${base}" — it will open blank`);
+    if (!bytes && key !== 'bin') console.error(`Missing pixel data (${key}) for "${base}": it will open blank`);
   }
   return parseFile(raw, (kind, id) => chunks.get(id === undefined ? kind : `${kind}:${id}`) ?? null);
 }
@@ -138,7 +138,7 @@ async function dropLegacyChunks(backend, projectId, fileName, raw) {
 }
 
 // Fills a stub in place from storage, once (concurrent callers share the
-// same promise). Only the pixels come from disk — the stub's own fields
+// same promise). Only the pixels come from disk: the stub's own fields
 // (e.g. an `order` changed since opening) are newer.
 async function loadStub(backend, projectId, fileName, raw, stub) {
   const full = await readFile(backend, projectId, fileName, raw);
@@ -157,8 +157,8 @@ async function loadStub(backend, projectId, fileName, raw, stub) {
 }
 
 // Resolves once `file`'s pixels are in memory (immediately if they already
-// are). Anything about to read a File that may not be the active one —
-// export, resize, the collection grid — awaits this first.
+// are). Anything about to read a File that may not be the active one:
+// export, resize, the collection grid: awaits this first.
 export function ensureLoaded(file) {
   markUsed(file);
   if (!file._stub) return Promise.resolve();
@@ -213,9 +213,9 @@ export async function unloadIdle(backend, project, inUse, { keep = 3, idleMs = 6
   }
 }
 
-// Deletes every file a project owns (its subtree is flat — project.json
+// Deletes every file a project owns (its subtree is flat: project.json
 // plus one .sprite per File, no nested directories) and drops it from the
-// registry. No undo — this is a hard delete, same as every other
+// registry. No undo: this is a hard delete, same as every other
 // delete/remove button in the app (file, collection, layer, group), none
 // of which confirm either.
 export async function deleteProject(backend, projectId) {
@@ -225,7 +225,7 @@ export async function deleteProject(backend, projectId) {
   await backend.write(REGISTRY_PATH, registry.filter((entry) => entry.id !== projectId));
 }
 
-// A File's pixels live in binary chunks beside its JSON — one per layer
+// A File's pixels live in binary chunks beside its JSON: one per layer
 // buffer (see sprite-format.js). Chunks are written before the JSON, so a
 // saved JSON never points at chunks that aren't there yet.
 const legacyFrameChunk = (fileName, id) => `${fileName}.sprite.frame-${id}`; // v3: every layer of a Frame in one

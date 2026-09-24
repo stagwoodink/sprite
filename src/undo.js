@@ -8,9 +8,9 @@ const CAP = 50; // §10: 50-step undo stack, persisted as part of the SpriteFile
 //
 // Most commands are pixel diffs ({ before, after }: see canvas-model.js's
 // diffFromSnapshot for the typed-array shape). Layer structural changes (add/delete/reorder) aren't pixel
-// diffs — they change the shape of file.layers/file.frames itself — so
+// diffs: they change the shape of file.layers/file.frames itself: so
 // those carry a before/after layer-stack snapshot instead, tagged
-// `type: 'layers'` — see snapshotLayers for why that's cheap.
+// `type: 'layers'`: see snapshotLayers for why that's cheap.
 export function commitCommand(file, command) {
   if (command.type === 'layers') {
     if (!command.before || !command.after) return;
@@ -24,7 +24,7 @@ export function commitCommand(file, command) {
 }
 
 // Layer add/delete/reorder only ever add, remove or reorder *references* to
-// pixel buffers — no buffer is edited or copied by them — so the snapshot
+// pixel buffers: no buffer is edited or copied by them: so the snapshot
 // holds the buffers by reference and clones only the small layer metadata.
 // (Deep-cloning every buffer here cost layers x frames x canvas area per
 // edit, times the 50-step stack.) Later pixel edits mutate those shared

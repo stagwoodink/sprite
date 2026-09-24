@@ -1,6 +1,6 @@
 import { linePixels } from './canvas-model.js';
 
-// Shape tool outlines (Q/W/E, hold Shift to constrain proportions) — pure
+// Shape tool outlines (Q/W/E, hold Shift to constrain proportions): pure
 // point-generators, decoupled from how/where they get stamped onto a model.
 
 export function rectOutline(x0, y0, x1, y1) {
