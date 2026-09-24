@@ -42,7 +42,9 @@ import { unzipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser
 import { SHAPE_OUTLINES, constrainSquare } from './shapes.js';
 import { openSlideOut } from './slide-out.js';
 import { visibleOrder } from './ordering.js';
+import { watchPixelSnap } from './pixel-snap.js';
 
+watchPixelSnap(); // before anything measures the layout: font sizes set the grid
 const canvas = document.getElementById('sprite-canvas');
 const ctx = canvas.getContext('2d');
 const paletteBar = document.getElementById('palette-bar');
