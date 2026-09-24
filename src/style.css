@@ -598,10 +598,27 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 }
 
 /* Where an open side panel visually stacks in front of the Timeline/
-   Palette (their shrunk edge butts against it), a plain dark shadow line
-   on that edge reads as "the side panel is on top of this one." */
-#timeline-bar.pushed-left, #palette-bar.pushed-left { border-left: var(--border-width) solid var(--panel-edge-shadow); }
-#timeline-bar.pushed-right, #palette-bar.pushed-right { border-right: var(--border-width) solid var(--panel-edge-shadow); }
+   Palette (their shrunk edge butts against it): a light line on the seam, then
+   a shadow line just inside it, so the two panels read as separate surfaces
+   and the side panel as the one on top. */
+#timeline-bar.pushed-left, #palette-bar.pushed-left { border-left: var(--border-width) solid var(--panel-edge-highlight); }
+#timeline-bar.pushed-right, #palette-bar.pushed-right { border-right: var(--border-width) solid var(--panel-edge-highlight); }
+#timeline-bar.pushed-left::before, #palette-bar.pushed-left::before,
+#timeline-bar.pushed-right::after, #palette-bar.pushed-right::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--border-width);
+  background: var(--panel-edge-shadow);
+  pointer-events: none;
+}
+#timeline-bar.pushed-left::before, #palette-bar.pushed-left::before { left: 0; }
+#timeline-bar.pushed-right::after, #palette-bar.pushed-right::after { right: 0; }
+/* The palette's leftmost control is the hamburger button, which brings its own
+   light edge: a light seam line would double up, so the seam is just the shadow. */
+#palette-bar.pushed-left { border-left-color: var(--panel-edge-shadow); }
+#palette-bar.pushed-left::before { display: none; }
 
 .fps-field {
   flex: 0 0 var(--block);
