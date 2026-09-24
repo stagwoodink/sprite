@@ -184,7 +184,7 @@ export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'blac
 
     // No per-artboard fill — every artboard is transparent, showing the one
     // shared backdrop (`appBg`, filled once above) straight through.
-    drawPixels(ctx, board, scale, ox, oy, w, h);
+    drawBoard(ctx, board, ox, oy, w, h);
   });
 }
 
@@ -625,5 +625,26 @@ function blitPixelBuffer(ctx, srcSize, ox, oy, w, h) {
 function drawPixels(ctx, model, scale, ox, oy, w, h) {
   const srcSize = buildPixelBuffer(model);
   blitPixelBuffer(ctx, srcSize, ox, oy, w, h);
+}
+
+// The artboard grid draws many boards per frame, so the single shared buffer
+// above would be rebuilt for every one of them on every pan and zoom step. Each
+// board keeps its own canvas instead, keyed by its pixel array and repainted
+// only when that array's `rev` moves; a frame is then one drawImage per board.
+const boardCanvases = new WeakMap(); // pixels -> { rev, canvas }
+function drawBoard(ctx, model, ox, oy, w, h) {
+  let entry = boardCanvases.get(model.pixels);
+  if (!entry || entry.rev !== model.pixels.rev || entry.canvas.width !== model.width || entry.canvas.height !== model.height) {
+    const canvas = entry ? entry.canvas : document.createElement('canvas');
+    canvas.width = model.width;
+    canvas.height = model.height;
+    const imageData = new ImageData(model.width, model.height);
+    new Uint32Array(imageData.data.buffer).set(model.pixels);
+    canvas.getContext('2d').putImageData(imageData, 0, 0);
+    entry = { rev: model.pixels.rev, canvas };
+    boardCanvases.set(model.pixels, entry);
+  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(entry.canvas, 0, 0, model.width, model.height, ox, oy, w, h);
 }
 

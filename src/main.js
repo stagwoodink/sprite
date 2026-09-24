@@ -845,10 +845,35 @@ function groupArtboards(groupId = activeGroupId) {
     const fileIndex = project.files.indexOf(f);
     // A File not loaded yet shows blank and fills in when it arrives (load
     // on view).
-    if (f._stub) ensureLoaded(f).then(() => { if (activeGroupId) renderCanvas(); });
-    artboards.push({ name: f.name, width: f.visibleWidth, height: f.visibleHeight, pixels: f._stub ? new Uint32Array(f.visibleWidth * f.visibleHeight) : compositeFrame(f), fileIndex });
+    if (f._stub) loadForGrid(f);
+    artboards.push({ name: f.name, width: f.visibleWidth, height: f.visibleHeight, pixels: f._stub ? blankPixels(f.visibleWidth, f.visibleHeight) : compositeFrame(f), fileIndex });
   });
   return artboards;
+}
+
+// This runs on every render, tool-tag update and pointer move over the grid,
+// so it must not do per-call work per file: a stub's placeholder is one shared
+// array per size (stable identity, so the renderer's per-board cache holds),
+// and each stub's load is requested once, with one coalesced redraw for however
+// many land in the same frame instead of a redraw (and a re-walk of every
+// file) per load per call.
+const blanks = new Map();
+const blankPixels = (w, h) => {
+  const key = w + 'x' + h;
+  if (!blanks.has(key)) blanks.set(key, new Uint32Array(w * h));
+  return blanks.get(key);
+};
+const loadRequested = new WeakSet();
+let gridRedrawQueued = false;
+function loadForGrid(file) {
+  if (loadRequested.has(file)) return;
+  loadRequested.add(file);
+  ensureLoaded(file).then(() => {
+    loadRequested.delete(file);
+    if (gridRedrawQueued) return;
+    gridRedrawQueued = true;
+    requestAnimationFrame(() => { gridRedrawQueued = false; if (activeGroupId) renderCanvas(); });
+  });
 }
 
 // The whole laid-out grid, treated as one "model" purely so the existing
@@ -862,8 +887,8 @@ function activeGridset() {
   return c && c.gridset;
 }
 
-function groupLayoutModel() {
-  const layout = computeArtboardLayout(groupArtboards(), activeGridset());
+function groupLayoutModel(artboards = groupArtboards()) {
+  const layout = computeArtboardLayout(artboards, activeGridset());
   return { width: Math.max(1, layout.totalW), height: Math.max(1, layout.totalH) };
 }
 
@@ -880,7 +905,7 @@ function groupFitScale(layoutModel, viewW, viewH) {
 function renderGroupCanvas() {
   const artboards = groupArtboards();
   const rect = canvas.getBoundingClientRect();
-  const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
+  const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(artboards), rect.width, rect.height);
   renderArtboardGrid(ctx, canvas.clientWidth, canvas.clientHeight, artboards, {
     appBg: groupAppBgCycler.get(), scale, panX: groupViewState.panX, panY: groupViewState.panY, gridset: activeGridset(),
   });
