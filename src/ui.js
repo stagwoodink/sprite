@@ -263,6 +263,7 @@ export function attachDragReorder(itemEl, index, { getItems, axis = 'x', onReord
     const startX = e.clientX, startY = e.clientY;
     const rect = itemEl.getBoundingClientRect();
     let items = null; // set once the press has become a drag
+    let ends = null; // each item's resting far edge along `axis`: slots are hit-tested against these, not the sliding items
     let ghost = null;
     let hoverIndex = index;
     let outside = false;
@@ -271,6 +272,7 @@ export function attachDragReorder(itemEl, index, { getItems, axis = 'x', onReord
       if (!items) {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
         items = getItems();
+        ends = items.map((el) => { const r = el.getBoundingClientRect(); return axis === 'x' ? r.right : r.bottom; });
         itemEl.classList.add('dragging');
         ghost = createGhost(itemEl);
         window.getSelection().removeAllRanges();
@@ -282,8 +284,9 @@ export function attachDragReorder(itemEl, index, { getItems, axis = 'x', onReord
       outside = !!containerEl && !!onRemove && !(under && containerEl.contains(under));
       itemEl.classList.toggle('removing', outside);
       ghost.classList.toggle('removing', outside);
-      const target = items.find((el) => under && el.contains(under));
-      hoverIndex = target && !outside ? items.indexOf(target) : index;
+      const at = axis === 'x' ? ev.clientX : ev.clientY;
+      const slot = ends.findIndex((end) => at < end); // past the last item, the last
+      hoverIndex = outside ? index : slot === -1 ? items.length - 1 : slot;
       applyShiftPreview(items, index, hoverIndex, axis);
     }
     function onUp() {
