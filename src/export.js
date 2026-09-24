@@ -284,7 +284,7 @@ function layoutSheetCells(artboards) {
     return {
       board,
       x: col * layout.stepX + Math.floor((layout.cellW - board.width) / 2),
-      y: row * layout.stepY + Math.floor((layout.cellH - board.height) / 2),
+      y: row * layout.stepY + (layout.cellH - board.height), // bottom-aligned, as on screen
     };
   });
   return { cells, layout };

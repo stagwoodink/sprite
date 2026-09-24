@@ -180,7 +180,7 @@ export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'blac
     const cellY = originY + row * layout.stepY * scale;
     const w = board.width * scale, h = board.height * scale;
     const ox = cellX + ((layout.cellW - board.width) / 2) * scale;
-    const oy = cellY + ((layout.cellH - board.height) / 2) * scale;
+    const oy = cellY + (layout.cellH - board.height) * scale; // bottom-aligned in its cell
 
     // No per-artboard fill: every artboard is transparent, showing the one
     // shared backdrop (`appBg`, filled once above) straight through.
@@ -206,7 +206,7 @@ export function hitTestArtboardGrid(viewW, viewH, artboards, { scale = 1, panX =
     const cellY = originY + row * layout.stepY * scale;
     const w = board.width * scale, h = board.height * scale;
     const ox = cellX + ((layout.cellW - board.width) / 2) * scale;
-    const oy = cellY + ((layout.cellH - board.height) / 2) * scale;
+    const oy = cellY + (layout.cellH - board.height) * scale; // bottom-aligned in its cell
     if (x >= ox && x < ox + w && y >= oy && y < oy + h) return i;
   }
   return -1;
