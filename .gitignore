@@ -3,3 +3,6 @@ dist/
 nohup.out
 scripts/.cert/
 todo/
+test/
+spec/
+snaps/
