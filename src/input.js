@@ -1,14 +1,14 @@
 import { paintAt, linePixels, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { computeViewport, screenToPixel } from './viewport.js';
-import { cursorForMode } from './cursors.js';
+import { createInvertedCursor } from './inverted-cursor.js';
 import { paintOptions } from './paint-options.js';
 
 // Mouse-only interaction (CONTEXT.md: keyboard-first control scheme rebuild
-// — the keyboard side owns tool/brush-size selection now). Two distinct
+//: the keyboard side owns tool/brush-size selection now). Two distinct
 // placement tools, same Alt convention the design doc already uses for
 // fill (Ctrl=fill, Ctrl+Alt=antialiased fill): plain left click/drag is
-// Place (a hard-edged square stamp — precision, predetermined size),
-// Alt+left click/drag is Paint (a soft antialiased circular brush — fluid
+// Place (a hard-edged square stamp: precision, predetermined size),
+// Alt+left click/drag is Paint (a soft antialiased circular brush: fluid
 // strokes). Held once a shape key or Shift is already down, the drag
 // drives that tool instead (see `dragTools`). Right click/drag always
 // erases (hard-edged, unaffected by Alt). Fill and pan stay keyboard-only.
@@ -16,18 +16,21 @@ export function createInputController(canvas, model, colors, onPlace, history, g
   let drawingButton = null; // 0 = left/place-or-paint, 2 = right/erase
   let lastPixel = null;
   let strokeSnapshot = null;
-  let overCanvas = true;
-  let dragIntent = 'place'; // 'place' | 'erase' | 'shape' | 'select' — decided once, on pointerdown
-  let strokeAntialiased = false; // Place vs Paint for the active drag — frozen at pointerdown, like dragIntent
-  let hoverAntialiased = false; // live Alt state while just hovering (not dragging) — drives the cursor preview
+  let dragIntent = 'place'; // 'place' | 'erase' | 'shape' | 'select': decided once, on pointerdown
+  let strokeAntialiased = false; // Place vs Paint for the active drag: frozen at pointerdown, like dragIntent
+  let hoverAntialiased = false; // live Alt state while just hovering (not dragging): drives the cursor preview
 
   function currentMode() {
     if (drawingButton === 2) return 'erase';
     return (drawingButton === 0 ? strokeAntialiased : hoverAntialiased) ? 'paint' : 'place';
   }
 
+  const invertedCursor = createInvertedCursor(canvas);
   function updateCursor() {
-    canvas.style.cursor = overCanvas ? cursorForMode(currentMode()) : 'default';
+    // The group grid is read-only: no tool applies there, so keep the plain arrow.
+    const readOnly = !!(getReadOnly && getReadOnly());
+    canvas.style.cursor = readOnly ? 'default' : 'none';
+    invertedCursor.setMode(readOnly ? null : currentMode());
   }
 
   function pointerPixel(e) {
@@ -57,7 +60,7 @@ export function createInputController(canvas, model, colors, onPlace, history, g
     updateCursor();
     // Left button defers to whatever keyboard tool is currently held (a
     // shape key, or Shift for a selection rect) before falling back to
-    // placing/painting — right button always erases, regardless of held
+    // placing/painting: right button always erases, regardless of held
     // modifiers.
     if (drawingButton === 0 && dragTools.shapeActive && dragTools.shapeActive()) {
       dragIntent = 'shape';
@@ -78,7 +81,6 @@ export function createInputController(canvas, model, colors, onPlace, history, g
   // Bresenham-fills between samples so a fast drag doesn't leave gaps.
   function onPointerMove(e) {
     const hoverNow = pointerPixel(e);
-    overCanvas = hoverNow.x >= 0 && hoverNow.x < model.width && hoverNow.y >= 0 && hoverNow.y < model.height;
     if (drawingButton === null) hoverAntialiased = e.altKey;
     updateCursor();
     if (drawingButton === null) return;

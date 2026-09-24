@@ -1,10 +1,12 @@
 // Modifier-mode cursor icons (design-doc §8: "hard requirement, not a nice-to-have").
 // Small inline SVGs so no asset files/build step are needed (luddite).
-const ACCENT = '%23F2F2F0';
+// Pure white: inverted-cursor.js draws these with a difference blend, so white is what
+// makes the result an exact inversion of whatever is underneath.
+const ACCENT = '%23FFFFFF';
 
 function svgCursor(inner, size, hotspot) {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'>${inner}</svg>`;
-  return `url("data:image/svg+xml,${svg}") ${hotspot.x} ${hotspot.y}`;
+  return { src: `data:image/svg+xml,${svg}`, hotspot };
 }
 
 // Every cursor below shares one 18x18 canvas and 1.5 stroke-width so no
@@ -61,22 +63,21 @@ const SHAPE_CIRCLE = svgCursor(
   18, { x: 2, y: 2 },
 );
 
-export const CURSORS = {
-  place: `${DOT}, crosshair`, // precision — hard-edged square stamp
-  paint: `${BRUSH}, crosshair`, // fluid — soft antialiased circular brush
-  fill: `${BUCKET}, cell`,
-  antialiasedFill: `${BUCKET}, cell`,
-  selectRect: `${MARQUEE}, crosshair`,
-  selectWand: `${WAND}, crosshair`,
-  selectPolygon: `${LASSO}, crosshair`,
-  erase: `${ERASER}, crosshair`,
-  shaperect: `${SHAPE_RECT}, crosshair`,
-  shapetriangle: `${SHAPE_TRIANGLE}, crosshair`,
-  shapecircle: `${SHAPE_CIRCLE}, crosshair`,
-  pan: 'grab',
-  panning: 'grabbing',
+const ICONS = {
+  place: DOT, // precision: hard-edged square stamp
+  paint: BRUSH, // fluid: soft antialiased circular brush
+  fill: BUCKET,
+  antialiasedFill: BUCKET,
+  selectRect: MARQUEE,
+  selectWand: WAND,
+  selectPolygon: LASSO,
+  erase: ERASER,
+  shaperect: SHAPE_RECT,
+  shapetriangle: SHAPE_TRIANGLE,
+  shapecircle: SHAPE_CIRCLE,
 };
 
-export function cursorForMode(mode) {
-  return CURSORS[mode] || CURSORS.place;
+/** `{ src, hotspot }` for a tool mode's cursor icon; unknown modes fall back to Place. */
+export function cursorIcon(mode) {
+  return ICONS[mode] || ICONS.place;
 }
