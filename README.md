@@ -31,7 +31,7 @@ Plain JavaScript, HTML and CSS. No framework, no build step, no dependencies to 
 - Collection view shows every canvas in a collection side by side in an even number of columns
 - New canvas presets from 8x8 up to Pico-8 (128x128) and Game Boy DMG (160x144), plus custom sizes up to 256x256
 - Double click the new canvas button to duplicate the size you were last working on
-- Resize canvases, reorder by dragging, multi-select with Shift and Alt
+- Resize canvases from an anchor, trim to their pixels (both undoable), reorder by dragging, multi-select with Shift and Alt
 - Capacity meter shows how close a project is to what a low-end machine handles comfortably
 
 **Layers and animation**
