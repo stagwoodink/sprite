@@ -1,5 +1,6 @@
 import { createColorTable, packedTable, bufferId, blendPacked } from './canvas-model.js';
 import { computeMembership, moveBlock, nextOrder } from './ordering.js';
+import { indexedBounds, unionBounds } from './trim.js';
 
 // SpriteFile / Layer / Frame data model (design-doc §5).
 export function createLayer(name = 'Layer 1', order = 1000) {
@@ -316,35 +317,54 @@ export function reorderFrame(file, from, to) {
   if (file.activeFrameIndex === from) file.activeFrameIndex = to;
 }
 
-// Resizing larger grows the logical buffer from center; resizing smaller only
-// shrinks the *visible* window: pixels outside it are preserved in the
-// logical buffer so growing back out later restores them intact (§13.4).
-export function resizeCanvas(file, newVisibleW, newVisibleH) {
-  const needsGrow = newVisibleW > file.canvasWidth || newVisibleH > file.canvasHeight;
-  if (!needsGrow) {
-    file.visibleWidth = newVisibleW;
-    file.visibleHeight = newVisibleH;
-    return;
-  }
+// Where the existing pixels sit in the resized canvas, as [horizontal, vertical]
+// fractions of the free space (0 = start edge, 1 = end edge): bottom left, top
+// left, top right, bottom right or centre.
+export const RESIZE_ANCHORS = { bl: [0, 1], tl: [0, 0], tr: [1, 0], br: [1, 1], c: [0.5, 0.5] };
 
-  const newCanvasW = Math.max(file.canvasWidth, newVisibleW);
-  const newCanvasH = Math.max(file.canvasHeight, newVisibleH);
-  const offsetX = Math.floor((newCanvasW - file.canvasWidth) / 2);
-  const offsetY = Math.floor((newCanvasH - file.canvasHeight) / 2);
+// Rebuilds every buffer at exactly the new size, with the visible pixels placed
+// at `anchor` and whatever falls outside cropped. Pixels outside the old visible
+// window (left by earlier versions, which kept them hidden) are dropped here.
+export function resizeCanvas(file, newW, newH, anchor = 'bl') {
+  const [fx, fy] = RESIZE_ANCHORS[anchor];
+  rebuildCanvas(file, newW, newH, Math.floor((newW - file.visibleWidth) * fx), Math.floor((newH - file.visibleHeight) * fy));
+}
+
+// Resizes to the box holding every placed pixel of every layer and frame, hidden
+// layers included, but never below `min` on a side. Returns false, changing
+// nothing, when the canvas is empty or already fits.
+export function trimCanvas(file, min) {
+  const w = file.visibleWidth, h = file.visibleHeight;
+  let box = null;
+  for (const frame of file.frames) {
+    for (const pixels of frame.layerPixels) box = unionBounds(box, indexedBounds(pixels, file.canvasWidth, w, h));
+  }
+  if (!box) return false;
+  // A box under the minimum grows toward the far edge, or back from it at the border.
+  const x0 = Math.max(0, Math.min(box.x0, w - min)), y0 = Math.max(0, Math.min(box.y0, h - min));
+  const newW = Math.max(min, box.x1 - x0), newH = Math.max(min, box.y1 - y0);
+  if (newW === w && newH === h) return false;
+  rebuildCanvas(file, newW, newH, -x0, -y0);
+  return true;
+}
+
+// Rebuilds every buffer at `newW` x `newH`, the old pixels shifted by (ox, oy).
+function rebuildCanvas(file, newW, newH, ox, oy) {
+  const oldW = file.visibleWidth, oldH = file.visibleHeight, stride = file.canvasWidth;
+  const x0 = Math.max(0, ox), x1 = Math.min(newW, ox + oldW);
+  const y0 = Math.max(0, oy), y1 = Math.min(newH, oy + oldH);
 
   for (const frame of file.frames) {
     frame.layerPixels = frame.layerPixels.map((oldPixels) => {
-      const next = new Uint16Array(newCanvasW * newCanvasH);
-      for (let y = 0; y < file.canvasHeight; y++) {
-        const from = y * file.canvasWidth;
-        next.set(oldPixels.subarray(from, from + file.canvasWidth), (y + offsetY) * newCanvasW + offsetX);
+      const next = new Uint16Array(newW * newH);
+      for (let y = y0; y < y1; y++) {
+        const from = (y - oy) * stride + (x0 - ox);
+        next.set(oldPixels.subarray(from, from + x1 - x0), y * newW + x0);
       }
       return next;
     });
   }
 
-  file.canvasWidth = newCanvasW;
-  file.canvasHeight = newCanvasH;
-  file.visibleWidth = newVisibleW;
-  file.visibleHeight = newVisibleH;
+  file.canvasWidth = file.visibleWidth = newW;
+  file.canvasHeight = file.visibleHeight = newH;
 }

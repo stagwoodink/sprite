@@ -63,11 +63,17 @@ export function addExistingFile(project, file, collectionId) {
 }
 
 // The bare name, then "name 2", "name 3": never a "1" suffix on the first.
-export function uniqueFileName(project, base) {
-  const taken = new Set(project.files.map((f) => f.name));
+// A File's name is its storage key, so two sharing one read and overwrite the
+// same record; `except` is the File being renamed, which may keep its own name.
+export function uniqueFileName(project, base, except) {
+  const taken = new Set(project.files.filter((f) => f !== except).map((f) => f.name));
   let name = base;
   for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;
   return name;
+}
+
+export function renameFile(project, file, name) {
+  file.name = uniqueFileName(project, name, file);
 }
 
 // The Collection a newly added File lands under by default (§ addFile):
@@ -140,7 +146,7 @@ export function deleteFile(project, index) {
 // The picker stops at Game Boy DMG; the custom fields go up to 256x256 (the
 // ceiling, chosen so long animations stay cheap: frame memory scales with
 // canvas area): see docs/adr/0003-canvas-size-range.md.
-export const MIN_CANVAS = 6;
+export const MIN_CANVAS = 3;
 export const MAX_CANVAS = 256;
 
 // Side of the square canvas a new project starts with, and the fallback for a new canvas with nothing to match.

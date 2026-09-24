@@ -12,7 +12,7 @@ const CAP = 50; // §10: 50-step undo stack, persisted as part of the SpriteFile
 // those carry a before/after layer-stack snapshot instead, tagged
 // `type: 'layers'`: see snapshotLayers for why that's cheap.
 export function commitCommand(file, command) {
-  if (command.type === 'layers') {
+  if (command.type === 'layers' || command.type === 'resize') {
     if (!command.before || !command.after) return;
   } else if (!command.before.length) {
     return;
@@ -46,11 +46,30 @@ function applyLayerSnapshot(file, snapshot) {
   file.activeLayerIndex = snapshot.activeLayerIndex;
 }
 
+// A resize builds new buffers and leaves the old ones untouched, so like the
+// layer snapshot this holds buffers by reference: nothing is copied.
+export function snapshotResize(file) {
+  const { visibleWidth, visibleHeight, canvasWidth, canvasHeight } = file;
+  return { visibleWidth, visibleHeight, canvasWidth, canvasHeight, frames: file.frames.map((frame) => ({ frame, layerPixels: frame.layerPixels.slice() })) };
+}
+
+function applyResizeSnapshot(file, snapshot) {
+  const { visibleWidth, visibleHeight, canvasWidth, canvasHeight } = snapshot;
+  Object.assign(file, { visibleWidth, visibleHeight, canvasWidth, canvasHeight });
+  for (const { frame, layerPixels } of snapshot.frames) frame.layerPixels = layerPixels.slice();
+}
+
+// Applies one side of a command: a layer or resize snapshot, or a pixel diff.
+function apply(file, model, command, side) {
+  if (command.type === 'layers') applyLayerSnapshot(file, side);
+  else if (command.type === 'resize') applyResizeSnapshot(file, side);
+  else applyDiff(model, side);
+}
+
 export function undo(file, model) {
   const command = file.undoStack.pop();
   if (!command) return false;
-  if (command.type === 'layers') applyLayerSnapshot(file, command.before);
-  else applyDiff(model, command.before);
+  apply(file, model, command, command.before);
   file.redoStack.push(command);
   return true;
 }
@@ -58,8 +77,7 @@ export function undo(file, model) {
 export function redo(file, model) {
   const command = file.redoStack.pop();
   if (!command) return false;
-  if (command.type === 'layers') applyLayerSnapshot(file, command.after);
-  else applyDiff(model, command.after);
+  apply(file, model, command, command.after);
   file.undoStack.push(command);
   return true;
 }
