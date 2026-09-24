@@ -1,6 +1,9 @@
 // "?" toggles a keybind reference modal; Esc also closes it while open.
 // Mirrors the focus-based control scheme (CONTEXT.md, todo/control.md):
 // one group per panel, plus Global and Canvas.
+import { keyIcon } from './icons.js';
+import { hoverTip } from './ui.js';
+
 const GROUPS = [
   ['Global', [
     ['?', 'Show/hide this modal'],
@@ -96,6 +99,12 @@ const GROUPS = [
 
 const TRANSITION_MS = 180;
 
+// Key names drawn as their icon; everything else in a key label stays text.
+// A name followed by `-` (Right-Shift) is a different key, so it stays text.
+const KEY_ICONS = { Ctrl: 'ctrl', Alt: 'alt', Shift: 'shift', Tab: 'tab', Backspace: 'backspace', Enter: 'return', Space: 'space', Up: 'up', Down: 'down', Left: 'left', Right: 'right' };
+const KEY_NAME = /\b(Ctrl|Alt|Shift|Tab|Backspace|Enter|Space|Up|Down|Left|Right)\b(?!-)/;
+const keyLabel = (text) => text.split(new RegExp(KEY_NAME.source, 'g')).map((part, i) => (i % 2 ? keyIcon(KEY_ICONS[part]) : part));
+
 export function createKeybindHelp() {
   let overlay = null;
   let closeTimer = null;
@@ -122,7 +131,8 @@ export function createKeybindHelp() {
         row.className = 'keybind-help-row';
         const k = document.createElement('span');
         k.className = 'keybind-help-key';
-        k.textContent = key;
+        k.append(...keyLabel(key));
+        hoverTip(k, key); // the icons are pictures: spell the combo out in the tool tag
         const d = document.createElement('span');
         d.textContent = desc;
         row.append(k, d);

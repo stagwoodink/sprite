@@ -1,7 +1,8 @@
 // Layers panel (design-doc §11, ui-design-system §4).
 import { paintThumbnail } from './thumbnail.js';
 import { BLOCK } from './grid.js';
-import { button, setIcon, makeReorderable, startInlineEdit } from './ui.js';
+import { overText } from './text-hit.js';
+import { button, setIcon, hoverTip, showTip, makeReorderable, startInlineEdit } from './ui.js';
 import { layerOrder, compositeLayerAt } from './sprite-file.js';
 import { visibleOrder } from './ordering.js';
 import { referencesOf, isResolved } from './references.js';
@@ -34,12 +35,12 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
   // One "+" at the foot of the stack. Click opens a menu of everything you can
   // add; right-click adds a group and Alt+click a reference straight away.
   const addBtn = button({
-    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New layer, group or reference',
+    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New layer, group or reference (+)',
     onClick: (e) => {
       if (e.altKey) { callbacks.onImportReference(); return; }
       openSlideOut(addBtn, [
-        { label: 'Layer', onClick: () => callbacks.onAddLayer() },
-        { label: 'Group', onClick: () => callbacks.onAddGroup() },
+        { label: 'Layer', keys: '+', onClick: () => callbacks.onAddLayer() },
+        { label: 'Group', keys: '=', onClick: () => callbacks.onAddGroup() },
         { label: 'Reference', onClick: () => callbacks.onImportReference() },
       ], { side: 'left' });
     },
@@ -64,9 +65,12 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     }
     nextThumbs.set(buf, thumb);
     const canvasEl = thumb.canvasEl;
-    const eyePip = document.createElement('div');
-    eyePip.className = 'eye-pip' + (layer.visible ? '' : ' hidden-indicator');
-    thumbWrap.append(canvasEl, eyePip);
+    const eyeOverlay = document.createElement('div');
+    eyeOverlay.className = 'thumb-eye' + (layer.visible ? '' : ' hidden-indicator');
+    setIcon(eyeOverlay, 'visibility');
+    thumbWrap.append(canvasEl, eyeOverlay);
+    const thumbTip = 'Hide/show layer';
+    hoverTip(thumbWrap, thumbTip);
     thumbWrap.addEventListener('click', (e) => {
       e.stopPropagation();
       // Clicking the thumbnail of a layer that's part of the current
@@ -76,49 +80,37 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
       else callbacks.onToggleVisible(i);
     });
 
-    // Hover-revealed vertical slider, OVERLAID on the thumbnail's right edge
-    // (not pushing it over): drag the pip up/down to change opacity, no
-    // right-click/menu needed. A % readout appears to its left while dragging.
-    const opacitySlider = document.createElement('div');
-    opacitySlider.className = 'opacity-slider';
-    const opacityFill = document.createElement('div');
-    opacityFill.className = 'opacity-slider-fill';
+    // Hover-revealed handle on the thumbnail's right edge: drag it up/down to
+    // change opacity, no right-click/menu needed. The tool tag shows the
+    // transparency, live while dragging.
+    const handleTip = () => `Transparency ${Math.round((1 - layer.opacity) * 100)}%`;
     const opacityPip = document.createElement('div');
-    opacityPip.className = 'opacity-slider-pip';
-    const opacityReadout = document.createElement('div');
-    opacityReadout.className = 'opacity-readout';
-    opacitySlider.append(opacityFill, opacityPip);
-
-    function setOpacityFromEvent(e) {
-      const r = opacitySlider.getBoundingClientRect();
-      const value = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
-      const pct = Math.round(value * 100);
-      opacityFill.style.height = pct + '%';
-      opacityPip.style.bottom = pct + '%';
-      opacityReadout.textContent = pct + '%';
-      opacityReadout.style.left = r.right + 4 + 'px';
-      opacityReadout.style.top = e.clientY - opacityReadout.offsetHeight / 2 + 'px';
-      callbacks.onOpacityChange(i, value);
-    }
-    opacityFill.style.height = Math.round(layer.opacity * 100) + '%';
-    opacityPip.style.bottom = Math.round(layer.opacity * 100) + '%';
-    opacitySlider.draggable = false;
-    opacitySlider.addEventListener('pointerdown', (e) => {
+    opacityPip.className = 'opacity-pip';
+    const placePip = () => opacityPip.style.setProperty('--t', 1 - layer.opacity);
+    placePip();
+    opacityPip.addEventListener('mouseenter', () => showTip(handleTip()));
+    opacityPip.addEventListener('mouseleave', () => showTip(thumbTip));
+    opacityPip.addEventListener('click', (e) => e.stopPropagation());
+    opacityPip.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      opacitySlider.setPointerCapture(e.pointerId);
-      document.body.append(opacityReadout);
-      setOpacityFromEvent(e);
-      const move = (ev) => setOpacityFromEvent(ev);
+      opacityPip.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const r = thumbWrap.getBoundingClientRect();
+        const travel = r.height - opacityPip.offsetHeight;
+        const value = Math.max(0, Math.min(1, 1 - (ev.clientY - r.top - opacityPip.offsetHeight / 2) / travel));
+        callbacks.onOpacityChange(i, value);
+        placePip();
+        showTip(handleTip());
+      };
       const up = () => {
-        opacitySlider.removeEventListener('pointermove', move);
-        opacitySlider.removeEventListener('pointerup', up);
-        opacityReadout.remove();
+        opacityPip.removeEventListener('pointermove', move);
+        opacityPip.removeEventListener('pointerup', up);
         callbacks.onOpacityCommit();
       };
-      opacitySlider.addEventListener('pointermove', move);
-      opacitySlider.addEventListener('pointerup', up);
+      opacityPip.addEventListener('pointermove', move);
+      opacityPip.addEventListener('pointerup', up);
     });
-    thumbWrap.append(opacitySlider);
+    thumbWrap.append(opacityPip);
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
@@ -173,7 +165,9 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     });
 
     const eyePip = document.createElement('div');
-    eyePip.className = 'eye-pip standalone' + (group.visible ? '' : ' hidden-indicator');
+    eyePip.className = 'eye-pip' + (group.visible ? '' : ' hidden-indicator');
+    setIcon(eyePip, 'visibility');
+    hoverTip(eyePip, 'Hide/show group');
     eyePip.addEventListener('click', (e) => { e.stopPropagation(); callbacks.onToggleGroupVisible(group.id); });
 
     const arrow = document.createElement('span');
@@ -189,6 +183,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     label.className = 'layer-label';
     label.textContent = group.name;
     label.addEventListener('dblclick', (e) => {
+      if (!overText(label, e)) return; // empty space beside the name: the row folds
       e.stopPropagation();
       startInlineEdit(label, group.name, (v) => { if (v) { group.name = v; callbacks.onRename(); } });
     });
@@ -198,7 +193,16 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
       onClick: (e) => { e.stopPropagation(); callbacks.onDeleteGroup(group.id); },
     });
 
-    row.append(handle, eyePip, arrow, label, deleteBtn);
+    // Fold arrow directly between the grab handle and the name.
+    row.append(handle, arrow, label, eyePip, deleteBtn);
+    // A click selects the group. A double click on empty space in the row folds or
+    // unfolds it; on the name's text it renames instead (above).
+    row.addEventListener('click', () => { if (group.id !== focusedGroupId) callbacks.onSelectGroup(group.id); });
+    row.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.drag-handle, .fold-arrow, .eye-pip, button') || overText(label, e)) return;
+      group.collapsed = !group.collapsed;
+      callbacks.onChange();
+    });
     return row;
   }
 

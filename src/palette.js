@@ -1,7 +1,7 @@
 import { PRESETS, DEFAULT_PRESET, MAX_CHIPS } from './palettes-presets.js';
 import { openColorPicker } from './color-picker.js';
 import { openCustomSlideOut } from './slide-out.js';
-import { button, attachNativeDragReorder, flashTip, pickFile } from './ui.js';
+import { button, attachDragReorder, flashTip, showTip, pickFile } from './ui.js';
 import { parsePalette, paletteNameFromFile } from './palette-parse.js';
 import { extractPalette } from './quantize.js';
 import { decodeImage, bitmapPixels, isImageFile } from './image-import.js';
@@ -37,11 +37,8 @@ function openPresetPanel(anchor, onLoad, onNewPalette, onDelete, onImport) {
       );
       panel.append(row);
     }
-    panel.append(button({ label: 'Import…', fill: true, onClick: () => { onImport(); close(); } }));
-    panel.append(button({
-      label: '+ New Palette', fill: true, className: 'new-palette-btn',
-      onClick: () => { onNewPalette(); close(); },
-    }));
+    panel.append(button({ label: 'Import', fill: true, onClick: () => { onImport(); close(); } }));
+    panel.append(button({ label: 'New', fill: true, onClick: () => { onNewPalette(); close(); } }));
   }, { side: 'up', className: 'palette-preset-panel' });
   return result && result.el;
 }
@@ -164,7 +161,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     container.innerHTML = '';
 
     const hamburger = button({
-      glyph: '☰', icon: true, className: 'palette-hamburger', title: 'Palettes',
+      glyph: '☰', icon: true, className: 'palette-hamburger', title: 'Palettes (\\)',
       onClick: () => openMenu(hamburger),
     });
     container.append(hamburger);
@@ -180,22 +177,26 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
       chip.className = 'chip';
       chip.style.setProperty('--chip-color', hex);
 
-      // Hex code reveals above the chip on hover: click it to open the
-      // color picker (one seamless interaction, not a right-click menu).
+      // Right-click, or the hex code that reveals above the chip on hover,
+      // opens the color picker.
       const hexLabel = document.createElement('button');
       hexLabel.className = 'chip-hex-label';
       hexLabel.textContent = hex;
-      hexLabel.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openColorPicker(chip, state.chips[i], (newHex) => {
-          if (state.chips[i] === state.primary) state.primary = newHex;
-          state.chips[i] = newHex;
-          chip.style.setProperty('--chip-color', newHex);
-          hexLabel.textContent = newHex;
-          onChange(state);
-        });
+      const editColor = () => openColorPicker(chip, state.chips[i], (newHex) => {
+        if (state.chips[i] === state.primary) state.primary = newHex;
+        state.chips[i] = newHex;
+        chip.style.setProperty('--chip-color', newHex);
+        hexLabel.textContent = newHex;
+        onChange(state);
       });
+      hexLabel.addEventListener('click', (e) => { e.stopPropagation(); editColor(); });
+      chip.addEventListener('contextmenu', (e) => { e.preventDefault(); editColor(); });
       chip.append(hexLabel);
+
+      // The tool tag names the colour and, for the first ten, the number key that picks it.
+      const numberKey = i < 9 ? String(i + 1) : i === 9 ? '0' : null;
+      chip.addEventListener('mouseenter', () => showTip(numberKey ? `${state.chips[i]} (${numberKey})` : state.chips[i]));
+      chip.addEventListener('mouseleave', () => showTip(null));
 
       chip.addEventListener('mousedown', () => chip.classList.add('pressed'));
       chip.addEventListener('mouseup', () => chip.classList.remove('pressed'));
@@ -213,7 +214,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
         onChange(state);
       });
 
-      attachNativeDragReorder(chip, i, {
+      attachDragReorder(chip, i, {
         getItems: () => Array.from(row.querySelectorAll('.chip')),
         axis: 'x',
         containerEl: viewport,
@@ -241,7 +242,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
 
     if (state.chips.length < MAX_CHIPS) {
       container.append(button({
-        glyph: '+', icon: true, className: 'chip-add', title: 'Add color',
+        glyph: '+', icon: true, className: 'chip-add', title: 'Add color (+)',
         onClick: () => {
           state.chips.push('#FFFFFF');
           scrollPx = Infinity; // clamped to the new max in layoutChips: scrolls the new chip into view
@@ -250,8 +251,6 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
         },
       }));
     }
-
-    container.append(button({ glyph: '↓', icon: true, className: 'palette-import', title: 'Import a palette file or image', onClick: pickPaletteFile }));
 
     layoutChips(viewport, row);
   }

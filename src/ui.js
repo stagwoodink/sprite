@@ -1,4 +1,5 @@
 import { hasIcon, iconElement } from './icons.js';
+import { forceCursor } from './inverted-cursor.js';
 export { setIcon } from './icons.js';
 // Shared hover-tip channel: instead of a button's `title` becoming a native
 // browser tooltip, button() reports it here on hover/focus; main.js (which
@@ -6,6 +7,9 @@ export { setIcon } from './icons.js';
 // tool/brush/zoom) subscribes once and displays it there instead.
 let hoverTipListener = null;
 export function onHoverTip(fn) { hoverTipListener = fn; }
+
+/** Puts `text` in the tool tag's tip slot (null clears it), for callers with no element of their own to hover. */
+export function showTip(text) { if (hoverTipListener) hoverTipListener(text); }
 
 // Wires any element to the tool tag's tip slot (what button() does for its
 // `title`). Tips must be terse: that slot is a few words wide.
@@ -158,6 +162,10 @@ export function makeReorderable(handle, row, index, { listEl, boundsEl, onReorde
     // array index sits *above* in the DOM, the reverse of the file list).
     const orderedRows = Array.from(listEl.querySelectorAll('[data-reorder-index]'));
     const startPos = orderedRows.indexOf(row);
+    // Slots are hit-tested against these resting positions, never the live
+    // ones: the rows slide to open a gap, and testing against the sliding rows
+    // made the target flip back and forth under a still cursor.
+    const restingBottoms = orderedRows.map((el) => el.getBoundingClientRect().bottom);
 
     let dropIndex = index;
     let outside = false;
@@ -177,9 +185,6 @@ export function makeReorderable(handle, row, index, { listEl, boundsEl, onReorde
         el.style.transform = shift ? `translateY(${shift * rowH}px)` : '';
       });
     }
-    function clearDragOver() {
-      document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
-    }
 
     function onMove(ev) {
       ghost.style.top = (ev.clientY - grabOffsetY) + 'px';
@@ -189,17 +194,15 @@ export function makeReorderable(handle, row, index, { listEl, boundsEl, onReorde
       row.classList.toggle('removing', outside && !!onRemove);
       ghost.classList.toggle('removing', outside && !!onRemove);
       if (outside) {
-        clearDragOver();
         resetShift();
         dropIndex = index;
         return;
       }
 
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      const target = el && el.closest('[data-reorder-index]');
-      clearDragOver();
-      if (target && target !== row && listEl.contains(target)) {
-        target.classList.add('drag-over');
+      // First slot whose bottom is below the cursor; past the last one, the last.
+      const slot = restingBottoms.findIndex((bottom) => ev.clientY < bottom);
+      const target = orderedRows[slot === -1 ? orderedRows.length - 1 : slot];
+      if (target !== row) {
         dropIndex = Number(target.dataset.reorderIndex);
         applyShift(target);
       } else {
@@ -212,7 +215,6 @@ export function makeReorderable(handle, row, index, { listEl, boundsEl, onReorde
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       row.classList.remove('dragging', 'removing');
-      clearDragOver();
       resetShift();
       ghost.remove();
       if (outside && onRemove) onRemove(index);
@@ -237,76 +239,69 @@ function clearShiftPreview(items) {
   items.forEach((el) => { el.style.transform = ''; el.style.opacity = ''; });
 }
 
-// Native HTML5 drag-and-drop reorder for a horizontal or vertical strip of
+// Pointer-based drag-to-reorder for a horizontal or vertical strip of
 // equal-size sibling elements (palette's chip row, timeline's frame strip).
-// A different mechanism from makeReorderable above on purpose: that one
-// exists specifically because native DnD is unreliable to trigger from a
-// small handle; a whole chip/frame tile is a large, unambiguous drag
-// target, so native DnD's other native perks (drag-image, OS-level cursor
-// feedback) are worth having here instead.
+// Unlike makeReorderable above the whole item is the handle, so a press only
+// becomes a drag after the pointer moves DRAG_THRESHOLD px: a plain click is
+// left alone. It is pointer-based, not native HTML5 drag-and-drop, so the
+// pointer stays the app's own inverted cursor (grab) instead of the OS's
+// drag cursor.
 //
-// dragstart marks the source; dragover previews the live shift; the actual
-// reorder commits on dragend rather than drop: a live shift-preview can
-// move the dragged element's own siblings out from under the pointer, so
-// whatever the browser resolves as the drop target at drop-time can be
-// stale or missing a listener, while dragend always fires on the dragged
-// element itself regardless. Call once per item in the strip; only one
-// native drag can be in flight browser-wide at a time, so the bit of state
-// that must be shared across every sibling's own dragover handler is a
-// module-level singleton here, the same way slide-out.js tracks its one
-// open popup.
-//
-// `getItems()` returns the current sibling elements in order: called
-// fresh at drag start, since the caller's own list can change between
-// drags. `axis`: 'x' for a horizontal strip, 'y' for vertical.
-// `containerEl` + `onRemove`, given together: dragging an item out past
-// `containerEl`'s bounds and releasing removes it instead of reordering
-// (the caller's own `onRemove` decides whether that's currently allowed,
-// e.g. never dropping below one remaining item: this helper doesn't know
-// or care what "removed" means beyond calling it back).
-let dragReorderState = null;
+// The item is dimmed in place and a ghost follows the pointer; the siblings
+// slide to preview the drop, and release commits it. `getItems()` returns the
+// current sibling elements in order: called fresh at drag start, since the
+// caller's own list can change between drags. `axis`: 'x' for a horizontal
+// strip, 'y' for vertical. `containerEl` + `onRemove`, given together:
+// releasing outside `containerEl`'s bounds removes the item instead of
+// reordering (the caller's own `onRemove` decides whether that's currently
+// allowed, e.g. never dropping below one remaining item).
+const DRAG_THRESHOLD = 4;
 
-export function attachNativeDragReorder(itemEl, index, { getItems, axis = 'x', onReorder, containerEl, onRemove } = {}) {
-  itemEl.draggable = true;
+export function attachDragReorder(itemEl, index, { getItems, axis = 'x', onReorder, containerEl, onRemove } = {}) {
+  itemEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const startX = e.clientX, startY = e.clientY;
+    const rect = itemEl.getBoundingClientRect();
+    let items = null; // set once the press has become a drag
+    let ghost = null;
+    let hoverIndex = index;
+    let outside = false;
 
-  function pointIsOutside(e) {
-    if (!containerEl) return false;
-    if (e.clientX === 0 && e.clientY === 0) return false; // 'drag' fires once with zeroed coords
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    return !el || !containerEl.contains(el);
-  }
-
-  itemEl.addEventListener('dragstart', (e) => {
-    dragReorderState = { fromIndex: index, hoverIndex: index, items: getItems() };
-    itemEl.classList.add('dragging');
-    e.dataTransfer.setData('text/plain', String(index));
+    function onMove(ev) {
+      if (!items) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
+        items = getItems();
+        itemEl.classList.add('dragging');
+        ghost = createGhost(itemEl);
+        window.getSelection().removeAllRanges();
+        forceCursor('grab');
+      }
+      ghost.style.left = rect.left + ev.clientX - startX + 'px';
+      ghost.style.top = rect.top + ev.clientY - startY + 'px';
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      outside = !!containerEl && !!onRemove && !(under && containerEl.contains(under));
+      itemEl.classList.toggle('removing', outside);
+      ghost.classList.toggle('removing', outside);
+      const target = items.find((el) => under && el.contains(under));
+      hoverIndex = target && !outside ? items.indexOf(target) : index;
+      applyShiftPreview(items, index, hoverIndex, axis);
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (!items) return;
+      ghost.remove();
+      forceCursor(null);
+      itemEl.classList.remove('dragging', 'removing');
+      clearShiftPreview(items);
+      // The release also fires a click on the item: it was a drag, not a click.
+      const swallow = (ev) => ev.stopPropagation();
+      window.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', swallow, true), 100); // no click follows a release outside the window
+      if (outside) onRemove(index);
+      else if (hoverIndex !== index) onReorder(index, hoverIndex);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   });
-
-  // 'drag' fires continuously (unlike 'dragover', which only fires over
-  // valid drop targets): the only way to flag "pulled outside the strip"
-  // with a visible cue before release.
-  if (containerEl && onRemove) {
-    itemEl.addEventListener('drag', (e) => {
-      if (!dragReorderState) return;
-      itemEl.classList.toggle('removing', pointIsOutside(e));
-    });
-  }
-
-  itemEl.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    if (!dragReorderState || dragReorderState.fromIndex === index) return;
-    dragReorderState.hoverIndex = index;
-    applyShiftPreview(dragReorderState.items, dragReorderState.fromIndex, index, axis);
-  });
-
-  itemEl.addEventListener('dragend', (e) => {
-    if (!dragReorderState) return;
-    const { fromIndex, hoverIndex, items } = dragReorderState;
-    dragReorderState = null;
-    itemEl.classList.remove('dragging', 'removing');
-    clearShiftPreview(items);
-    if (containerEl && onRemove && pointIsOutside(e)) onRemove(fromIndex);
-    else if (hoverIndex !== fromIndex) onReorder(fromIndex, hoverIndex);
-  });
-  itemEl.addEventListener('drop', (e) => e.preventDefault());
 }

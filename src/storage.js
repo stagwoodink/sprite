@@ -84,6 +84,7 @@ async function fsaDirFor(root, path, { create } = {}) {
 function createFsaBackend(rootHandle) {
   return {
     kind: 'fsa',
+    name: rootHandle.name,
     async write(path, data) {
       const dir = await fsaDirFor(rootHandle, path, { create: true });
       const fileHandle = await dir.getFileHandle(path[path.length - 1], { create: true });

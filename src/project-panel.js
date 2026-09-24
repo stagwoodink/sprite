@@ -1,6 +1,7 @@
-import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder, projectLoad, projectLoadBreakdown, formatBytes } from './project.js';
+import { renameFile, NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder, projectLoad, projectLoadBreakdown, formatBytes } from './project.js';
 import { visibleOrder } from './ordering.js';
 import { openSlideOut, openCustomSlideOut, closeSlideOut } from './slide-out.js';
+import { overText } from './text-hit.js';
 import { button, setIcon, hoverTip, makeReorderable, startInlineEdit } from './ui.js';
 
 // Project panel (ui-design-system §7, design-doc §13). `state` is the
@@ -24,16 +25,26 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     project.name = v;
     // A single-file project reads as one thing to the user: its one
     // .sprite file should track the project's own name.
-    if (project.files.length === 1) project.files[0].name = v;
+    if (project.files.length === 1) renameFile(project, project.files[0], v);
     callbacks.onChange();
   }));
 
-  // Same glyph, same `.btn--reveal` hover treatment as every other row's
-  // "⋯" menu button (file, collection): one menu-trigger look everywhere,
-  // not a bespoke always-visible one just for this row.
-  const openBtn = button({ glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Select project', onClick: () => callbacks.onOpenProject(openBtn) });
+  // The project icon says where projects are stored: a button that picks the
+  // working directory where the browser can, otherwise a label warning that
+  // storage is temporary. The menu button has the same look and `.btn--reveal`
+  // hover treatment as every other row's menu button (canvas, collection).
+  const workDirTip = callbacks.workDirName || 'Choose working directory';
+  const projectIcon = callbacks.onPickWorkDir
+    ? button({ glyph: 'project', icon: true, className: 'project-icon', title: workDirTip, onClick: callbacks.onPickWorkDir })
+    : document.createElement('div');
+  if (!callbacks.onPickWorkDir) {
+    projectIcon.className = 'project-icon';
+    setIcon(projectIcon, 'project');
+    hoverTip(projectIcon, 'Temporary storage, recommend regular backups.');
+  }
+  const openBtn = button({ glyph: 'menu', icon: true, className: 'btn--reveal', title: 'Select project (\\)', onClick: () => callbacks.onOpenProject(openBtn) });
 
-  header.append(nameEl, openBtn);
+  header.append(projectIcon, nameEl, openBtn);
 
   const fileList = document.createElement('div');
   fileList.className = 'file-list';
@@ -77,7 +88,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     nameEl.textContent = file.name;
     nameEl.addEventListener('dblclick', (e) => {
       e.stopPropagation();
-      startInlineEdit(nameEl, file.name, (v) => { if (v) { file.name = v; callbacks.onChange({ scrollToFileIndex: fileIndex }); } });
+      startInlineEdit(nameEl, file.name, (v) => { if (v) { renameFile(project, file, v); callbacks.onChange({ scrollToFileIndex: fileIndex }); } });
     });
 
     // Every per-file action folds into one menu instead of its own
@@ -87,12 +98,12 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
       onClick: (e) => {
         e.stopPropagation();
         const items = [
-          { label: 'Resize', onClick: () => openSizePopup(menuBtn, (w, h) => callbacks.onResizeFile(file, w, h)) },
+          { label: 'Resize', onClick: () => openSizePopup(menuBtn, (w, h, _preset, where) => callbacks.onResizeFile(file, w, h, where), { anchored: true, onTrim: () => callbacks.onTrimFile(file) }) },
         ];
         // The last file can't be removed (project.js: deleteFile is a no-op
         // then anyway): a project always has at least one file.
-        if (project.files.length > 1) items.push({ label: 'Remove', onClick: () => callbacks.onRemoveFile(fileIndex) });
-        items.push({ label: 'Export', onClick: () => callbacks.onExportFile && callbacks.onExportFile(file, fileIndex) });
+        if (project.files.length > 1) items.push({ label: 'Remove', keys: '_', onClick: () => callbacks.onRemoveFile(fileIndex) });
+        items.push({ label: 'Export', keys: 'e', onClick: () => callbacks.onExportFile && callbacks.onExportFile(file, fileIndex) });
         openSlideOut(menuBtn, items);
       },
     });
@@ -106,11 +117,13 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     const selected = collection.id === focusedCollectionId || collection.id === activeGroupId;
     row.className = 'collection-header tile reveal-on-hover' + (selected ? ' selected' : '');
     row.dataset.collectionId = collection.id;
-    // Same no-op guard as a file row's click: selecting the already-active
-    // group is not a real change.
-    row.addEventListener('click', () => {
-      if (collection.id === activeGroupId) return;
-      callbacks.onSelectGroup(collection.id);
+    // A click selects the collection. A double click on empty space in the row folds
+    // or unfolds it; on the name's text it renames instead (below).
+    row.addEventListener('click', () => { if (!selected) callbacks.onSelectGroup(collection.id); });
+    row.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.drag-handle, .fold-arrow, button') || overText(nameEl, e)) return;
+      collection.collapsed = !collection.collapsed;
+      callbacks.onChange();
     });
 
     const handle = document.createElement('div');
@@ -135,6 +148,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     nameEl.className = 'file-row-name';
     nameEl.textContent = collection.name;
     nameEl.addEventListener('dblclick', (e) => {
+      if (!overText(nameEl, e)) return; // empty space beside the name: the row folds
       e.stopPropagation();
       startInlineEdit(nameEl, collection.name, (v) => { if (v) { collection.name = v; callbacks.onChange({ scrollToCollectionId: collection.id }); } });
     });
@@ -147,9 +161,8 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     // project always starts with exactly one, so this is the common case,
     // not an edge case: the menu button itself disables rather than
     // opening onto nothing.
-    menuItems.push({ label: 'Columns', onClick: () => openGridsetPopup(menuBtn, collection, callbacks.onSetGridset) });
     menuItems.push({ label: 'Export', onClick: () => callbacks.onExportCollection(collection) });
-    if (project.collections.length > 1) menuItems.push({ label: 'Remove', onClick: () => callbacks.onDeleteCollection(collection.id) });
+    if (project.collections.length > 1) menuItems.push({ label: 'Remove', keys: '_', onClick: () => callbacks.onDeleteCollection(collection.id) });
     const menuBtn = button({
       glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Collection menu',
       disabled: menuItems.length === 0,
@@ -180,7 +193,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   // Right click: new collection, straight away: single-purpose gestures on
   // one button instead of a menu in between.
   const addFileBtn = button({
-    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New canvas',
+    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New canvas (+)',
     onClick: () => openSizePopup(addFileBtn, (w, h, preset) => callbacks.onAddFile(w, h, preset), { onCollection: () => callbacks.onAddCollection(), onImport: () => callbacks.onImport(addFileBtn) }),
     onContextMenu: (e) => { e.preventDefault(); callbacks.onAddCollection(); },
   });
@@ -222,15 +235,42 @@ function buildCapacityMeter(project, callbacks) {
 // working up from the anchor it slides out of. The bottom row is a custom
 // W x H pair. `onPick(w, h, preset)`: `preset` is null for a custom size.
 // `onCollection` and `onImport`, when given, add a "Collection" and a last "Import" row (new canvas only).
-export function openSizePopup(anchor, onPick, { onDismiss, onCollection, onImport } = {}) {
+// `anchored` (resize only) adds an anchor picker under the custom size and passes the chosen anchor as `onPick`'s fourth argument.
+// `onTrim` (resize only) adds a "Trim" row, between the presets and the custom size, that fits the canvas to its pixels.
+export function openSizePopup(anchor, onPick, { onDismiss, onCollection, onImport, anchored = false, onTrim } = {}) {
   return openCustomSlideOut(anchor, (bar, close) => {
+    let where = 'bl';
     for (const preset of [...NEW_FILE_SIZES].reverse()) {
-      bar.append(button({ label: preset.label, fill: true, onClick: () => { onPick(preset.w, preset.h, preset); close(); } }));
+      bar.append(button({ label: preset.label, fill: true, onClick: () => { onPick(preset.w, preset.h, preset, where); close(); } }));
     }
-    bar.append(customSizeRow((w, h) => { onPick(w, h, null); close(); }));
+    if (onTrim) bar.append(button({ label: 'Trim', fill: true, title: 'Fit to pixels', onClick: () => { close(); onTrim(); } }));
+    bar.append(customSizeRow((w, h) => { onPick(w, h, null, where); close(); }));
+    if (anchored) bar.append(anchorPicker((key) => { where = key; }));
     if (onCollection) bar.append(button({ label: 'Collection', fill: true, onClick: () => { close(); onCollection(); } }));
     if (onImport) bar.append(button({ label: 'Import', fill: true, title: 'Spritesheet or .sprite', onClick: () => { close(); onImport(); } }));
   }, { className: 'size-popup', onDismiss });
+}
+
+// The anchors icon as a control: five squares on a 3x3 grid, one per corner plus
+// the centre, of which the selected one (bottom left to start) is coloured. Says
+// where a resize keeps the existing pixels. `onChange(key)` receives a
+// `RESIZE_ANCHORS` key.
+const ANCHOR_CELLS = [['tl', 'Top left'], null, ['tr', 'Top right'], null, ['c', 'Center'], null, ['bl', 'Bottom left'], null, ['br', 'Bottom right']];
+function anchorPicker(onChange) {
+  const grid = document.createElement('div');
+  grid.className = 'anchor-grid';
+  const cells = new Map();
+  for (const cell of ANCHOR_CELLS) {
+    if (!cell) { grid.append(document.createElement('div')); continue; }
+    const [key, title] = cell;
+    const el = button({ label: '', title, className: 'anchor-cell', selected: key === 'bl', onClick: () => {
+      cells.forEach((other, k) => other.classList.toggle('selected', k === key));
+      onChange(key);
+    } });
+    cells.set(key, el);
+    grid.append(el);
+  }
+  return grid;
 }
 
 // Two number fields (Tab between them) and Enter to commit. H mirrors W
@@ -244,13 +284,15 @@ function customSizeRow(onSubmit) {
     el.min = MIN_CANVAS;
     el.max = MAX_CANVAS;
     el.title = title;
-    el.placeholder = title;
+    el.placeholder = 'px';
     return el;
   };
   const w = field('W'), h = field('H');
   let hEdited = false;
   // Typing past the ceiling snaps the text itself down to it.
   for (const el of [w, h]) el.addEventListener('input', () => { if (Number(el.value) > MAX_CANVAS) el.value = MAX_CANVAS; });
+  // Below the minimum only snaps once the field is left: a keystroke check would turn the 1 of "16" into 3.
+  for (const el of [w, h]) el.addEventListener('blur', () => { if (el.value && Number(el.value) < MIN_CANVAS) el.value = MIN_CANVAS; });
   h.addEventListener('input', () => { hEdited = true; });
   w.addEventListener('input', () => { if (!hEdited) h.value = w.value; });
   const submit = (e) => {
@@ -263,12 +305,3 @@ function customSizeRow(onSubmit) {
   return row;
 }
 
-// Collection header menu's "Columns": how many artboards the group
-// grid wraps after before starting a new row (§ renderer.js's
-// computeArtboardLayout `gridset`). 'Auto' clears it back to the default
-// square-ish layout.
-function openGridsetPopup(anchor, collection, onSetGridset) {
-  const items = [1, 2, 3, 4, 5, 6].map((n) => ({ label: String(n), onClick: () => onSetGridset(collection, n) }));
-  items.push({ label: 'Auto', onClick: () => onSetGridset(collection, null) });
-  openSlideOut(anchor, items);
-}

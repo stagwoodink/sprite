@@ -1,7 +1,7 @@
 import { paintThumbnail } from './thumbnail.js';
 import { compositeFrameAt } from './sprite-file.js';
 import { BLOCK } from './grid.js';
-import { button, setIcon, attachNativeDragReorder } from './ui.js';
+import { button, setIcon, hoverTip, startInlineEdit, attachDragReorder } from './ui.js';
 
 const THUMB_H = BLOCK * 2; // frame tiles are 2 blocks tall
 
@@ -10,6 +10,7 @@ const THUMB_H = BLOCK * 2; // frame tiles are 2 blocks tall
 // `out` changes identity when the layer structure or size changes, `rev` on
 // every edit to it. A rebuild reuses the canvas and repaints only when they moved.
 const painted = new WeakMap(); // frame -> { canvasEl, out, rev }
+const FPS_DRAG_PX = 6; // pixels of vertical drag per frame-per-second
 
 export function renderTimelinePanel(container, file, playback, callbacks, frameSelection) {
   container._thumbObserver?.disconnect();
@@ -18,13 +19,34 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
   const selLo = frameSelection ? Math.min(frameSelection.anchor, frameSelection.to) : -1;
   const selHi = frameSelection ? Math.max(frameSelection.anchor, frameSelection.to) : -1;
 
-  const fpsField = document.createElement('input');
-  fpsField.type = 'number';
+  // A div, not an <input>: an input's text is not placed on whole device pixels and
+  // renders soft, where ordinary text (and the inline rename fields) stays sharp.
+  const fpsField = document.createElement('div');
   fpsField.className = 'fps-field';
-  fpsField.min = 1;
-  fpsField.max = 60;
-  fpsField.value = playback.fps;
-  fpsField.addEventListener('change', () => callbacks.onSetFps(Math.max(1, Number(fpsField.value) || 1)));
+  fpsField.textContent = playback.fps;
+  hoverTip(fpsField, 'FPS - Drag or type to change.');
+  const setFps = (fps) => { fpsField.textContent = fps; callbacks.onSetFps(fps); };
+  // Dragging up or down on the number changes it, one step per few pixels; a click without
+  // a drag edits it in place.
+  fpsField.addEventListener('pointerdown', (e) => {
+    if (fpsField.isContentEditable) return;
+    const startY = e.clientY, startFps = Number(fpsField.textContent) || 1;
+    let dragged = false;
+    const move = (ev) => {
+      const fps = Math.max(1, Math.min(60, startFps + Math.round((startY - ev.clientY) / FPS_DRAG_PX)));
+      if (fps === Number(fpsField.textContent)) return;
+      dragged = true;
+      setFps(fps);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (dragged) return;
+      startInlineEdit(fpsField, String(startFps), (v) => setFps(Math.max(1, Math.min(60, Math.round(Number(v)) || startFps))));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
 
   const onionBtn = button({
     glyph: '◈', icon: true, className: 'onion-toggle', active: playback.onionSkin, // diamond glyph, per the brand's rotated-square motif
@@ -91,7 +113,7 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
 
     tile.append(canvasEl, del);
     tile.addEventListener('click', () => callbacks.onSelect(i));
-    attachNativeDragReorder(tile, i, {
+    attachDragReorder(tile, i, {
       getItems: () => Array.from(strip.querySelectorAll('.frame-tile')),
       axis: 'x',
       onReorder: (from, to) => callbacks.onReorder(from, to),
@@ -100,7 +122,7 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
     strip.append(tile);
   });
 
-  const addBtn = button({ glyph: '+', icon: true, title: 'Add frame', onClick: () => callbacks.onAddFrame() });
+  const addBtn = button({ glyph: '+', icon: true, title: 'Add frame (+)', onClick: () => callbacks.onAddFrame() });
 
   // Onion skin and add-frame stack 1 block each, to the right of the FPS
   // field, filling the same 2-block panel height between them.

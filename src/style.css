@@ -1,15 +1,9 @@
 @font-face {
-  font-family: 'm3x6';
-  src: url('fonts/m3x6.ttf') format('truetype');
+  font-family: 'Stagwood Sprite 64';
+  src: url('fonts/stagwood-sprite-64.ttf') format('truetype');
   font-display: block;
-  /* The font's own metrics (ascent 682, descent 128 of 1024) put the baseline
-     at 789 in a 1em line box, so capitals sit 85 units (1.3px at 16px) below
-     centre. Capitals are 384 tall and the baseline should be 704 (11px at 16px)
-     for them to centre: ascent - descent = 384, keeping the 128 descent. The
-     gap is zeroed so no extra leading shifts anything. */
-  ascent-override: 50%;
-  descent-override: 12.5%;
-  line-gap-override: 0%;
+  /* Built by scripts/font/build.py. Its own metrics (ascent 8px, descent 2px, no gap)
+     put the baseline 11px down a 16px line box, which is what centres a 6px capital. */
 }
 
 :root {
@@ -58,15 +52,16 @@
   --checker-light: #DEDEDE;
   --checker-dark: #CFCFCF;
 
-  /* m3x6 draws each of its pixels 1/16 em wide (unitsPerEm 1024, 64 units per
+  /* Stagwood Sprite 64 draws each of its pixels 1/16 em wide (unitsPerEm 1024, 64 units per
      pixel; a capital is 6 pixels tall), so it is only crisp when font-size is
      a whole multiple of 16 device pixels: 16, 32, 48. Any other size, 18 and
      12 included, resamples every glyph and blurs it. pixel-snap.js keeps
      these on that grid whatever the display's pixel ratio. */
   --font-body: 16px;
   --font-header: 32px;
-  /* One pixel of an icon (icons.js): two device pixels at the 16px font size, so an
-     icon is always an even number of device pixels across and centres exactly. */
+  /* One pixel of an icon (icons.js): two font pixels, always a whole number of device
+     pixels and even, so an icon centres exactly. Key icons in a line of text use one
+     font pixel instead (.icon--inline), which makes them as tall as a capital. */
   --icon-px: calc(var(--font-body) / 8);
 
   --unit: 4px; /* small, incidental spacing: tooltips, the Controls modal. Not the grid unit below. */
@@ -81,8 +76,8 @@
      body): an element set in a smaller context (the Controls modal, a
      tooltip) is deliberately outside the grid and never uses these.
 
-     CSS `em` = font-size, not glyph width: m3x6's capital M is only
-     ~0.375em wide/tall, so don't eyeball the block size against letter
+     CSS `em` = font-size, not glyph width: Stagwood Sprite 64's capitals are only
+     0.375em tall, so don't eyeball the block size against letter
      width. A 1-block (1.5em) row is built from the text's own line
      (line-height:1, exactly 1em) plus 0.25em of clearance top and
      bottom: --pad is that clearance, sized so pad + line + pad lands
@@ -93,7 +88,7 @@
   --panel-width: 9em; /* every side panel is 6 blocks wide */
 
   /* Every icon in the app is a plain Unicode character, not a drawn
-     shape: but the pixel font (m3x6) doesn't define most of these
+     shape: but the pixel font doesn't define most of these
      glyphs, so each one was silently falling back to whatever font the
      browser happened to substitute per-character, at inconsistent
      metrics. Force one explicit fallback stack so every icon glyph
@@ -163,6 +158,7 @@
   --z-base: 0;
   --z-label: 20;
   --z-modal: 2000;
+  --z-tag: 2001; /* the corner tags stay above a modal's backdrop */
   --z-panel: 10;
   --z-preview: 3000;
   --z-cursor: 4000;
@@ -175,7 +171,6 @@
   /* Composite effects */
   --bevel-chip: inset 0 1px 0 0 var(--white-a20), inset -1px 0 0 0 var(--black-a30), inset 0 -5px 0 0 var(--black-a35);
   --bevel-chip-pressed: inset 0 1px 0 0 var(--white-a20), inset -1px 0 0 0 var(--black-a30), inset 0 -7px 0 0 var(--black-a35);
-  --drag-insert: inset 0 2px 0 var(--accent);
   --edge-highlight-top: inset 0 1px 0 var(--panel-edge-highlight);
   --edge-shadow-above: 0 calc(var(--border-width) * -1) 0 var(--black-a03); /* a hairline just outside a panel's top edge */
   --shadow-drag: 0 4px 12px var(--black-a50);
@@ -211,7 +206,7 @@
   color: var(--text-primary);
   font: inherit;
   font-size: var(--font-body);
-  cursor: pointer;
+  --cursor: click;
   white-space: nowrap;
 }
 .btn:hover { background: var(--bg-hover); }
@@ -222,7 +217,7 @@
   border-color: var(--accent-light) var(--accent-shadow) var(--accent-shadow) var(--accent-light);
 }
 .btn.selected:hover, .btn.active:hover { background: var(--accent-dark); }
-.btn:disabled { opacity: var(--opacity-muted); cursor: default; pointer-events: none; }
+.btn:disabled { opacity: var(--opacity-muted); pointer-events: none; }
 
 /* Square, icon-font glyph, no text padding: grab handles, hamburgers,
    the +/resize/delete buttons. */
@@ -255,7 +250,7 @@
   align-items: stretch;
   height: var(--block);
   background: var(--bg-elevated);
-  cursor: pointer;
+  --cursor: click;
   box-shadow: inset 0 calc(var(--border-width) * -1) 0 var(--hairline);
 }
 .tile:hover { background: var(--bg-hover); }
@@ -269,12 +264,10 @@
 .tile--tall > .btn { height: auto; }
 /* Pointer-based reorder feedback (see makeReorderable in ui.js): the row
    being dragged fades in place (the floating .drag-ghost is what actually
-   tracks the cursor), the row it's currently over shows an accent edge as
-   the drop indicator, and dragging past the panel's edge marks it for
-   removal with a red X: the same "dragged off = remove" cue the palette
+   tracks the cursor), the rows slide to open the gap, and dragging past the
+   panel's edge marks it for removal with a red X: the same "dragged off = remove" cue the palette
    chips already use. */
 .tile.dragging { opacity: var(--opacity-muted); }
-.tile.drag-over { box-shadow: var(--drag-insert); }
 .tile.removing { opacity: 1; }
 .tile.removing::after {
   content: '✕';
@@ -319,13 +312,21 @@
 }
 *::-webkit-scrollbar { display: none; } /* Chromium/WebKit */
 
+/* Each element's cursor is named by `--cursor` (inherited); inverted-cursor.js draws it
+   in place of the OS cursor, which is hidden once that script has started. */
+html { --cursor: arrow; }
+/* Names rename in place, but only their text is editable (inverted-cursor.js). */
+.file-row-name, .layer-label, .project-name { --cursor: text-on-text; }
+input, textarea, [contenteditable="true"] { --cursor: text; }
+.reference-section .layer-label { --cursor: click; } /* reference names are not renamed in place */
+.custom-cursor, .custom-cursor * { cursor: none !important; }
 html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
   background: var(--bg-elevated);
   color: var(--text-primary);
-  font-family: 'm3x6', monospace;
+  font-family: 'Stagwood Sprite 64', monospace;
   font-size: var(--font-body);
   line-height: 1;
   -webkit-font-smoothing: none;
@@ -468,11 +469,13 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   position: absolute;
   right: var(--push-right, 0);
   bottom: var(--push-bottom, 0);
-  z-index: var(--z-panel);
-  /* +1px: only the .panel border's bottom edge is a real `border` now (its
-     top is a box-shadow instead, see below, which doesn't consume layout
-     space): this keeps the *content* area exactly one block regardless. */
-  height: calc(var(--block) + var(--border-width));
+  z-index: var(--z-tag);
+  /* One block in all, so it stays on the grid: the bottom border and a 1px row
+     of top padding (which the highlight overlay below draws over) come out of
+     it, and the content, stretched to what is left, is centred between the two
+     lines. */
+  height: var(--block);
+  padding-top: var(--border-width); /* the 1px highlight row, so the content is centred between it and the bottom border */
   display: flex;
   align-items: stretch;
   transition: right var(--dur-slow) ease, bottom var(--dur-slow) ease;
@@ -494,15 +497,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   pointer-events: none;
 }
 #version-tab.hidden-tag { display: none; }
-#version-tab a {
-  display: flex;
-  align-items: center;
-  padding: var(--space-2) var(--space-8);
-  font-size: var(--font-body);
-  color: var(--text-secondary);
-  text-decoration: none;
-}
-#version-tab a:hover { color: var(--text-primary); background: var(--bg-hover); }
 /* Hold-`+Left/Right keyboard focus (main.js): same treatment a real
    :focus-visible ring would give, just driven by our own held-key state
    instead of actual DOM focus. */
@@ -519,7 +513,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    itself (not this) accounts for its own border, see #version-tab. */
 .version-tab-icon {
   width: var(--block);
-  height: var(--block);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -535,8 +528,9 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   position: absolute;
   left: var(--push-left, 0);
   bottom: var(--push-bottom, 0);
-  z-index: var(--z-panel);
-  height: calc(var(--block) + var(--border-width)); /* see #version-tab */
+  z-index: var(--z-tag);
+  height: var(--block); /* see #version-tab */
+  padding-top: var(--border-width);
   display: flex;
   align-items: stretch;
   transition: left var(--dur-slow) ease, bottom var(--dur-slow) ease;
@@ -606,7 +600,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    failures worth clicking into (`--actionable`); a non-actionable failure
    stays neutral text since there's nothing to do about it. */
 .tool-tag-export-error {
-  cursor: pointer;
+  --cursor: click;
 }
 .tool-tag-export-error[hidden] { display: none; }
 .tool-tag-export-error--actionable {
@@ -620,34 +614,45 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    and the side panel as the one on top. */
 #timeline-bar.pushed-left, #palette-bar.pushed-left { border-left: var(--border-width) solid var(--panel-edge-highlight); }
 #timeline-bar.pushed-right, #palette-bar.pushed-right { border-right: var(--border-width) solid var(--panel-edge-highlight); }
-#timeline-bar.pushed-left::before, #palette-bar.pushed-left::before,
-#timeline-bar.pushed-right::after, #palette-bar.pushed-right::after {
+/* The shadow line just inside the light seam is one overlay across both edges,
+   on ::before: ::after belongs to the focus ring (.kb-focused). */
+#timeline-bar::before, #palette-bar::before {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: var(--border-width);
-  background: var(--panel-edge-shadow);
+  inset: 0;
   pointer-events: none;
+  z-index: var(--z-trigger);
+  background:
+    linear-gradient(var(--seam-l, transparent), var(--seam-l, transparent)) left / var(--border-width) 100% no-repeat,
+    linear-gradient(var(--seam-r, transparent), var(--seam-r, transparent)) right / var(--border-width) 100% no-repeat;
 }
-#timeline-bar.pushed-left::before, #palette-bar.pushed-left::before { left: 0; }
-#timeline-bar.pushed-right::after, #palette-bar.pushed-right::after { right: 0; }
+#timeline-bar.pushed-left, #palette-bar.pushed-left { --seam-l: var(--panel-edge-shadow); }
+#timeline-bar.pushed-right, #palette-bar.pushed-right { --seam-r: var(--panel-edge-shadow); }
 /* The palette's leftmost control is the hamburger button, which brings its own
    light edge: a light seam line would double up, so the seam is just the shadow. */
-#palette-bar.pushed-left { border-left-color: var(--panel-edge-shadow); }
-#palette-bar.pushed-left::before { display: none; }
+#palette-bar.pushed-left { border-left-color: var(--panel-edge-shadow); --seam-l: transparent; }
 
 .fps-field {
-  flex: 0 0 var(--block);
+  /* One block wide as before; --block is in em and this field's font is larger,
+     so it is spelled out from the body size. */
+  flex: 0 0 calc(var(--font-body) * 1.5);
+  min-width: 0;
   height: 100%;
+  display: flex;
+  justify-content: center;
+  /* Placed from the top, not centred: the panel is two blocks less its 1px top border, so
+     centring the line puts the baseline on a half pixel and blurs it. 7 of 16 to the em of
+     the body font is 7 whole font pixels, which (the line being 1em tall, its 10-pixel
+     glyph box centred in it) puts the capitals in the middle of the panel. */
+  padding-top: calc(var(--font-body) * 7 / 16);
   background: var(--bg-elevated);
-  border: none;
-  border-right: var(--border-width) solid var(--hairline);
+  /* An inset shadow, not a border: a border takes a pixel off the width the number is centred in. */
+  box-shadow: inset calc(var(--border-width) * -1) 0 0 var(--hairline);
   color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--font-body);
-  text-align: center;
+  font-size: var(--font-header);
+  --cursor: drag-vertical; /* a vertical drag changes it (timeline-panel.js) */
 }
+.fps-field[contenteditable="true"] { --cursor: text; outline: none; }
 
 /* Onion-skin toggle stacked over the add-frame button, 1 block each:
    together they match the 2-block timeline panel height. */
@@ -669,7 +674,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   height: calc(var(--block) * 2);
   align-self: center;
   border-top: var(--border-width) solid var(--black-a30); /* shares the layer-thumbnail hairline (§6) */
-  cursor: pointer;
+  --cursor: click;
 }
 /* Native drag-and-drop reorder (ui.js's attachNativeDragReorder): same
    dim-while-dragging convention as `.tile.dragging`/`.chip.dragging`. */
@@ -718,7 +723,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   background: var(--bg-hover);
   color: var(--accent);
   font-size: var(--font-body);
-  cursor: pointer;
+  --cursor: click;
 }
 .frame-tile:hover .frame-delete { display: flex; }
 
@@ -740,7 +745,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   background: var(--bg-hover);
   color: var(--text-primary);
   border: none;
-  cursor: pointer;
+  --cursor: click;
 }
 .frame-insert-gap:hover .frame-insert-btn { opacity: 1; }
 
@@ -750,7 +755,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   flex: 1 1 0;
   min-width: var(--space-32);
   height: var(--block);
-  cursor: pointer;
+  --cursor: click;
   background: var(--chip-color, var(--chip-default));
   /* Every edge cue (right-edge hairline between chips, top highlight,
      bottom shadow) is an inset box-shadow, not a border: chips have
@@ -846,7 +851,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* ---- Color picker popup (§7.2) --------------------------------------- */
 .color-picker-popup { padding: 0; gap: 0; }
 
-.picker-square { display: block; cursor: crosshair; }
+.picker-square { display: block; --cursor: crosshair; }
 
 .picker-hue {
   width: 100%;
@@ -876,7 +881,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* ---- Palette-preset slide-out (opened by the hamburger) -------------- */
 .palette-preset-panel { min-width: calc(var(--block) * 2); }
 .palette-preset-panel .btn { justify-content: flex-start; }
-.palette-preset-panel .new-palette-btn { color: var(--accent); }
 .palette-preset-panel .palette-rule { border-top: var(--border-width) solid var(--hairline); }
 .palette-row { display: flex; }
 
@@ -888,11 +892,22 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .capacity-meter { height: var(--meter-h); background: var(--accent-dark); border-top: var(--border-width) solid var(--hairline); }
 /* min-width: a sliver is always lit, even at 0% load: purely for looks */
 .capacity-fill { height: 100%; min-width: var(--space-3); background: var(--accent); }
-.capacity-meter.full { cursor: pointer; }
+.capacity-meter.full { --cursor: click; }
 
 /* ---- New-File size popup: custom W x H row --------------------------- */
 .size-popup { min-width: calc(var(--block) * 4); }
 .size-row { display: flex; }
+/* The anchors icon: each cell is a block with a half-block square at its centre,
+   so the squares sit one art pixel apart like the icon's. */
+.anchor-grid { display: grid; grid-template-columns: repeat(3, var(--block)); justify-content: center; }
+.btn.anchor-cell, .btn.anchor-cell:hover { background: none; border: 0; }
+.anchor-cell::after { content: ''; width: calc(var(--block) / 2); height: calc(var(--block) / 2); background: var(--text-secondary); }
+.anchor-cell:hover::after { background: var(--text-primary); }
+.anchor-cell.selected::after { background: var(--accent); }
+.size-row input::placeholder { color: var(--text-muted); }
+/* No spin arrows: sizes are typed. */
+.size-row input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.size-row input::-webkit-inner-spin-button, .size-row input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .sheet-popup { min-width: calc(var(--block) * 6); }
 .sheet-fields { flex-wrap: wrap; }
 .sheet-fields input { width: 50%; }
@@ -931,13 +946,29 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
      hovered, so there's no block there to supply clearance in the resting
      state. */
   padding: var(--pad) var(--pad) var(--pad) calc(var(--pad) * 2);
-  cursor: text;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .panel-add-btn { font-family: var(--icon-font); }
-.icon { display: block; flex: none; fill: currentColor; pointer-events: none; }
+.icon {
+  display: block;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: center / 100% 100% no-repeat;
+  mask: center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+/* A key icon inside a line of text: sits on the baseline, as tall as a capital. */
+.btn .icon { background: var(--text-secondary); }
+.btn:hover .icon, .btn:focus-visible .icon, .btn.selected .icon, .btn.active .icon { background: var(--text-primary); }
+/* the heart sits a device pixel low in its block: lift it */
+.icon--lift { transform: translateY(calc(var(--icon-px) / -2)); }
+/* the app icon sits two device pixels low */
+.icon--lift-2 { transform: translateY(calc(var(--icon-px) * -1)); }
+.btn:hover .icon--heart { background: var(--accent); }
+.icon--new { transform: translateY(calc(var(--icon-px) / -2)); } /* its top row is empty: lift it so the drawing centres */
+.icon--inline { display: inline-block; vertical-align: baseline; --icon-px: calc(var(--font-body) / 16); }
 
 .file-list {
   flex: 1 1 auto;
@@ -1090,7 +1121,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   max-height: var(--modal-max-h);
   overflow-y: auto;
   margin: auto;
-  /* Pixel font (m3x6): font-size must stay a multiple of 16 device pixels or
+  /* Pixel font: font-size must stay a multiple of 16 device pixels or
      glyphs blur (see --font-body). */
   font-size: var(--font-body);
 }
@@ -1168,53 +1199,21 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 
 .layer-row { position: relative; }
 
-/* Opacity slider: overlays the thumbnail's right edge (doesn't push it
-   over), revealed on hover, drag the pip up/down to set opacity: no
-   right-click/menu needed. */
-.opacity-slider {
+/* Opacity handle: overlays the thumbnail's right edge, revealed on hover;
+   --t is 0 at the top (opaque) to 1 at the bottom, kept inside the thumbnail. */
+.opacity-pip {
   position: absolute;
   right: 0;
-  top: 0;
-  bottom: 0;
-  width: 0;
-  overflow: visible;
-  background: var(--black-a50);
-  cursor: ns-resize;
-  transition: width var(--dur-fast) ease;
-  z-index: var(--z-trigger);
-}
-.layer-thumb:hover .opacity-slider { width: var(--space-8); }
-.opacity-slider-fill {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--accent);
-}
-.opacity-slider-pip {
-  position: absolute;
-  left: 50%;
+  top: calc((100% - var(--space-8)) * var(--t, 0));
   width: var(--space-8);
   height: var(--space-8);
   background: var(--text-primary);
   border: var(--border-width) solid var(--black);
-  transform: translate(-50%, 50%);
+  --cursor: drag-vertical;
+  opacity: 0;
+  z-index: var(--z-trigger);
 }
-/* Fixed (not absolute): the layers panel clips overflow for its own
-   slide-in/out animation, which would otherwise cut this off since it
-   floats outside the thumbnail/slider's own bounds. */
-.opacity-readout {
-  position: fixed;
-  z-index: var(--z-tooltip);
-  padding: var(--space-1) var(--space-4);
-  background: var(--bg-elevated);
-  border: var(--border-width) solid var(--border-strong);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: var(--font-body);
-  white-space: nowrap;
-  pointer-events: none;
-}
+.layer-thumb:hover .opacity-pip { opacity: 1; }
 
 /* Grab handle: the one drag point for reordering a layer/file row: a
    plain character (vertical ellipsis; the Braille all-dots glyph it used
@@ -1225,7 +1224,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   font-family: var(--icon-font);
   flex: 0 0 var(--block);
   height: 100%;
-  cursor: grab;
+  --cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1233,7 +1232,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   color: var(--text-secondary);
 }
 .drag-handle:hover { color: var(--text-primary); }
-.drag-handle:active { cursor: grabbing; }
 
 /* Collection/group header fold toggle: the one clickable element that
    collapses/expands; the name text itself only renames (double-click), it
@@ -1242,18 +1240,25 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   font-family: var(--icon-font);
   flex: 0 0 var(--block);
   height: 100%;
-  cursor: pointer;
+  --cursor: click;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: var(--font-body);
   color: var(--text-secondary);
 }
-.fold-arrow:hover { color: var(--text-primary); }
-/* The header row itself is no longer clickable (only the arrow folds, only
-   the name double-click-renames): don't imply otherwise with the pointer
-   cursor .tile sets generically for selectable rows. */
-.collection-header, .layer-group-header { cursor: default; }
+.collection-header .fold-arrow, .layer-group-header .fold-arrow {
+  /* The same space either side of the icon: 1em from the grab handle's dots (which
+     end half an em into their box) and 1em to the name. */
+  flex: 0 0 auto;
+  width: calc(var(--icon-px) * 6 + 1em);
+  justify-content: flex-start;
+}
+.fold-arrow + .file-row-name, .fold-arrow + .layer-label { padding-left: 0; }
+.fold-arrow:hover,
+.collection-header.selected:hover .fold-arrow, .layer-group-header.selected:hover .fold-arrow { color: var(--text-primary); }
+/* The project icon labels the project header: an icon, not a button. */
+.project-icon { flex: 0 0 var(--block); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
 /* A light line above and a shadow line below, so a header reads as a raised
    divider between the rows it groups instead of one more row. Inset shadows,
    not borders: a border would push the text down inside the row. */
@@ -1272,36 +1277,35 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* Same reason as .tile.selected: on the accent fill that edge reads as a dark red stripe. */
 .tile.selected .layer-thumb, .tile.active .layer-thumb { border-top-width: 0; }
 
-.eye-pip {
+.thumb-eye {
   position: absolute;
-  right: var(--space-3);
-  bottom: var(--space-3);
-  width: var(--space-6);
-  height: var(--space-6);
-  background: var(--text-primary);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--black-a50);
+  color: var(--text-primary);
   opacity: 0;
+  pointer-events: none;
 }
-.layer-thumb:hover .eye-pip { opacity: var(--opacity-soft); }
-.eye-pip.hidden-indicator { opacity: 1; background: var(--accent); }
+.layer-thumb:hover .thumb-eye { opacity: 1; }
+.thumb-eye.hidden-indicator { color: var(--accent); }
 
-/* Group header's visibility toggle (layers-panel.js): same pip, but
-   there's no thumbnail to overlay/hover here, so it sits inline (own
-   6x6 dot centered in a full-height square) and stays at rest opacity
-   instead of only appearing on hover. */
-.eye-pip.standalone {
-  position: static;
+/* Group header's visibility toggle (layers-panel.js): no thumbnail to
+   overlay here, so it sits inline in a full-height square. */
+.eye-pip {
   flex: 0 0 var(--block);
   width: var(--block);
   height: 100%;
-  background: none;
-  opacity: 1;
-  cursor: pointer;
+  --cursor: click;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.eye-pip.standalone::after { content: ''; width: var(--space-6); height: var(--space-6); background: var(--text-secondary); }
-.eye-pip.standalone.hidden-indicator::after { background: var(--accent); }
+.eye-pip { color: var(--text-secondary); }
+.eye-pip:hover { color: var(--text-primary); }
+.eye-pip.hidden-indicator { color: var(--accent-dark); }
+.eye-pip.hidden-indicator:hover { color: var(--accent-light); }
 
 .layer-label {
   flex: 1 1 auto;

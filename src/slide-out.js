@@ -199,10 +199,16 @@ function finishOpen(bar, anchor, side, { onDismiss, snapWidth } = {}) {
   return close;
 }
 
-// Export always leads a menu and Remove always closes it, wherever a caller
-// listed them: the destructive item sits in one predictable place. Array#sort
-// is stable, so every other item keeps the order it was given.
-const edgeRank = ({ label }) => (label === 'Export' ? 0 : /^Remove/.test(label) ? 2 : 1);
+// Menu items sit in a fixed order, nearest the button that opened the menu
+// first: Open, New, Import, Export, then everything else in the order it was
+// given, and Remove farthest away. Array#sort is stable, so the rest keep their
+// order. A menu opened from the lower half of the screen (or upward) hangs above
+// its button, so it is listed in reverse to keep the nearest item closest.
+const NEAREST_FIRST = ['Open', 'New', 'Import', 'Export'];
+const distanceRank = ({ label }) => {
+  const i = NEAREST_FIRST.indexOf(label);
+  return i >= 0 ? i : /^Remove/.test(label) ? NEAREST_FIRST.length + 1 : NEAREST_FIRST.length;
+};
 
 export function openSlideOut(anchor, buttons, { side = 'right', onDismiss } = {}) {
   if (openAnchorEl === anchor) { closeSlideOut(); return null; }
@@ -212,10 +218,12 @@ export function openSlideOut(anchor, buttons, { side = 'right', onDismiss } = {}
   bar.className = 'slide-out-bar panel';
 
   let close;
-  for (const { label, onClick, accent } of [...buttons].sort((a, b) => edgeRank(a) - edgeRank(b))) {
+  const items = [...buttons].sort((a, b) => distanceRank(a) - distanceRank(b));
+  if (side === 'up' || anchor.getBoundingClientRect().top > window.innerHeight / 2) items.reverse();
+  for (const { label, onClick, accent, keys } of items) {
     // Close first: an item that opens a follow-up menu from the same anchor
     // (Columns) would otherwise hit the anchor-toggle above and close itself.
-    const btn = button({ label, fill: true, selected: accent, onClick: () => { close(); onClick(); } });
+    const btn = button({ label, title: keys, fill: true, selected: accent, onClick: () => { close(); onClick(); } });
     bar.append(btn);
   }
 
