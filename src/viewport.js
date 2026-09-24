@@ -15,27 +15,28 @@ const EPS = 1e-9; // keeps 4.000000001 or 3.9999999 from landing on the wrong si
  * sampled), which is as sharp as a reduction gets. `dir`: -1 rounds toward
  * zoomed out, 1 toward zoomed in, 0 to the nearest stop.
  *
- * The one exception: 100% (one CSS pixel per canvas pixel) is always a stop,
- * even where that is a fractional number of device pixels, because being able
- * to see the art at true size matters more than the crispness of one step.
+ * "100%" is one canvas pixel per *device* pixel, the true 1:1, not one CSS
+ * pixel: on a display whose devicePixelRatio is not 1 (browser zoom, fractional
+ * scaling) a CSS pixel is a fraction of a device pixel and drops pixels.
  */
 export function snapScale(scale, dpr = deviceRatio(), dir = 0) {
   const device = scale * dpr;
-  let stop;
-  if (device >= 1) stop = Math.max(1, [Math.floor, Math.round, Math.ceil][dir + 1](device + (dir < 0 ? EPS : -EPS))) / dpr;
-  else stop = 1 / (Math.max(1, [Math.ceil, Math.round, Math.floor][dir + 1](1 / device + (dir < 0 ? -EPS : EPS))) * dpr);
-  const hundred = dir < 0 ? scale >= 1 && stop < 1 : dir > 0 ? scale <= 1 && stop > 1 : Math.abs(scale - 1) < Math.abs(scale - stop);
-  return hundred ? 1 : stop;
+  if (device >= 1) return Math.max(1, [Math.floor, Math.round, Math.ceil][dir + 1](device + (dir < 0 ? EPS : -EPS))) / dpr;
+  return 1 / (Math.max(1, [Math.ceil, Math.round, Math.floor][dir + 1](1 / device + (dir < 0 ? -EPS : EPS))) * dpr);
 }
 
-// The stop one notch in / out from `scale` (which need not be a stop itself),
-// or 100% if that lies in between.
+/** The scale at which one canvas pixel is exactly one device pixel: what the UI calls 100%. */
+export const trueScale = (dpr = deviceRatio()) => 1 / dpr;
+
+/** `scale` as the percentage shown to the user, 100 being trueScale(). */
+export const zoomPercent = (scale, dpr = deviceRatio()) => Math.round(scale * dpr * 100);
+
+// The stop one notch in / out from `scale` (which need not be a stop itself).
 function adjacentStop(scale, dir, dpr) {
   const device = scale * dpr;
-  const stop = device > 1 + EPS || (dir > 0 && device >= 1 - EPS)
+  return device > 1 + EPS || (dir > 0 && device >= 1 - EPS)
     ? Math.max(1, Math.round(device) + dir) / dpr
     : 1 / (Math.max(1, Math.round(1 / device) - dir) * dpr);
-  return (scale - 1) * (stop - 1) < 0 ? 1 : stop;
 }
 
 /**
@@ -59,7 +60,7 @@ export function snapLength(px, dpr = deviceRatio()) {
 // handling so they can never drift out of sync (§6: zoom-to-fit, free zoom,
 // pan).
 export function fitScale(model, viewW, viewH, dpr = deviceRatio()) {
-  return Math.max(1, Math.floor(Math.min(viewW / model.width, viewH / model.height) * dpr + EPS) / dpr);
+  return Math.max(1, Math.floor(Math.min(viewW / model.width, viewH / model.height) * dpr + EPS)) / dpr;
 }
 
 // Zoom in until at least MIN_VISIBLE_PX canvas pixels still span the
@@ -70,7 +71,7 @@ export function fitScale(model, viewW, viewH, dpr = deviceRatio()) {
 // be able to zoom in that far.
 const MIN_VISIBLE_PX = 16;
 export function maxZoomScale(model, viewW, viewH) {
-  const capScale = Math.max(1, Math.min(viewW, viewH) / MIN_VISIBLE_PX);
+  const capScale = Math.max(trueScale(), Math.min(viewW, viewH) / MIN_VISIBLE_PX);
   const fillScale = Math.min(viewW / model.width, viewH / model.height);
   return Math.max(capScale, fillScale);
 }
@@ -83,9 +84,9 @@ const MIN_ZOOM_TARGET_PX = 200;
 export function minZoomScale(model, viewW, viewH) {
   const rawFit = Math.min(viewW / model.width, viewH / model.height);
   const targetScale = MIN_ZOOM_TARGET_PX / Math.max(model.width, model.height);
-  // Cap at 1 (100%) so a small sprite: whose 200px footprint target would
+  // Cap at 1:1 (100%) so a small sprite: whose 200px footprint target would
   // otherwise sit above 1:1: never loses the ability to zoom out to 100%.
-  return Math.min(rawFit, targetScale, 1);
+  return Math.min(rawFit, targetScale, trueScale());
 }
 
 // Zoom/pan that centers the pixel-space box `b` ({minX, minY, w, h}) and

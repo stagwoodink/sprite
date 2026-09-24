@@ -3,7 +3,7 @@ import { parseFile } from './sprite-format.js';
 import { paintOptions, SYMMETRY_CYCLE } from './paint-options.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
-import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView, snapScale, stepScale } from './viewport.js';
+import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView, snapScale, stepScale, trueScale, zoomPercent } from './viewport.js';
 import { viewState, resetView, groupViewState, resetGroupView } from './view-state.js';
 import { createPalette } from './palette.js';
 import { maskFromRect, maskFromWand, maskFromColor, fullMask, toRenderSelection } from './selection.js';
@@ -222,7 +222,7 @@ function updateToolTag() {
     setText(toolLabel, tip || '');
     setHidden(primarySwatch, true);
     const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
-    setText(zoomLabel, Math.round(scale * 100) + '%');
+    setText(zoomLabel, zoomPercent(scale) + '%');
     return;
   } else {
     setHidden(toolLabel, false);
@@ -232,7 +232,7 @@ function updateToolTag() {
   }
   setHidden(primarySwatch, false);
   const scale = (viewState.zoom || fitScale(model, rect.width, rect.height));
-  setText(zoomLabel, Math.round(scale * 100) + '%');
+  setText(zoomLabel, zoomPercent(scale) + '%');
   const primary = colors.primary();
   if (primary !== swatchColor) primarySwatch.style.background = swatchColor = primary;
 }
@@ -785,6 +785,10 @@ function resize() {
   view.w = canvas.width / devicePixelRatio;
   view.h = canvas.height / devicePixelRatio;
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  // A stored zoom is in CSS pixels, so a change of devicePixelRatio (browser zoom,
+  // another monitor) leaves it off the stops; put it back on one.
+  if (viewState.zoom) viewState.zoom = snapScale(viewState.zoom);
+  if (groupViewState.zoom) groupViewState.zoom = snapScale(groupViewState.zoom);
   draw();
 }
 
@@ -1765,7 +1769,7 @@ canvas.addEventListener('wheel', (e) => {
 
   const rate = Math.min(wheelVelocity * 0.15, 0.5);
   const next = current * (zoomingIn ? 1 + rate : 1 - rate);
-  zoomTo(stepScale(current, next < 1 && min >= 1 ? 1 : next));
+  zoomTo(stepScale(current, next < trueScale() && min >= trueScale() ? trueScale() : next));
 }, { passive: false });
 
 // Double-click an artboard in the group grid (§ project panel group
@@ -2236,7 +2240,7 @@ function dispatchCanvas(e) {
   if ((e.key === 'r' || e.key === 'R') && !e.repeat) { beginRotate(e.shiftKey ? 15 : 1); return; }
   if (e.key === 'z' && !e.repeat) { held.z = true; return; }
   if (e.key === '+' && !e.repeat) { zoomStep(1); return; }
-  if (e.key === '-' && !e.repeat) { zoomTo(1); return; }
+  if (e.key === '-' && !e.repeat) { zoomTo(trueScale()); return; }
   if (e.key === '=' && !e.repeat) { fitView(); return; }
   if (e.key === '_' && !e.repeat) { zoomStep(-1); return; }
   if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) { paintOptions.dither = !paintOptions.dither; uiPrefs.dither = paintOptions.dither; saveUiPrefs(uiPrefs); draw(); return; }
