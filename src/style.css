@@ -2,6 +2,14 @@
   font-family: 'm3x6';
   src: url('fonts/m3x6.ttf') format('truetype');
   font-display: block;
+  /* The font's own metrics (ascent 682, descent 128 of 1024) put the baseline
+     at 789 in a 1em line box, so capitals sit 85 units (1.3px at 16px) below
+     centre. Capitals are 384 tall and the baseline should be 704 (11px at 16px)
+     for them to centre: ascent - descent = 384, keeping the 128 descent. The
+     gap is zeroed so no extra leading shifts anything. */
+  ascent-override: 50%;
+  descent-override: 12.5%;
+  line-gap-override: 0%;
 }
 
 :root {
