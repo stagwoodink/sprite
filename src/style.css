@@ -5,7 +5,7 @@
 }
 
 :root {
-  /* spec/ui-colors.png — the official Sprite UI palette, a 14-step neutral
+  /* spec/ui-colors.png: the official Sprite UI palette, a 14-step neutral
      ramp from white to near-black, lightest first. Exposed in full (not
      just the steps used below) so any future UI work pulls from these
      exact values instead of inventing new grays. */
@@ -58,23 +58,23 @@
   --font-body: 16px;
   --font-header: 32px;
 
-  --unit: 4px; /* small, incidental spacing — tooltips, the Controls modal. Not the grid unit below. */
+  --unit: 4px; /* small, incidental spacing: tooltips, the Controls modal. Not the grid unit below. */
 
-  /* The grid system, in real CSS `em` — one number (--font-body) scales
+  /* The grid system, in real CSS `em`: one number (--font-body) scales
      every block, panel and padding in lockstep, literally, not a
      compounding `calc()` chain. Every block-sized element carries its
      own clearance, so gaps between elements come from their own size,
      never from extra margin/padding tacked on around them (panels/rows
      themselves carry zero padding). This only works because every grid
      element shares the same font-size (--font-body, inherited from
-     body) — an element set in a smaller context (the Controls modal, a
+     body): an element set in a smaller context (the Controls modal, a
      tooltip) is deliberately outside the grid and never uses these.
 
-     CSS `em` = font-size, not glyph width — m3x6's capital M is only
+     CSS `em` = font-size, not glyph width: m3x6's capital M is only
      ~0.375em wide/tall, so don't eyeball the block size against letter
      width. A 1-block (1.5em) row is built from the text's own line
      (line-height:1, exactly 1em) plus 0.25em of clearance top and
-     bottom — --pad is that clearance, sized so pad + line + pad lands
+     bottom: --pad is that clearance, sized so pad + line + pad lands
      exactly on --block, not a fraction chosen by feel. */
   --block: 1.5em;
   --meter-h: 4px; /* project capacity meter; the add-file row shrinks by this */
@@ -82,7 +82,7 @@
   --panel-width: 9em; /* every side panel is 6 blocks wide */
 
   /* Every icon in the app is a plain Unicode character, not a drawn
-     shape — but the pixel font (m3x6) doesn't define most of these
+     shape: but the pixel font (m3x6) doesn't define most of these
      glyphs, so each one was silently falling back to whatever font the
      browser happened to substitute per-character, at inconsistent
      metrics. Force one explicit fallback stack so every icon glyph
@@ -154,6 +154,7 @@
   --z-modal: 2000;
   --z-panel: 10;
   --z-preview: 3000;
+  --z-cursor: 4000;
   --z-raised: 1;
   --z-slideout: 1000;
   --z-tooltip: 30;
@@ -173,13 +174,13 @@
 
 /* ---- Button (universal interactive control) ---------------------------
    Flat fill with a 1px hairline highlight on the top/left edge and a
-   hairline shadow on the bottom/right edge — depth and separation from
+   hairline shadow on the bottom/right edge: depth and separation from
    two thin lines, not a chunky raised face + drop-shadow layer. Every
    clickable control in the app (icon button, text button, tab, toggle)
    is a `.btn`, so hover/active/focus/selected states live in one place
    instead of being reimplemented per feature. */
 /* Inline rename (ui.js's startInlineEdit) toggles contenteditable on the
-   name label in place — no swapped-in <input>, so only the browser's own
+   name label in place: no swapped-in <input>, so only the browser's own
    default focus outline needs suppressing to keep the caret without the
    box-around-text "form field" look. */
 [contenteditable="true"] { outline: none; }
@@ -212,15 +213,15 @@
 .btn.selected:hover, .btn.active:hover { background: var(--accent-dark); }
 .btn:disabled { opacity: var(--opacity-muted); cursor: default; pointer-events: none; }
 
-/* Square, icon-font glyph, no text padding — grab handles, hamburgers,
+/* Square, icon-font glyph, no text padding: grab handles, hamburgers,
    the +/resize/delete buttons. */
 .btn--icon { width: var(--block); flex: 0 0 var(--block); padding: 0; font-family: var(--icon-font); }
-/* Fill button (design system: Button/Tile/Tile-bar/Panel) — fills the full
+/* Fill button (design system: Button/Tile/Tile-bar/Panel): fills the full
    width of whatever it sits in, rather than the fixed square/icon size
    every other button variant uses. A column stack (slide-out list, preset
    panel) just wants that; a horizontal `.tile-bar` additionally wants it
    to *share* the row equally with its siblings, which needs `flex` on the
-   main (horizontal) axis specifically, not `width` — the two are set
+   main (horizontal) axis specifically, not `width`: the two are set
    separately below so a fill button in a vertical stack never stretches
    its height to match (flex:1 on a column's main axis means height, not
    width). `button({ fill: true })` in ui.js.
@@ -229,7 +230,7 @@
 .tile-bar > .btn--fill { flex: 1 1 0; }
 
 /* Hidden until its container is hovered, then slides in from the edge
-   it's flush against — the one mechanism for every "only show on hover"
+   it's flush against: the one mechanism for every "only show on hover"
    button (file resize/export, the project panel's New/Open). */
 .btn--reveal { flex: 0 0 0; width: 0; border-width: 0; overflow: hidden; transition: flex-basis var(--dur-fast) ease, width var(--dur-fast) ease; }
 .reveal-on-hover:hover .btn--reveal { flex-basis: var(--block); width: var(--block); border-width: var(--border-width); }
@@ -249,11 +250,11 @@
 .tile:hover { background: var(--bg-hover); }
 .tile.selected, .tile.active { background: var(--accent); color: var(--text-primary); }
 .tile--tall { height: calc(var(--block) * 2); }
-/* Pointer-based reorder feedback (see makeReorderable in ui.js) — the row
+/* Pointer-based reorder feedback (see makeReorderable in ui.js): the row
    being dragged fades in place (the floating .drag-ghost is what actually
    tracks the cursor), the row it's currently over shows an accent edge as
    the drop indicator, and dragging past the panel's edge marks it for
-   removal with a red X — the same "dragged off = remove" cue the palette
+   removal with a red X: the same "dragged off = remove" cue the palette
    chips already use. */
 .tile.dragging { opacity: var(--opacity-muted); }
 .tile.drag-over { box-shadow: var(--drag-insert); }
@@ -284,7 +285,7 @@
 .tile-bar { display: flex; align-items: stretch; }
 
 /* ---- Panel (floating or docked control surface) ------------------------
-   Shared surface treatment for every popup/slide-out/docked panel — same
+   Shared surface treatment for every popup/slide-out/docked panel: same
    hairline highlight/shadow edge as `.btn`, at panel scale. */
 .panel {
   background: var(--bg-elevated);
@@ -293,7 +294,7 @@
   border-color: var(--panel-edge-highlight) var(--panel-edge-shadow) var(--panel-edge-shadow) var(--panel-edge-highlight);
 }
 
-/* Hard rule: no visible scrollbars anywhere, ever — scrollable elements
+/* Hard rule: no visible scrollbars anywhere, ever: scrollable elements
    stay scrollable (wheel/touch/drag), the bar itself just never renders. */
 * {
   scrollbar-width: none; /* Firefox */
@@ -331,7 +332,7 @@ h1, h2, .header-text {
 }
 
 /* The canvas always fills the entire app, edge to edge, regardless of which
-   panels are open — panels are overlays drawn on top of it, never flex
+   panels are open: panels are overlays drawn on top of it, never flex
    siblings that resize it. This is what keeps the canvas centered under
    panel show/hide instead of shifting/squishing it. */
 #canvas-area {
@@ -339,6 +340,19 @@ h1, h2, .header-text {
   inset: 0;
   z-index: var(--z-base);
 }
+
+/* Above every panel so it can blend with the whole page, but inverted-cursor.js
+   only shows it while the pointer is over the canvas itself. */
+.inverted-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: var(--z-cursor);
+  pointer-events: none;
+  mix-blend-mode: difference;
+  will-change: transform;
+}
+.inverted-cursor[hidden] { display: none; }
 
 #sprite-canvas {
   display: block;
@@ -354,7 +368,7 @@ h1, h2, .header-text {
 .edge-trigger-bottom { left: 0; right: 0; bottom: 0; height: var(--edge-trigger); }
 
 /* Collection/group view (§ project panel group select) is a read-only
-   overview of other files' already-composited pixels — no colors, layers,
+   overview of other files' already-composited pixels: no colors, layers,
    or frames of its own to show, so all three panels and their reveal
    triggers are removed outright rather than left open-but-pointless.
    main.js toggles this class via setActiveGroup(). */
@@ -377,7 +391,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .panel-overlay-top { top: 0; left: 0; right: 0; }
 .panel-overlay-bottom { bottom: 0; left: 0; right: 0; }
 
-/* Side panels run the full viewport height — Timeline and Palette are the
+/* Side panels run the full viewport height: Timeline and Palette are the
    ones that shrink horizontally (below) to clear whichever is open, so
    nothing actually overlaps despite that. */
 .side-panel {
@@ -389,7 +403,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   transition: width var(--dur-slow) ease;
 }
 .side-panel.panel-hidden { width: 0; }
-/* Outer-edge highlight — a lightened tint of the panel's own fill,
+/* Outer-edge highlight: a lightened tint of the panel's own fill,
    separating it from the canvas/viewport behind it. Only while visible:
    border-left/right renders full-height regardless of width, so a
    collapsed (width:0) panel would otherwise still show as a hairline. */
@@ -406,7 +420,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   display: flex;
   align-items: stretch;
 }
-/* Border only while actually visible — border-top has height 0 has no
+/* Border only while actually visible: border-top has height 0 has no
    height dependency, so a collapsed (height:0) panel would otherwise
    still render as a persistent hairline instead of fully disappearing. */
 #timeline-bar:not(.panel-hidden) { border-top: var(--border-width) solid var(--panel-edge-highlight); }
@@ -414,7 +428,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 
 /* ---- Palette bar (bottom edge, shrinks around open side panels) ------ */
 #palette-bar {
-  height: var(--block); /* matches the chip row (§7.2) — needed so height can transition */
+  height: var(--block); /* matches the chip row (§7.2): needed so height can transition */
   left: var(--push-left, 0);
   right: var(--push-right, 0);
   transition: height var(--dur-slow) ease, left var(--dur-slow) ease, right var(--dur-slow) ease,
@@ -431,7 +445,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 
 /* Always as far right/down as it can be: flush with the window's bottom
    edge when the palette is closed, only pushed up above it when the
-   palette is actually there — same idea for the layers panel and
+   palette is actually there: same idea for the layers panel and
    --push-right. main.js keeps both custom properties in sync. */
 #version-tab {
   position: absolute;
@@ -440,12 +454,12 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   z-index: var(--z-panel);
   /* +1px: only the .panel border's bottom edge is a real `border` now (its
      top is a box-shadow instead, see below, which doesn't consume layout
-     space) — this keeps the *content* area exactly one block regardless. */
+     space): this keeps the *content* area exactly one block regardless. */
   height: calc(var(--block) + var(--border-width));
   display: flex;
   align-items: stretch;
   transition: right var(--dur-slow) ease, bottom var(--dur-slow) ease;
-  /* Top edge sits 1px in from the corner instead of flush with it — a
+  /* Top edge sits 1px in from the corner instead of flush with it: a
      plain `border-top` (from `.panel`) reads flush against the canvas
      above; this pulls the hairline itself down a px while keeping the
      same color/weight. */
@@ -472,19 +486,19 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   text-decoration: none;
 }
 #version-tab a:hover { color: var(--text-primary); background: var(--bg-hover); }
-/* Hold-`+Left/Right keyboard focus (main.js) — same treatment a real
+/* Hold-`+Left/Right keyboard focus (main.js): same treatment a real
    :focus-visible ring would give, just driven by our own held-key state
    instead of actual DOM focus. */
 .version-nav-focused { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 /* The report-bug/Discord/help buttons are plain `.btn`s, whose universal
-   height is a full block — but this tag is a `.panel` with its own 1px
+   height is a full block: but this tag is a `.panel` with its own 1px
    border eating into that space, so a full-block-tall child overflows
    past it. 100% always matches whatever's actually left. */
 
-/* Static (non-interactive) icon-sized glyph — e.g. the zoom icon next to
+/* Static (non-interactive) icon-sized glyph: e.g. the zoom icon next to
    its readout, which isn't itself clickable. Real icon buttons use
    `.btn.btn--icon` instead, for the hover/focus/border treatment. A
-   plain full block, same as every other icon in the app — the tag
+   plain full block, same as every other icon in the app: the tag
    itself (not this) accounts for its own border, see #version-tab. */
 .version-tab-icon {
   width: var(--block);
@@ -497,7 +511,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   color: var(--text-secondary);
 }
 
-/* Tool reference tag — same idea as #version-tab, mirrored to the bottom
+/* Tool reference tag: same idea as #version-tab, mirrored to the bottom
    left: hugs the corner, pushed right by the Project panel instead of
    left by the Layers panel. "`" toggles both tags at once. */
 #tool-tag {
@@ -510,13 +524,13 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   align-items: stretch;
   transition: left var(--dur-slow) ease, bottom var(--dur-slow) ease;
   /* .panel's generic button-bevel puts the highlight on top/left and the
-     shadow on right/bottom — but this tag hugs the viewport's LEFT edge, so
+     shadow on right/bottom: but this tag hugs the viewport's LEFT edge, so
      its canvas-facing edge is the right one, which needs a light hairline
      instead. `--hairline` (not the bolder `--panel-edge-highlight` used for
-     a real bevel edge) keeps it subtle — this edge doesn't sit against an
+     a real bevel edge) keeps it subtle: this edge doesn't sit against an
      open/closed panel the way a side panel's does. */
   border-right-color: var(--hairline);
-  /* Top edge 1px in from the corner — see #version-tab. */
+  /* Top edge 1px in from the corner: see #version-tab. */
   border-top: none;
 }
 #tool-tag.hidden-tag { display: none; }
@@ -531,12 +545,12 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* The plain class rule's own `display: flex` above would otherwise beat
    the `hidden` attribute's default UA style (same-origin author rules
    always win over the UA stylesheet, regardless of specificity or source
-   order) — this compound selector outranks it. Used by the group grid's
+   order): this compound selector outranks it. Used by the group grid's
    tip section (main.js's updateToolTag) when there's nothing to show. */
 .tool-tag-label[hidden] { display: none; }
-/* Divider between the zoom % and the tool info — not between the zoom
+/* Divider between the zoom % and the tool info: not between the zoom
    icon and its own %, which reads as one unit. */
-/* Flush against the zoom icon immediately to its left — that icon already
+/* Flush against the zoom icon immediately to its left: that icon already
    supplies its own clearance (it's a full block, centered glyph), so no
    left padding is added here on top of it (same "padding isn't
    additive" rule the grid uses everywhere else). */
@@ -545,7 +559,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   width: var(--block);
   border-left: var(--border-width) solid var(--hairline);
 }
-/* Export progress (main.js's onExportProgress) — takes the tool label's
+/* Export progress (main.js's onExportProgress): takes the tool label's
    own slot while an export is running, same padding so nothing shifts. A
    plain track (the outer box, border+background) with the fill as an
    absolutely-positioned child spanning it left-to-right by %. */
@@ -570,7 +584,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   background: var(--accent);
   transition: width var(--dur-fast) ease;
 }
-/* Lingering export-failure marker (main.js's onExportProgress) — same slot
+/* Lingering export-failure marker (main.js's onExportProgress): same slot
    sizing as .tool-tag-label, plus a click affordance. Red/white only for
    failures worth clicking into (`--actionable`); a non-actionable failure
    stays neutral text since there's nothing to do about it. */
@@ -601,7 +615,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   text-align: center;
 }
 
-/* Onion-skin toggle stacked over the add-frame button, 1 block each —
+/* Onion-skin toggle stacked over the add-frame button, 1 block each:
    together they match the 2-block timeline panel height. */
 .timeline-stack { display: flex; flex-direction: column; flex: 0 0 var(--block); width: var(--block); }
 
@@ -623,7 +637,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   border-top: var(--border-width) solid var(--black-a30); /* shares the layer-thumbnail hairline (§6) */
   cursor: pointer;
 }
-/* Native drag-and-drop reorder (ui.js's attachNativeDragReorder) — same
+/* Native drag-and-drop reorder (ui.js's attachNativeDragReorder): same
    dim-while-dragging convention as `.tile.dragging`/`.chip.dragging`. */
 .frame-tile.dragging { opacity: var(--opacity-muted); }
 .frame-tile::after {
@@ -636,11 +650,11 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   background: var(--border-strong);
 }
 .frame-tile.active::after { background: var(--accent); }
-/* T+Shift+Left/Right multi-frame select — a red outline around every
+/* T+Shift+Left/Right multi-frame select: a red outline around every
    selected tile, distinct from the underline that already marks the single
    active frame. */
 .frame-tile--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
-/* Layers-panel Shift+Up/Down multi-select — same red outline convention. */
+/* Layers-panel Shift+Up/Down multi-select: same red outline convention. */
 .layer-row--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 /* Focus-based control scheme: Ctrl+Arrow (or Tab-cycle) ring on whichever panel
    currently owns the keyboard (main.js's syncFocusRing). */
@@ -705,7 +719,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   cursor: pointer;
   background: var(--chip-color, var(--chip-default));
   /* Every edge cue (right-edge hairline between chips, top highlight,
-     bottom shadow) is an inset box-shadow, not a border — chips have
+     bottom shadow) is an inset box-shadow, not a border: chips have
      fractional widths (they split the bar evenly, flex:1 1 0, not whole
      pixels), and a `border` and a `box-shadow` don't always snap to the
      same sub-pixel boundary on a fractional box: a border-right visibly
@@ -718,7 +732,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 }
 
 .chip:hover, .chip.pressed { filter: brightness(1.25); }
-/* Lifts up, not down (§1.3) — shadow deepens to match. Keeps the same
+/* Lifts up, not down (§1.3): shadow deepens to match. Keeps the same
    top-highlight/right-hairline layers as the base rule; only the
    bottom-shadow layer's depth changes. */
 .chip.pressed {
@@ -727,7 +741,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
     var(--bevel-chip-pressed);
 }
 .chip.dragging { opacity: var(--opacity-muted); }
-/* Dragged past the palette's edge — about to be dropped/removed. */
+/* Dragged past the palette's edge: about to be dropped/removed. */
 .chip.removing { opacity: 1; }
 .chip.removing::after {
   content: '✕';
@@ -743,13 +757,13 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   font-size: var(--font-body);
 }
 
-/* No primary/secondary "in use" indicator (§1.3) — deliberately deferred,
+/* No primary/secondary "in use" indicator (§1.3): deliberately deferred,
    chips stay visually identical regardless of primary/secondary status. */
 
 /* Hamburger: opens the palette-preset slide-out (left of the chip row). */
 .palette-hamburger { flex: 0 0 var(--block); }
 
-/* Fixed clipping window — chips never spill past the bar's edge
+/* Fixed clipping window: chips never spill past the bar's edge
    horizontally. Native overflow-x scrolling is deliberately not used:
    palette.js hand-rolls wheel scrolling via a transform on .chip-row so it
    can enforce the fixed-slot-width/peek-chip behavior instead of free
@@ -768,7 +782,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   align-items: stretch;
 }
 
-/* Hex code, revealed above the chip on hover — click opens the color
+/* Hex code, revealed above the chip on hover: click opens the color
    picker. A button (not inert text) so it's directly clickable. */
 .chip-hex-label {
   position: absolute;
@@ -791,7 +805,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .chip:hover .chip-hex-label { opacity: 1; pointer-events: auto; }
 
 /* Add-chip button: always visible at the bar's trailing edge (§7.2's
-   hover-reveal was a needless extra step — the "+" belongs with the rest
+   hover-reveal was a needless extra step: the "+" belongs with the rest
    of the row, not hidden). */
 .chip-add { flex: 0 0 var(--block); color: var(--text-secondary); }
 
@@ -838,7 +852,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .project-add-row { height: calc(var(--block) - var(--meter-h) + var(--border-width)); }
 .project-add-row .btn { height: 100%; }
 .capacity-meter { height: var(--meter-h); background: var(--accent-dark); border-top: var(--border-width) solid var(--hairline); }
-/* min-width: a sliver is always lit, even at 0% load — purely for looks */
+/* min-width: a sliver is always lit, even at 0% load: purely for looks */
 .capacity-fill { height: 100%; min-width: var(--space-3); background: var(--accent); }
 .capacity-meter.full { cursor: pointer; }
 
@@ -872,11 +886,11 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .project-header.active { background: var(--accent); color: var(--text-primary); }
 .project-name {
   flex: 1 1 auto;
-  /* Literal 1em padding on top/bottom/right — not centered inside a taller
+  /* Literal 1em padding on top/bottom/right: not centered inside a taller
      block via flexbox (that leaves the actual gap up to the rendered
      line's own box, not a fixed value). Top/bottom pin the row to
      exactly 1 block tall (1em + 1 line + 1em, line-height:1 makes the
-     line itself exactly 1em) by construction. Left gets a little extra —
+     line itself exactly 1em) by construction. Left gets a little extra:
      the panel carries no padding of its own, and the plain single `--pad`
      every other row uses read too tight for the project's own name. Right:
      sits flush against the New/Open buttons, hidden (0-width) until
@@ -898,7 +912,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 }
 .file-stack { margin-top: auto; }
 .file-row { border-bottom: var(--border-width) solid var(--black-a10); overflow: hidden; }
-/* Nested under a collection/group header — indent the handle and name (not
+/* Nested under a collection/group header: indent the handle and name (not
    the trailing resize/export buttons), so a nested file visibly sits inside
    its collection instead of reading as just another top-level row. */
 .file-row--nested .drag-handle { margin-left: calc(var(--pad) * 1.5); }
@@ -907,7 +921,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 
 .file-row-name {
   flex: 1 1 auto;
-  /* Literal padding, not flex-centered inside a taller row — see
+  /* Literal padding, not flex-centered inside a taller row: see
      .project-name. No left padding: the grab handle immediately to its
      left is a block element and already carries that clearance itself. */
   padding: var(--pad) var(--pad) var(--pad) 0;
@@ -916,7 +930,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   text-overflow: ellipsis;
 }
 
-/* Hold-D color-pick preview — offset from the actual cursor/sample point so
+/* Hold-D color-pick preview: offset from the actual cursor/sample point so
    it never covers what's being picked. */
 .d-pick-preview {
   position: fixed;
@@ -929,8 +943,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 
 /* ---- Slide-Out Context Bar (CONTEXT.md vocabulary) -------------------
    The one mechanism for every secondary/contextual control surface that
-   isn't a full docked panel — file rename/resize, the new-file size
-   picker, palette presets — a stack of buttons sliding out from the
+   isn't a full docked panel: file rename/resize, the new-file size
+   picker, palette presets: a stack of buttons sliding out from the
    element that triggered it, never a floating text dropdown. */
 .slide-out-bar {
   position: fixed;
@@ -940,20 +954,24 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   transition: transform var(--dur-base) ease, opacity var(--dur-base) ease, width var(--dur-base) ease;
 }
 /* Same left/right inset every other row/label in the app gives its text
-   (.file-row-name, .project-name, etc.) — a fill button sized to a bare
+   (.file-row-name, .project-name, etc.): a fill button sized to a bare
    text width would otherwise read as edge-to-edge cramped. */
 .slide-out-bar .btn { padding: 0 var(--pad); }
+/* .btn centers its label, which lands on a half device pixel whenever the
+   label's width and the block-snapped bar width differ by an odd amount,
+   blurring the pixel font. */
+.slide-out-bar .btn--fill { justify-content: flex-start; }
 /* `.btn--fill`'s own 2-block floor is for its other callers (export
-   format/scale, "Add layer or group") — a slide-out menu is deliberately
+   format/scale, "Add layer or group"): a slide-out menu is deliberately
    allowed to snap to a single block when that's all its longest label
    needs (slide-out.js's snapToBlockWidth is what actually sets the width). */
 .slide-out-bar .btn--fill { min-width: 0; }
 
-/* Chevron pointing back at whichever tile/anchor opened the bar — flush
+/* Chevron pointing back at whichever tile/anchor opened the bar: flush
    against it (no gap/floating space), side set by positionSlideOut(). For
    'left'/'right' the bar itself is now pinned to the panel's outer edge
    (positionSlideOut), not the anchor, so the chevron's negative offset is
-   what does the actual pointing — it overlaps back onto the panel by a few
+   what does the actual pointing: it overlaps back onto the panel by a few
    px, rendered above it (the bar's z-index applies to its children too),
    rather than floating in the gap between panel and bar. */
 .slide-out-chevron {
@@ -963,7 +981,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   border: var(--space-6) solid transparent;
 }
 /* Colored to match whichever edge of the bar the chevron actually touches
-   (`.panel`'s own bevel: highlight on top/left, shadow on bottom/right) —
+   (`.panel`'s own bevel: highlight on top/left, shadow on bottom/right):
    not a generic gray, so it reads as that edge folding out to a point
    rather than an unrelated triangle floating in front of the panel. */
 .slide-out-bar[data-side="right"] .slide-out-chevron { left: calc(var(--space-12) * -1); transform: translateY(-50%); border-right-color: var(--panel-edge-highlight); }
@@ -973,34 +991,34 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 
 /* ---- Export panel (§14) ----------------------------------------------
    A docked full-height side panel (like Project/Layers), not a floating
-   popup — opened from the Project panel's Export button, stacks flush
+   popup: opened from the Project panel's Export button, stacks flush
    against it and pushes the tool tag over the same way Project itself
    does. */
 #export-panel { left: var(--export-left, var(--panel-width)); }
-/* Open Project (§ project panel "Open" menu item) — same slot/treatment as
+/* Open Project (§ project panel "Open" menu item): same slot/treatment as
    Export: docked flush beside Project, never independently pinned, only
    ever opened alongside it. The two never show at once (main.js closes
    whichever isn't being opened), so sharing the slot is safe. */
 #open-project-panel { left: var(--open-project-left, var(--panel-width)); }
 /* Bottom-anchored (§ open-project-panel.js): title comes after the list in
-   DOM order, so its divider needs to face the other way — a line above it
+   DOM order, so its divider needs to face the other way: a line above it
    (from the list it's now under), not below. */
 #open-project-panel .side-panel-title { border-bottom: none; border-top: var(--border-width) solid var(--hairline); }
 /* No drag-handle on these rows (unlike file rows, whose handle supplies
-   the name's left clearance) — needs its own. */
+   the name's left clearance): needs its own. */
 #open-project-panel .file-row-name { padding-left: var(--pad); }
 /* Shared by every docked side panel that slides out next to Project
    (Export, Open Project) rather than being one of the four primary edge
-   panels — same title-row + scrollable-body shape either way. */
+   panels: same title-row + scrollable-body shape either way. */
 .side-panel-title {
-  /* Literal padding, not flex-centered — see .project-name. 1em top/bottom
+  /* Literal padding, not flex-centered: see .project-name. 1em top/bottom
      plus the 1em line gives exactly 1 block, so no explicit height needed. */
   padding: var(--pad);
   color: var(--text-secondary);
   text-transform: uppercase;
   border-bottom: var(--border-width) solid var(--hairline);
 }
-/* No padding/gap of its own — the panel is flush, and every child here is
+/* No padding/gap of its own: the panel is flush, and every child here is
    already a block-sized (or block-row) element that carries its own
    clearance. */
 .side-panel-body { flex: 1 1 auto; display: flex; flex-direction: column; overflow-y: auto; }
@@ -1068,7 +1086,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 
 /* ---- Generic modal (export-error "more info", main.js) ---------------
    Same overlay+panel+fade technique as .keybind-help-overlay above, kept
-   as its own classes rather than shared — two unrelated features. */
+   as its own classes rather than shared: two unrelated features. */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1116,7 +1134,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .layer-row { position: relative; }
 
 /* Opacity slider: overlays the thumbnail's right edge (doesn't push it
-   over), revealed on hover, drag the pip up/down to set opacity — no
+   over), revealed on hover, drag the pip up/down to set opacity: no
    right-click/menu needed. */
 .opacity-slider {
   position: absolute;
@@ -1147,7 +1165,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   border: var(--border-width) solid var(--black);
   transform: translate(-50%, 50%);
 }
-/* Fixed (not absolute) — the layers panel clips overflow for its own
+/* Fixed (not absolute): the layers panel clips overflow for its own
    slide-in/out animation, which would otherwise cut this off since it
    floats outside the thumbnail/slider's own bounds. */
 .opacity-readout {
@@ -1163,7 +1181,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   pointer-events: none;
 }
 
-/* Grab handle: the one drag point for reordering a layer/file row — a
+/* Grab handle: the one drag point for reordering a layer/file row: a
    plain character (vertical ellipsis; the Braille all-dots glyph it used
    to be renders as a solid blob at this size in the icon-font fallback
    stack, reading as a drawn square instead of text), sized by font-size
@@ -1182,7 +1200,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .drag-handle:hover { color: var(--text-primary); }
 .drag-handle:active { cursor: grabbing; }
 
-/* Collection/group header fold toggle — the one clickable element that
+/* Collection/group header fold toggle: the one clickable element that
    collapses/expands; the name text itself only renames (double-click), it
    no longer also folds on a plain click. */
 .fold-arrow {
@@ -1198,7 +1216,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 }
 .fold-arrow:hover { color: var(--text-primary); }
 /* The header row itself is no longer clickable (only the arrow folds, only
-   the name double-click-renames) — don't imply otherwise with the pointer
+   the name double-click-renames): don't imply otherwise with the pointer
    cursor .tile sets generically for selectable rows. */
 .collection-header, .layer-group-header { cursor: default; }
 
@@ -1223,7 +1241,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .layer-thumb:hover .eye-pip { opacity: var(--opacity-soft); }
 .eye-pip.hidden-indicator { opacity: 1; background: var(--accent); }
 
-/* Group header's visibility toggle (layers-panel.js) — same pip, but
+/* Group header's visibility toggle (layers-panel.js): same pip, but
    there's no thumbnail to overlay/hover here, so it sits inline (own
    6x6 dot centered in a full-height square) and stays at rest opacity
    instead of only appearing on hover. */

@@ -1,6 +1,6 @@
 # Control Scheme
 
-Keyboard-first, usable on 60% keyboard, focus-based rather than hold-to-reveal (see `todo/control.md`). `Ctrl`(left)+Arrow focuses a panel — Timeline/Layers/Colors/Projects for Up/Right/Down/Left — pulling it out with a red hairline; it stays focused after keyup and owns the whole keyboard until `Tab` cycles to another panel or `Ctrl`(left) alone (tap) returns focus to Canvas, the default. Mouse works alongside this: left places (Alt: paints), right erases, scroll zooms.
+Keyboard-first, usable on 60% keyboard, focus-based rather than hold-to-reveal (see `todo/control.md`). `Ctrl`(left)+Arrow focuses a panel: Timeline/Layers/Colors/Projects for Up/Right/Down/Left: pulling it out with a red hairline; it stays focused after keyup and owns the whole keyboard until `Tab` cycles to another panel or `Ctrl`(left) alone (tap) returns focus to Canvas, the default. Mouse works alongside this: left places (Alt: paints), right erases, scroll zooms.
 
 ## Global
 
@@ -43,7 +43,7 @@ Keyboard-first, usable on 60% keyboard, focus-based rather than hold-to-reveal (
 | `Q`/`W`/`A`/`S` (hold) | Rectangle / triangle / circle / line shape (`Shift` constrains) |
 | `[` / `]` | Brush size -1 / +1 |
 | `{` / `}` | Brush size ÷2 / ×2 |
-| `I` (tap) | Dropper — sample color under cursor |
+| `I` (tap) | Dropper: sample color under cursor |
 | `I` (hold) + click | Sample color from anywhere in the viewport |
 | `F` / `Shift+F` | Flip horizontal / vertical |
 | `R` / `Shift+R` (hold) + Left/Right | Rotate 1°/15° per step (accelerating hold) |
@@ -102,16 +102,16 @@ Keyboard-first, usable on 60% keyboard, focus-based rather than hold-to-reveal (
 ### Projects (`Ctrl+Left` to focus)
 | Input | Action |
 |---|---|
-| Up/Down | Navigate files and collections |
+| Up/Down | Navigate canvases and collections |
 | `Space` | Fold/unfold the focused collection |
-| `+` | New file (opens size picker; Left/Right adjusts size, `Enter` commits, `Escape` cancels) |
+| `+` | New canvas (opens size picker; Left/Right adjusts size, `Enter` commits, `Escape` cancels) |
 | `Alt++` | New project |
-| `_` | Remove selected file or collection |
+| `_` | Remove selected canvas or collection |
 | `=` | New collection |
-| `Enter` | Rename focused file/collection |
+| `Enter` | Rename focused canvas/collection |
 | `Shift+Enter` | Rename project |
-| `e` / `E` | Export file / project |
+| `e` / `E` | Export canvas / project |
 | `\` | Open project picker |
 
 ## Known gaps
-- Multi-project open/new and focused-category/group navigation not built (panel nav acts on the current file/layer's own category/group).
+- Multi-project open/new and focused-category/group navigation not built (panel nav acts on the current canvas/layer's own category/group).

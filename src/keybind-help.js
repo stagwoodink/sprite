@@ -1,10 +1,10 @@
 // "?" toggles a keybind reference modal; Esc also closes it while open.
-// Mirrors the focus-based control scheme (CONTEXT.md, todo/control.md) —
+// Mirrors the focus-based control scheme (CONTEXT.md, todo/control.md):
 // one group per panel, plus Global and Canvas.
 const GROUPS = [
   ['Global', [
     ['?', 'Show/hide this modal'],
-    ['Tab', 'Cycle focus through panels (Timeline → Layers → Colors → Projects)'],
+    ['Tab', 'Cycle focus through panels (Timeline > Layers > Colors > Projects)'],
     ['Shift+Tab', 'Pin/unpin every panel at once'],
     ['~', 'Pin/unpin the corner tags'],
     ['`', 'Hold + Left/Right to select a version-tab button, Return to launch'],
@@ -32,8 +32,8 @@ const GROUPS = [
     ['Hold Q/W/A/S', 'Rectangle/triangle/circle/line shape (Shift constrains)'],
     ['[ / ]', 'Decrease / increase brush size'],
     ['{ / }', 'Halve / double brush size'],
-    ['I', 'Invert color — of the selection, or just the pixel under the cursor'],
-    ['Shift+I', 'Dropper — tap samples at cursor, hold + click samples anywhere'],
+    ['I', 'Invert color: of the selection, or just the pixel under the cursor'],
+    ['Shift+I', 'Dropper: tap samples at cursor, hold + click samples anywhere'],
     ['F / Shift+F', 'Flip horizontal / vertical'],
     ['Hold R / Shift+R + Left/Right', 'Rotate 1° / 15° per step (accelerating hold)'],
     ['+', 'Zoom in'],
@@ -77,19 +77,19 @@ const GROUPS = [
     ['+', 'Add chip'],
     ['-', 'Remove current chip'],
     ['\\', 'Open the palette preset menu (Up/Down navigate, Enter commits)'],
-    ['Enter', 'Edit the primary chip’s color'],
+    ['Enter', 'Edit the primary color'],
     ['Shift+Enter', 'Rename (and save) the palette'],
   ]],
   ['Projects', [
-    ['Up/Down', 'Navigate files and collections'],
+    ['Up/Down', 'Navigate canvases and collections'],
     ['Space', 'Fold/unfold the focused collection'],
-    ['+', 'New file'],
+    ['+', 'New canvas'],
     ['Alt++', 'New project'],
-    ['_', 'Remove selected file or collection'],
+    ['_', 'Remove selected canvas or collection'],
     ['=', 'New collection'],
-    ['Enter', 'Rename focused file/collection'],
+    ['Enter', 'Rename focused canvas/collection'],
     ['Shift+Enter', 'Rename project'],
-    ['e / E', 'Export file / project'],
+    ['e / E', 'Export canvas / project'],
     ['\\', 'Open project picker'],
   ]],
 ];

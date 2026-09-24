@@ -9,13 +9,13 @@ import { loadLibrary, addPalette, removePalette, renamePalette, MAX_SAVED } from
 
 const BUILTIN_NAMES = Object.values(PRESETS).map((p) => p.name);
 
-// Slides up from the hamburger (palette docks to the bottom edge) — one
+// Slides up from the hamburger (palette docks to the bottom edge): one
 // list: the built-in presets, then (below a hairline) the user's saved
 // palettes, each with a hover-revealed ✕ like a layer row, then a
 // "+ New Palette" to start a blank one. Uses
 // openCustomSlideOut (not the plain openSlideOut button-list) only for the
 // left-justified/accent-text button styling below, scoped via its own
-// `className` — toggle-on-second-click, outside-click dismiss, and the
+// `className`: toggle-on-second-click, outside-click dismiss, and the
 // slide/fade-in are all shared with every other slide-out popup.
 function openPresetPanel(anchor, onLoad, onNewPalette, onDelete, onImport) {
   const result = openCustomSlideOut(anchor, (panel, close) => {
@@ -47,7 +47,7 @@ function openPresetPanel(anchor, onLoad, onNewPalette, onDelete, onImport) {
 }
 
 // Up to this many chips, the row stretches them to fill the bar. Beyond it
-// the row switches to a fixed-size scrollable window instead — 16 full
+// the row switches to a fixed-size scrollable window instead: 16 full
 // chips visible plus at least a quarter-chip peek on each edge, as a
 // "there's more this way" affordance, scrolled with the wheel.
 const INLINE_CHIPS = 32;
@@ -69,7 +69,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
   let chipWidthPx = 0; // 0 while every chip is inline (nothing scrolls)
 
   // True when the working palette differs from the saved/built-in entry it
-  // came from — the only time switching away saves anything, which is what
+  // came from: the only time switching away saves anything, which is what
   // keeps the library from filling up with untouched presets. An unnamed
   // palette (its entry was deleted, or a legacy custom one) never counts.
   function hasUnsavedEdits() {
@@ -84,7 +84,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
   // can't diverge between them.
   function switchTo(next) {
     if (hasUnsavedEdits() && addPalette(getProjectName(), state.chips, BUILTIN_NAMES) === null) {
-      flashTip(`Palette library is full (${MAX_SAVED}) — your edits to this palette weren't saved`);
+      flashTip(`Palette library is full (${MAX_SAVED}): your edits to this palette weren't saved`);
     }
     state.name = next.name;
     state.chips = next.chips.slice(0, MAX_CHIPS);
@@ -117,7 +117,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     const name = paletteNameFromFile(file.name);
     switchTo({ name, chips });
     const saved = addPalette(name, chips, BUILTIN_NAMES);
-    if (saved === null) flashTip(`Palette library is full (${MAX_SAVED}) — imported palette wasn't saved`);
+    if (saved === null) flashTip(`Palette library is full (${MAX_SAVED}): imported palette wasn't saved`);
     else if (saved !== name) { state.name = saved; onChange(state); }
   }
 
@@ -180,7 +180,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
       chip.className = 'chip';
       chip.style.setProperty('--chip-color', hex);
 
-      // Hex code reveals above the chip on hover — click it to open the
+      // Hex code reveals above the chip on hover: click it to open the
       // color picker (one seamless interaction, not a right-click menu).
       const hexLabel = document.createElement('button');
       hexLabel.className = 'chip-hex-label';
@@ -223,7 +223,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
           render();
           onChange(state);
         },
-        // Drag a chip off the palette entirely to remove it — never down to
+        // Drag a chip off the palette entirely to remove it: never down to
         // zero chips.
         onRemove: (removedIndex) => {
           if (state.chips.length <= 1) return;
@@ -244,7 +244,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
         glyph: '+', icon: true, className: 'chip-add', title: 'Add color',
         onClick: () => {
           state.chips.push('#FFFFFF');
-          scrollPx = Infinity; // clamped to the new max in layoutChips — scrolls the new chip into view
+          scrollPx = Infinity; // clamped to the new max in layoutChips: scrolls the new chip into view
           render();
           onChange(state);
         },
@@ -258,7 +258,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
 
   // <=16 chips: stretch evenly to fill the bar (no scrolling needed at all).
   // >16 chips: fixed-width slots sized for 16 full + 2 half-peeks (17
-  // chip-widths across the viewport), scrolled by wheel — never native
+  // chip-widths across the viewport), scrolled by wheel: never native
   // overflow/scrollbars, and chips never spill past the bar's own edge.
   function layoutChips(viewport, row) {
     const count = state.chips.length;
@@ -299,7 +299,7 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
   return {
     getPrimary: () => state.primary,
     // Swaps in a different project's palette object wholesale (project
-    // switching, §ProjectSwitching) — replaces the live reference rather
+    // switching, §ProjectSwitching): replaces the live reference rather
     // than copying fields, so main.js's `project.palette` stays the same
     // object this module reads/mutates.
     setState(newState) { state = newState; nameLegacyPalette(state); render(); },
@@ -343,10 +343,11 @@ export function createPalette(container, initial, onChange, onSelectColor, getPr
     },
     // Colors-panel keyboard scheme: `\` opens the same preset picker as the
     // hamburger button; `Return` opens the same hex/HSL editor as clicking a
-    // chip's hex label — both just replay the existing click handlers rather
+    // chip's hex label: both just replay the existing click handlers rather
     // than duplicating them.
     openPresetMenu: openMenu,
     importFile,
+    pickAndImport: pickPaletteFile,
     renamePalette() { return rename(container.querySelector('.palette-hamburger')); },
     editPrimaryChip() {
       const chipEl = container.querySelectorAll('.chip')[primaryIndex()];

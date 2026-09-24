@@ -106,9 +106,9 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
   // field, filling the same 2-block panel height between them.
   const stack = document.createElement('div');
   stack.className = 'timeline-stack';
-  // Still creates a new File — nothing imports into the open one; Frames
+  // Still creates a new File: nothing imports into the open one; Frames
   // is pre-selected because that's the Timeline's concern.
-  const importBtn = button({ glyph: '↓', icon: true, title: 'Import a spritesheet as frames (new File)', onClick: (e) => callbacks.onImportSheet(e.currentTarget) });
+  const importBtn = button({ glyph: '↓', icon: true, title: 'Import a spritesheet as frames (new canvas)', onClick: (e) => callbacks.onImportSheet(e.currentTarget) });
   stack.append(onionBtn, addBtn, importBtn);
 
   container.append(fpsField, stack, strip);

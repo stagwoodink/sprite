@@ -10,7 +10,7 @@ import { maskFromRect, maskFromWand, maskFromColor, fullMask, toRenderSelection 
 import { extract, stamp, flip, rotate, shiftMask, moveContent, maskBounds } from './selection-ops.js';
 import { commitCommand, undo as undoCmd, redo as redoCmd, snapshotLayers } from './undo.js';
 import {
-  createProject, activeFile as getActiveFile, addFile, deleteFile,
+  createProject, DEFAULT_CANVAS_SIZE, activeFile as getActiveFile, addFile, deleteFile,
   addCollection, deleteCollection, NEW_FILE_SIZES, projectOrder, moveProjectItem,
   lastCollection, mostRecentFileIn, splitByCollection, addExistingFile, uniqueFileName,
 } from './project.js';
@@ -57,10 +57,20 @@ const toolTag = document.getElementById('tool-tag');
 versionTab.classList.add('panel');
 toolTag.classList.add('panel');
 
-const uiPrefs = loadUiPrefs();
+// The backend is picked before any UI is built because preferences can live in
+// it (a `.prefs` file in a connected folder, see ui-prefs.js), and the panels
+// below are constructed from them.
+let backend;
+try {
+  backend = await chooseBackend();
+} catch (err) {
+  console.error('Storage backend unavailable, autosave disabled:', err);
+  backend = { write: async () => {}, read: async () => null, delete: async () => {}, list: async () => [] };
+}
+const uiPrefs = await loadUiPrefs(backend);
 let activeReferenceId = null; // the reference `:` acts on: the one last added or clicked
 
-// App icon, left of the name — static (not itself clickable), same
+// App icon, left of the name: static (not itself clickable), same
 // `.version-tab-icon` treatment the tool tag's zoom glyph uses. Real glyph
 // TBD; '#' is a placeholder.
 const appIcon = document.createElement('div');
@@ -76,7 +86,7 @@ versionLink.rel = 'noopener';
 versionLink.textContent = `Sprite v${VERSION}`;
 
 // Plain ASCII (!, @, ?) reads visibly bigger than the hand-picked symbol
-// glyphs used elsewhere in this fallback font (@ especially) — scaled
+// glyphs used elsewhere in this fallback font (@ especially): scaled
 // down via an inner span, not the button's own font-size: --block is a
 // real `em` value, so font-size on the button itself would also shrink
 // its width/height (they're derived from its own em context), leaving it
@@ -89,7 +99,7 @@ function scaledGlyph(text) {
   return span;
 }
 
-// Plain text/Unicode stand-ins — real icons come later (a custom icon
+// Plain text/Unicode stand-ins: real icons come later (a custom icon
 // font), swapped in by just changing this character, no markup change.
 const bugBtn = document.createElement('a');
 bugBtn.href = GITHUB_ISSUES_URL;
@@ -105,12 +115,12 @@ discordBtn.rel = 'noopener';
 discordBtn.className = 'btn btn--icon';
 discordBtn.append(scaledGlyph('@'));
 
-// Text for now, a real icon later — toggles the same Controls modal as "?".
+// Text for now, a real icon later: toggles the same Controls modal as "?".
 const helpBtn = button({ glyph: scaledGlyph('?'), icon: true, onClick: () => keybindHelp.toggle() });
 
 versionTab.append(appIcon, versionLink, bugBtn, discordBtn, helpBtn);
 
-// Hold-`+Left/Right selects a version-tab button, Return activates it —
+// Hold-`+Left/Right selects a version-tab button, Return activates it:
 // "everything keyboard-accessible". `~` (Global) separately pins/unpins the
 // corner tags.
 const versionNavItems = [versionLink, bugBtn, discordBtn, helpBtn];
@@ -120,7 +130,7 @@ function updateVersionNavHighlight() {
   versionNavItems.forEach((el, i) => el.classList.toggle('version-nav-focused', heldBacktick && i === versionNavIndex));
 }
 
-// Tool reference tag — mirrors version-tab on the opposite corner. Left
+// Tool reference tag: mirrors version-tab on the opposite corner. Left
 // side: current tool + brush size. Right: zoom %, then the primary swatch.
 // Content refreshed from renderCanvas() (cheap: a handful of
 // textContent/background writes).
@@ -133,7 +143,7 @@ const zoomLabel = document.createElement('div');
 zoomLabel.className = 'tool-tag-label tool-tag-label--divider';
 const primarySwatch = document.createElement('div');
 primarySwatch.className = 'tool-tag-swatch';
-// Export progress (§14, export.js's onExportProgress) — a small bar that
+// Export progress (§14, export.js's onExportProgress): a small bar that
 // takes the tool label's place while an export is running, so it doesn't
 // need its own reserved slot the rest of the time.
 const exportBar = document.createElement('div');
@@ -145,7 +155,7 @@ const exportBarFill = document.createElement('div');
 exportBarFill.className = 'tool-tag-export-fill';
 exportBarTrack.append(exportBarFill);
 exportBar.append(exportBarTrack);
-// Lingering export-failure marker — hidden while nothing has failed (or a
+// Lingering export-failure marker: hidden while nothing has failed (or a
 // fresh export is running), shown as a short clickable label otherwise;
 // click opens a modal with the full error detail (openExportErrorModal,
 // below). Red/white styling only for failures the user can act on.
@@ -158,7 +168,7 @@ toolTag.append(zoomIcon, zoomLabel, toolLabel, exportBar, exportErrorLabel, prim
 const MODE_LABELS = { place: 'Place', paint: 'Paint', erase: 'Erase' };
 
 // A final export failure leaves a quiet marker here (cleared the moment
-// the next export starts) instead of an interrupting dialog — see
+// the next export starts) instead of an interrupting dialog: see
 // export.js's runExport for the retry-then-classify logic that decides
 // `actionable` (red/white, worth a click) vs. not.
 let exportError = null;
@@ -175,14 +185,14 @@ onExportProgress((status) => {
 });
 
 // A hovered/focused button's own tip text takes over the tool tag's label
-// in place of a native tooltip — cleared back to the normal tool/brush
+// in place of a native tooltip: cleared back to the normal tool/brush
 // readout on mouseleave/blur. Set synchronously (not waiting for the next
 // animation frame) so it's responsive even while that loop is paused (e.g.
 // viewing a read-only group grid, § renderGroupCanvas).
 let hoverTip = null;
 onHoverTip((text) => { hoverTip = text; updateToolTag(); });
 // Whichever artboard the mouse is over in the group grid (§ canvas
-// pointermove, below) — "name WxH", or null over empty space between
+// pointermove, below): "name WxH", or null over empty space between
 // cells. A button's own hoverTip still wins if somehow both are set.
 let groupHoverTip = null;
 
@@ -197,18 +207,18 @@ const setHidden = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden
 function updateToolTag() {
   const rect = canvasRect;
   // An export in progress takes over the label slot with the progress bar
-  // (already shown/hidden by the onExportProgress subscription above) —
+  // (already shown/hidden by the onExportProgress subscription above):
   // nothing else competes for it while that's up.
   if (!exportBar.hidden) {
     setHidden(toolLabel, true);
   } else if (activeGroupId) {
     // The group grid (§ project panel group select) has no active tool or
-    // color — a hovered button's tip is still worth showing there, but the
+    // color: a hovered button's tip is still worth showing there, but the
     // brush/mode readout and primary-swatch are meaningless outside actual
     // editing, and the zoom % needs to read the grid's own camera, not the
     // single-file canvas's.
     const tip = hoverTip || groupHoverTip;
-    setHidden(toolLabel, !tip); // nothing to show between artboards — don't render an empty tip section
+    setHidden(toolLabel, !tip); // nothing to show between artboards: don't render an empty tip section
     setText(toolLabel, tip || '');
     setHidden(primarySwatch, true);
     const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
@@ -227,7 +237,7 @@ function updateToolTag() {
   if (primary !== swatchColor) primarySwatch.style.background = swatchColor = primary;
 }
 
-// Corner-tag hide/show state — `~` (Global) pins/unpins both at once.
+// Corner-tag hide/show state: `~` (Global) pins/unpins both at once.
 let tagsHidden = uiPrefs.tagsHidden;
 versionTab.classList.toggle('hidden-tag', tagsHidden);
 toolTag.classList.toggle('hidden-tag', tagsHidden);
@@ -241,7 +251,7 @@ function toggleTagsHidden() {
 
 // Timeline (top) and Palette (bottom) both shrink horizontally to clear
 // whichever side panel is open, rather than staying full width and
-// pushing anything — side panels just run the full viewport height.
+// pushing anything: side panels just run the full viewport height.
 // Pushes are whole blocks of the live --block, not pixel constants: pixel-snap.js
 // resizes the block with the device pixel ratio, and a fixed pixel offset would drift from it.
 const SIDE_PANEL_BLOCKS = 6; // must match --panel-width in style.css
@@ -257,7 +267,7 @@ function updatePushes() {
   const projectOpen = !!(projectReveal && projectReveal.isFocused());
   // Export and Open Project only ever show docked beside an open Project
   // panel, and never both at once (each force-closes the other when
-  // opened, below) — if Project closes out from under whichever is open
+  // opened, below): if Project closes out from under whichever is open
   // (e.g. unpinned via Tab), close it too.
   if (!projectOpen) {
     if (exportReveal && exportReveal.isFocused()) exportReveal.forceHide();
@@ -272,7 +282,7 @@ function updatePushes() {
   const pushedRight = !!(layersReveal && layersReveal.isFocused());
   const leftPush = blocks(((projectOpen ? 1 : 0) + (secondSlotOpen ? 1 : 0)) * SIDE_PANEL_BLOCKS);
   const rightPush = blocks(pushedRight ? SIDE_PANEL_BLOCKS : 0);
-  // The version tab always sits as far right/down as it can — right of the
+  // The version tab always sits as far right/down as it can: right of the
   // layers panel when closed, flush with the window bottom when the
   // palette itself is closed, not pinned to the palette's height always.
   const paletteVisible = !!(paletteReveal && paletteReveal.isFocused());
@@ -280,23 +290,33 @@ function updatePushes() {
   for (const el of [timelineBar, paletteBar]) {
     el.style.setProperty('--push-left', leftPush);
     el.style.setProperty('--push-right', rightPush);
-    // Dark shadow line where an open side panel butts against this edge —
+    // Dark shadow line where an open side panel butts against this edge:
     // shows the side panel stacking in front of it (§ panel-edge treatment).
     el.classList.toggle('pushed-left', pushedLeft);
     el.classList.toggle('pushed-right', pushedRight);
   }
-  // Both corner tags always sit as far into their corner as they can — only
+  // Both corner tags always sit as far into their corner as they can: only
   // lifted above the palette when it's actually visible, only pulled in
   // from their side when that side panel is actually open.
   versionTab.style.setProperty('--push-right', rightPush);
   versionTab.style.setProperty('--push-bottom', bottomPush);
-  toolTag.style.setProperty('--push-left', leftPush);
+  toolTag.style.setProperty('--push-left', slideOutPush ? `max(${leftPush}, ${slideOutPush}px)` : leftPush);
   toolTag.style.setProperty('--push-bottom', bottomPush);
 }
 
+// An open slide-out that covers the tool tag's corner shoves the tag past
+// its own right edge instead of hiding it.
+let slideOutPush = 0;
+document.addEventListener('slideout-bounds', (e) => {
+  const bar = e.detail, tag = toolTag.getBoundingClientRect();
+  const covers = bar && bar.top < tag.bottom && bar.bottom > tag.top && bar.left < tag.right;
+  slideOutPush = covers ? bar.right : 0;
+  updatePushes();
+});
+
 // Shared reveal/hide/pin/focus mechanic (§15), one instance per panel.
-// Pin state is restored from uiPrefs (palette starts pinned by default —
-// §7.2 flagged assumption 3 — on a first run with nothing saved yet), and
+// Pin state is restored from uiPrefs (palette starts pinned by default:
+// §7.2 flagged assumption 3: on a first run with nothing saved yet), and
 // persisted back on every pin/unpin so a reload looks the way you left it.
 // Export doesn't get this: it isn't independently pinnable (only ever
 // opens alongside Project, via openExport()), so there's no pin state of
@@ -305,11 +325,11 @@ projectReveal = createRevealablePanel(projectPanel, document.getElementById('pro
   initiallyPinned: uiPrefs.project, onVisibility: updatePushes,
   onPinChange: (v) => { uiPrefs.project = v; saveUiPrefs(uiPrefs); },
 });
-// No edge trigger — opened only by the Project panel's Export button
+// No edge trigger: opened only by the Project panel's Export button
 // (openExport(), below); its own element is its "trigger" so hovering it
 // keeps it open with the same grace-period behavior as every other panel.
 exportReveal = createRevealablePanel(exportPanel, exportPanel, { onVisibility: updatePushes });
-// Same non-pinnable, own-element-as-trigger treatment as Export — opened
+// Same non-pinnable, own-element-as-trigger treatment as Export: opened
 // only by the Project panel's "Open" menu item (openProjectListPanel(), below).
 openProjectReveal = createRevealablePanel(openProjectPanel, openProjectPanel, { onVisibility: updatePushes });
 layersReveal = createRevealablePanel(layersPanel, document.getElementById('layers-trigger'), {
@@ -324,12 +344,12 @@ paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palet
   initiallyPinned: uiPrefs.palette, onVisibility: updatePushes,
   onPinChange: (v) => { uiPrefs.palette = v; saveUiPrefs(uiPrefs); },
 });
-updatePushes(); // final pass — the four constructions above ran with partial info
+updatePushes(); // final pass: the four constructions above ran with partial info
 const keybindHelp = createKeybindHelp();
 
 // Minimal generic modal for the export-error label's "click for more info"
 // (openExportErrorModal above). Mirrors keybind-help.js's proven
-// overlay+panel+fade pattern but with its own classes — deliberately not
+// overlay+panel+fade pattern but with its own classes: deliberately not
 // shared, keybind-help.js is unrelated and untouched.
 let exportErrorOverlay = null;
 function openExportErrorModal(error) {
@@ -360,12 +380,12 @@ function closeExportErrorModal() {
 }
 
 // Shift+Tab: pin/unpin every panel at once. A plain toggle on whether *any*
-// panel is currently pinned — the earlier stash-and-restore-exact-prior-state
+// panel is currently pinned: the earlier stash-and-restore-exact-prior-state
 // version was a no-op whenever nothing happened to be pinned yet, which read
 // as broken.
 function toggleHideAllPanels() {
   // Colors/Layers/Timeline are removed outright in group view (setActiveGroup)
-  // — Shift+Tab shouldn't be able to pin them back open behind the scenes.
+  //: Shift+Tab shouldn't be able to pin them back open behind the scenes.
   const reveals = activeGroupId ? [projectReveal] : [projectReveal, layersReveal, timelineReveal, paletteReveal];
   const anyPinned = reveals.some((r) => r.isPinned());
   for (const r of reveals) {
@@ -376,7 +396,7 @@ function toggleHideAllPanels() {
 
 // --- Focus-based control scheme: Ctrl(left)+Arrow focuses a panel (pulling
 // it out, red hairline), staying focused after keyup until focus moves
-// elsewhere — unlike the old hold-to-reveal Tab/C/\/T keys. `Tab` cycles
+// elsewhere: unlike the old hold-to-reveal Tab/C/\/T keys. `Tab` cycles
 // through PANEL_CYCLE; a tap of Ctrl alone (no arrow) returns to 'canvas'.
 let focusedPanel = 'canvas'; // 'canvas' | 'timeline' | 'layers' | 'colors' | 'projects'
 const PANEL_REVEAL = { timeline: timelineReveal, layers: layersReveal, colors: paletteReveal, projects: projectReveal };
@@ -385,7 +405,7 @@ const PANEL_CYCLE = ['timeline', 'layers', 'colors', 'projects'];
 function setFocus(panel) {
   if (focusedPanel === panel) {
     // Focusing the panel that's already focused pins/unpins it instead of
-    // no-op-ing — "call it twice in a row" toggles whether it stays open.
+    // no-op-ing: "call it twice in a row" toggles whether it stays open.
     if (PANEL_REVEAL[panel]) PANEL_REVEAL[panel].togglePin();
     return;
   }
@@ -395,10 +415,10 @@ function setFocus(panel) {
   syncFocusRing();
 }
 
-// Hovering a panel gives it keyboard focus too, same as Ctrl+Arrow — mouse
+// Hovering a panel gives it keyboard focus too, same as Ctrl+Arrow: mouse
 // and keyboard stay in sync rather than needing a keyboard focus step after
 // an already-visible (hovered) panel. Colors/Layers/Timeline aren't
-// reachable in group view (§ setActiveGroup) — Projects is the only one
+// reachable in group view (§ setActiveGroup): Projects is the only one
 // still worth hover-focusing there.
 const PANEL_TRIGGER_ID = { timeline: 'timeline-trigger', layers: 'layers-trigger', colors: 'palette-trigger', projects: 'project-trigger' };
 for (const name of PANEL_CYCLE) {
@@ -421,7 +441,7 @@ function syncFocusRing() {
 }
 
 // The read-only group grid (§ project panel group select) has no colors,
-// layers, or frames of its own to show — it's an overview of other files'
+// layers, or frames of its own to show: it's an overview of other files'
 // already-composited pixels, none of it editable. Colors/Layers/Timeline
 // have nothing to do there, so entering group view force-closes and hides
 // all three (CSS keyed off `.group-view` on <body>, toggled here) instead
@@ -430,7 +450,7 @@ function syncFocusRing() {
 // a future one.
 function setActiveGroup(id) {
   // Remember the outgoing collection's own zoom/pan (§7 issue: "remember
-  // zoom per collection"), and restore the incoming one's — stored directly
+  // zoom per collection"), and restore the incoming one's: stored directly
   // on the collection object, same as .order/.collapsed. Only persists on
   // switch, not live-tracked mid-pan/zoom.
   if (activeGroupId) {
@@ -458,16 +478,15 @@ function setActiveGroup(id) {
 // Autosave (§10, §18): every committed change writes to whichever backend
 // was resolved (real folder via FSA, or the IndexedDB fallback), debounced
 // so a fast drag-stroke doesn't fire one write per pixel. IndexedDB is
-// unavailable in some contexts (a file:// origin, private browsing) — fall
+// unavailable in some contexts (a file:// origin, private browsing): fall
 // back to an in-memory no-op backend rather than taking the whole app down,
 // since losing autosave is much better than losing the app.
-let backend, project;
+let project;
 try {
-  backend = await chooseBackend();
   // Reopen whichever project was open last time; failing that, whatever's
   // most recently touched in the registry; failing that (first-ever run),
   // start a fresh one. Projects persist indefinitely once saved (§
-  // ProjectSwitching) — this is just which one to land on, not the only one.
+  // ProjectSwitching): this is just which one to land on, not the only one.
   project = (uiPrefs.lastProjectId && await loadProject(backend, uiPrefs.lastProjectId)) || null;
   if (!project) {
     const registry = await listProjects(backend);
@@ -524,7 +543,7 @@ document.addEventListener('visibilitychange', () => {
 // model.pixels at that combination's array in place (same reference the
 // SpriteFile stores) rather than rebuilding every module that holds `model`.
 // stride = the logical canvas width, which can exceed the visible width
-// after a shrink (§13.4) — width/height stay the visible (edit/display)
+// after a shrink (§13.4): width/height stay the visible (edit/display)
 // window, cropped from the top-left of that wider backing array.
 const model = { width: 0, height: 0, stride: 0, pixels: null, colors: null };
 
@@ -559,20 +578,20 @@ paintOptions.symmetry = uiPrefs.symmetry;
 let showRuler = uiPrefs.showRuler;
 // Shared step order for every checker/solid backdrop in the app (the
 // single-file canvas's own `u`, its app-wide `Shift+U` chrome, and the
-// group grid's `U` — the group grid has no per-artboard canvas background
+// group grid's `U`: the group grid has no per-artboard canvas background
 // of its own, every artboard is always transparent, showing this one
-// shared backdrop through it) — transparent, then dark to light, looping.
+// shared backdrop through it): transparent, then dark to light, looping.
 // One array: all three cycles share the exact same stops.
 const BG_STEPS = ['checker', 'black', 'grey', 'white'];
 // Pre-unification saves may still have the old 'dark'/'mid'/'light' app
-// backdrop names on disk — map them onto their new equivalents so an
+// backdrop names on disk: map them onto their new equivalents so an
 // upgrade doesn't silently reset (or crash indexOf into -1) a returning
 // user's chosen background.
 const LEGACY_BG_NAMES = { dark: 'black', mid: 'grey', light: 'white' };
 function normalizeBg(value, fallback) { return LEGACY_BG_NAMES[value] || value || fallback; }
 
 // One shared "advance to the next step, persist, redraw" shape behind
-// every backdrop cycle key below — they differ only in which uiPrefs key
+// every backdrop cycle key below: they differ only in which uiPrefs key
 // they read/write and their own starting fallback.
 function makeBgCycler(prefsKey, fallback) {
   let value = normalizeBg(uiPrefs[prefsKey], fallback);
@@ -586,25 +605,25 @@ function makeBgCycler(prefsKey, fallback) {
   };
 }
 
-const canvasBgCycler = makeBgCycler('canvasBg', 'checker');
+const canvasBgCycler = makeBgCycler('canvasBg', 'white');
 function cycleCanvasBg() { canvasBgCycler.cycle(); }
 
-// App-wide chrome background (Shift+U) — the space the canvas itself sits
+// App-wide chrome background (Shift+U): the space the canvas itself sits
 // on, painted by renderer.js as part of the canvas fill (the canvas element
 // covers the full viewport, so a CSS body background would never be
 // visible). Distinct from the sprite's own backdrop (`u`/canvasBgCycler
-// above), though both share the same transparency checkerboard —
+// above), though both share the same transparency checkerboard:
 // renderer.js draws it once, pixel-aligned to the canvas, as a base layer
 // under both, so the two can never drift out of alignment with each other.
-const appBgCycler = makeBgCycler('appBg', 'black');
+const appBgCycler = makeBgCycler('appBg', 'white');
 function cycleAppBg() { appBgCycler.cycle(); }
 
 // Ctrl+U: cycle the canvas and app backdrops together instead of one at a
 // time. If they're currently different colors, the first press just snaps
 // the app backdrop onto the canvas's own (canvas wins) rather than also
-// stepping past it — only once they agree does a press actually cycle
+// stepping past it: only once they agree does a press actually cycle
 // both, in step, from there. Genuinely its own thing (not another
-// makeBgCycler instance) — it reads and compares two cyclers' values
+// makeBgCycler instance): it reads and compares two cyclers' values
 // together, which the shared factory has no shape for.
 function cycleBothBg() {
   if (appBgCycler.get() !== canvasBgCycler.get()) {
@@ -620,7 +639,7 @@ const groupAppBgCycler = makeBgCycler('groupAppBg', 'white');
 function cycleGroupAppBg() { groupAppBgCycler.cycle(); }
 let hoverPixel = null;
 // Declared this early because updateToolTag() (called from renderCanvas(),
-// which the animateCursor loop invokes synchronously right away) reads it —
+// which the animateCursor loop invokes synchronously right away) reads it:
 // a `let` declared further down is in the temporal dead zone until its own
 // line runs, so referencing it before then throws and silently aborts the
 // entire module, which is what broke rendering/the tool tag altogether.
@@ -628,11 +647,11 @@ let heldD = false;
 let dPickPreview = null;
 // Keyboard-first control scheme (CONTEXT.md): brush size is keyboard-owned
 // state, read by both the tool tag and input.js's mouse handlers (which
-// just mirror whatever's set here). Paint/erase is momentary now — which
+// just mirror whatever's set here). Paint/erase is momentary now: which
 // key/button is down at the time, not a persisted mode.
 let brushSize = 1;
 // Panel keyboard focus: a position in the panel's visible combined order
-// (project-panel.js/layers-panel.js) that Up/Down moves through — distinct
+// (project-panel.js/layers-panel.js) that Up/Down moves through: distinct
 // from `activeFileIndex`/`activeLayerIndex`, since focus can land on a
 // header (to fold/unfold it with Space) where "the active file/layer"
 // doesn't mean anything. Landing on a file/layer still syncs the active
@@ -646,17 +665,17 @@ let layerSelection = null; // { anchor, to } inclusive layer/group range, while 
 let selectionMask = null;
 let selectionRender = null;
 // The Collection currently shown as a read-only artboard grid instead of
-// the normal single-file editing canvas (§ project panel group select) —
+// the normal single-file editing canvas (§ project panel group select):
 // null means the canvas shows the active file as usual.
 let activeGroupId = null;
 // Multi-file selection in the project panel (Shift/Alt-click, § buildFileRow)
-// — a Set of `project.files` indices, or null when nothing's multi-selected
+//: a Set of `project.files` indices, or null when nothing's multi-selected
 // (the plain single active-file highlight applies instead). Indices, not
 // file references, matching how layerSelection/frameSelection already
 // track transient panel selection elsewhere in this app.
 let fileSelection = null;
 // Same idea, for the layers panel (Shift/Alt-click, § layers-panel.js's
-// buildLayerRow) — a Set of `file.layers` indices, distinct from the
+// buildLayerRow): a Set of `file.layers` indices, distinct from the
 // existing `layerSelection` {anchor,to} range (that one drives the
 // backslash+arrows bulk-reorder feature, an unrelated keyboard mechanic).
 let multiLayerSelection = null;
@@ -668,9 +687,9 @@ const playback = { fps: 8, onionSkin: false, onionLayerOnly: false, playing: fal
 const ONION_RANGE = 2;
 function computeOnionFrames(file) {
   // T+Shift+Left/Right (multi-frame select) onion-ghosts every frame in the
-  // selected range instead of the fixed ±2 — "onion all" (§ new control
+  // selected range instead of the fixed ±2: "onion all" (§ new control
   // scheme), still focused on the active frame as the real (non-ghost) one.
-  // This overrides the plain onion-skin toggle rather than requiring it —
+  // This overrides the plain onion-skin toggle rather than requiring it:
   // a multi-frame selection is itself the signal to show the ghosts.
   if (frameSelection) {
     const lo = Math.min(frameSelection.anchor, frameSelection.to);
@@ -732,16 +751,16 @@ const selectionApi = {
   },
 };
 
-// Undo/redo lives on the active SpriteFile (§5, §10) — this just resolves it.
+// Undo/redo lives on the active SpriteFile (§5, §10): this just resolves it.
 const history = {
-  // Full refresh (thumbnails included) once per committed edit — not per
+  // Full refresh (thumbnails included) once per committed edit: not per
   // animation frame or per pointermove, which is what made this laggy
   // before (see the animateCursor comment further down).
   commit: (cmd) => { const file = getActiveFile(project); commitCommand(file, cmd); autosave(file); draw(); },
 };
 
 // Layer structural edits (add/delete/reorder) go through undo too, as a
-// layer-stack snapshot (buffers by reference) rather than a pixel diff — snapshot before, run the
+// layer-stack snapshot (buffers by reference) rather than a pixel diff: snapshot before, run the
 // mutation, snapshot after, hand both to history.commit.
 function commitLayerChange(file, mutate) {
   const before = snapshotLayers(file);
@@ -762,7 +781,7 @@ function resize() {
 // Retro trailing brush cursor: the on-canvas cursor indicator eases toward
 // the real pointer position instead of snapping to it instantly. This was
 // originally an accidental side effect of an expensive per-move redraw
-// (rebuilding the layers/timeline panels on every pointermove) — that was a
+// (rebuilding the layers/timeline panels on every pointermove): that was a
 // real perf bug, fixed by splitting the cheap per-frame canvas render
 // (renderCanvas) from the expensive full refresh (draw, panels included,
 // now only called once per committed action via history.commit). This is
@@ -787,7 +806,7 @@ function renderCanvas() {
   // (§11), while `model` (the active layer's own raw buffer) is what
   // painting/selection/undo actually mutate.
   const file = getActiveFile(project);
-  if (file._stub) return; // still loading — bindActiveFile redraws when it lands
+  if (file._stub) return; // still loading: bindActiveFile redraws when it lands
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
   const brushCursor = { mode: (inputController && inputController.getMode()) || 'place', size: brushSize };
@@ -798,7 +817,7 @@ function renderCanvas() {
 }
 
 // Read-only grid view of a Collection's files (§ project panel group
-// select) — no editing tool touches these pixels, this is display only.
+// select): no editing tool touches these pixels, this is display only.
 // `groupId` defaults to whichever collection is actively open in the group
 // grid, but export.js's collection export needs this for an arbitrary
 // collection without first entering group view for it.
@@ -808,7 +827,7 @@ function groupArtboards(groupId = activeGroupId) {
   combined.forEach((entry) => {
     if (entry.isHeader || entry.item.groupId !== groupId) return;
     const f = entry.item;
-    // `fileIndex` isn't read by renderArtboardGrid itself — carried through
+    // `fileIndex` isn't read by renderArtboardGrid itself: carried through
     // purely so double-clicking an artboard (§ canvas dblclick, below) can
     // jump straight to the right File without a fragile lookup by name.
     const fileIndex = project.files.indexOf(f);
@@ -861,10 +880,10 @@ function groupLayoutModel(artboards = groupArtboards()) {
   return { width: Math.max(1, layout.totalW), height: Math.max(1, layout.totalH) };
 }
 
-// This is an overview, not a single sprite being edited — "fit" leaves a
+// This is an overview, not a single sprite being edited: "fit" leaves a
 // margin around the whole grid instead of running it edge-to-edge (which is
 // what the single-file canvas's own fitScale does, floored to whole pixels
-// and never below 1:1 — both wrong here: a large collection needs to shrink
+// and never below 1:1: both wrong here: a large collection needs to shrink
 // below 1:1 to fit at all, and it should never fit flush to the viewport).
 const GROUP_FIT_PADDING = 96; // screen px margin on every side at "fit" zoom
 function groupFitScale(layoutModel, viewW, viewH) {
@@ -899,7 +918,7 @@ function groupZoomStep(dir) {
 
 function draw() {
   // Full refresh: cheap canvas render plus the layers/timeline panel
-  // rebuilds (thumbnails etc.) — only called once per committed action
+  // rebuilds (thumbnails etc.): only called once per committed action
   // (see history.commit below), not per animation frame or per pointermove.
   renderCanvas();
   redrawLayersPanel();
@@ -936,13 +955,13 @@ function draw() {
 
 // Any input can change what the canvas shows (hover, zoom, tool, colour,
 // toggles), and most handlers rely on the loop noticing rather than calling
-// renderCanvas() themselves — so treat every input event as a render request.
+// renderCanvas() themselves: so treat every input event as a render request.
 for (const type of ['pointermove', 'pointerdown', 'pointerup', 'keydown', 'keyup', 'wheel', 'input', 'change', 'click']) {
   window.addEventListener(type, requestRender, { capture: true, passive: true });
 }
 
 // redrawProjectPanel() fully rebuilds the panel's DOM (innerHTML=''),
-// resetting scroll to the top — used after that rebuild to bring a specific
+// resetting scroll to the top: used after that rebuild to bring a specific
 // file or collection row back into view instead of leaving the list stuck
 // at the top. Shared by new-file creation and inline rename.
 function scrollProjectRowIntoView({ scrollToFileIndex, scrollToCollectionId } = {}) {
@@ -954,8 +973,8 @@ function scrollProjectRowIntoView({ scrollToFileIndex, scrollToCollectionId } = 
 }
 
 // The Collection a new File should join by default: whichever one is
-// currently being worked on — the open group grid, or the active File's own
-// Collection — rather than always whichever Collection happens to sit last
+// currently being worked on: the open group grid, or the active File's own
+// Collection: rather than always whichever Collection happens to sit last
 // in display order.
 function currentCollectionId() {
   if (activeGroupId) return activeGroupId;
@@ -966,7 +985,7 @@ function currentCollectionId() {
   return lc ? lc.id : null;
 }
 
-// Shared by the size picker's fixed presets and its Current option — both
+// Shared by the size picker's fixed presets and its Current option: both
 // just resolve a (w, h) differently, then land the new File the same way.
 function commitNewFile(w, h, preset) {
   const collectionId = currentCollectionId(); // read before exiting group view below
@@ -981,7 +1000,7 @@ function commitNewFile(w, h, preset) {
   autosave();
 }
 
-// Makes File `i` the active one, keeping the current zoom/pan — shared by
+// Makes File `i` the active one, keeping the current zoom/pan: shared by
 // a plain file-row click and double-clicking an artboard in the group grid
 // (§ canvas dblclick listener, below).
 function selectFile(i) {
@@ -1016,19 +1035,16 @@ function redrawProjectPanel() {
     // The panel's import button: a spritesheet (new File) or a whole .sprite project.
     onImport: (anchor) => pickFile('image/*,.sprite,.json', (f) => (isImageFile(f) ? importSpritesheet(f, { mode: 'frames', anchor }) : importProjectFile(f))),
     onSplitProject: () => splitProject(),
-    // "Current" (bottom of the New File size picker): same size as
-    // whichever File was most recently worked on in the collection this
-    // new one is about to land in — falls back to the new-project default
-    // (9x9) if that collection has no files yet to match.
+    // Double click on New File: same size as whichever canvas was last worked
+    // on, wherever it lives; the new-project default only if nothing was.
     onAddFileCurrent: () => {
-      const targetId = currentCollectionId();
-      const ref = targetId && mostRecentFileIn(project, targetId);
-      commitNewFile(ref ? ref.visibleWidth : 9, ref ? ref.visibleHeight : 9);
+      const ref = mostRecentFileIn(project);
+      commitNewFile(ref ? ref.visibleWidth : DEFAULT_CANVAS_SIZE, ref ? ref.visibleHeight : DEFAULT_CANVAS_SIZE);
     },
     onResizeFile: async (file, w, h) => {
       await ensureLoaded(file);
       resizeCanvas(file, w, h);
-      file.updatedAt = Date.now(); // § project.js's mostRecentFileIn — resize isn't routed through commitCommand
+      file.updatedAt = Date.now(); // § project.js's mostRecentFileIn: resize isn't routed through commitCommand
       if (file === getActiveFile(project)) { bindActiveFile(); resetView(); }
       redrawProjectPanel();
       draw();
@@ -1062,7 +1078,7 @@ function redrawProjectPanel() {
 }
 
 // Shift+click a file (§ buildFileRow): select it and every file between it
-// and the current active file — but only within one Collection. Different
+// and the current active file: but only within one Collection. Different
 // collection (or the target IS the current file, i.e. no real range) is a
 // no-op, same as this app's other "nothing to do" guards rather than doing
 // something surprising.
@@ -1082,7 +1098,7 @@ function shiftSelectFile(targetIndex) {
 
 // Alt+click a file (§ buildFileRow): add it to whatever's already
 // multi-selected (starting from just the current active file if nothing
-// was yet) — unlike Shift, not restricted to one collection.
+// was yet): unlike Shift, not restricted to one collection.
 function altSelectFile(targetIndex) {
   if (!fileSelection) fileSelection = new Set([project.activeFileIndex]);
   fileSelection.add(targetIndex);
@@ -1090,7 +1106,7 @@ function altSelectFile(targetIndex) {
 }
 
 // Clicking away from a multi-select menu without picking anything collapses
-// the selection back down too — passed as every such menu's `onDismiss`.
+// the selection back down too: passed as every such menu's `onDismiss`.
 function dismissFileSelection() {
   fileSelection = null;
   redrawProjectPanel();
@@ -1098,9 +1114,9 @@ function dismissFileSelection() {
 
 // Resize/Export/Remove all for the whole multi-selection, anchored (chevron
 // included, same as every other row menu) at whichever file was most
-// recently added to it — the same "⋯" menu shape a single file gets, just
+// recently added to it: the same "⋯" menu shape a single file gets, just
 // scoped wider. Every action ends the multi-select the same way dismissing
-// it does — the menu was for this one operation.
+// it does: the menu was for this one operation.
 function openFileSelectionMenu(lastAddedIndex) {
   redrawProjectPanel();
   const anchor = projectPanel.querySelector(`[data-file-index="${lastAddedIndex}"]`);
@@ -1126,7 +1142,7 @@ function openMultiResizePopup(anchor, files) {
 }
 
 // One PNG download per selected file (the same default 'e' itself exports
-// a single active file with) — a full per-file format/scale picker for a
+// a single active file with): a full per-file format/scale picker for a
 // multi-export is more than this needed yet.
 async function exportSelectedFiles(files) {
   for (const file of files) await exportFile(file, { format: 'png', scale: 1, mode: 'canvas' });
@@ -1134,7 +1150,7 @@ async function exportSelectedFiles(files) {
   redrawProjectPanel();
 }
 
-// Descending index order — deleting high indices first means earlier ones
+// Descending index order: deleting high indices first means earlier ones
 // never shift out from under the next delete. deleteFile's own "at least
 // one file" guard already stops short of emptying the project entirely.
 function removeSelectedFiles(files) {
@@ -1146,7 +1162,7 @@ function removeSelectedFiles(files) {
 }
 
 // The collection header currently under keyboard focus (Tab held, Up/Down
-// navigated onto it) — null whenever focus is on a file instead, or Tab
+// navigated onto it): null whenever focus is on a file instead, or Tab
 // hasn't been used to navigate at all this hold.
 function focusedCollectionId() {
   if (tabFocusPos === null) return null;
@@ -1156,8 +1172,8 @@ function focusedCollectionId() {
 }
 redrawProjectPanel();
 
-// What the Export panel is currently showing — a File, a Collection, or
-// the whole Project (§ export-panel.js's own `target` shapes) — so a
+// What the Export panel is currently showing: a File, a Collection, or
+// the whole Project (§ export-panel.js's own `target` shapes): so a
 // generic refresh (e.g. onChange, below, whenever anything the panel might
 // be displaying could have changed) knows what to re-render without every
 // caller having to re-supply it.
@@ -1169,10 +1185,10 @@ function redrawExportPanel() {
 // Opens the Export panel already showing `target`, docked beside the
 // Project panel (which it reveals/pins open too, since Export only makes
 // sense next to it). Switching to a new target while already open just
-// re-points it, rather than toggling closed — only the plain "E" shortcut
+// re-points it, rather than toggling closed: only the plain "E" shortcut
 // (toggleExportForActiveFile, below) toggles.
 function openExport(target) {
-  if (openProjectReveal.isPinned()) openProjectReveal.forceHide(); // same docked slot — mutually exclusive
+  if (openProjectReveal.isPinned()) openProjectReveal.forceHide(); // same docked slot: mutually exclusive
   exportTarget = target;
   projectReveal.setPinned(true);
   exportReveal.setPinned(true);
@@ -1202,11 +1218,11 @@ async function redrawOpenProjectPanel() {
 
 // "Open" (project panel menu, § openProjectPicker below): docks the list of
 // other saved projects beside Project, same treatment as Export (openExport
-// above) rather than a floating slide-out menu — switching projects is a
+// above) rather than a floating slide-out menu: switching projects is a
 // real navigation action with its own list, not a one-off pick.
 function openProjectListPanel() {
   if (openProjectReveal.isPinned()) { openProjectReveal.forceHide(); return; }
-  if (exportReveal.isPinned()) exportReveal.forceHide(); // same docked slot — mutually exclusive
+  if (exportReveal.isPinned()) exportReveal.forceHide(); // same docked slot: mutually exclusive
   projectReveal.setPinned(true);
   openProjectReveal.setPinned(true);
   redrawOpenProjectPanel();
@@ -1214,7 +1230,7 @@ function openProjectListPanel() {
 
 // --- Project switching (§ ProjectSwitching, Tab+N/Tab+O) ---
 // Only one project is ever open at a time (no simultaneous multi-project),
-// but every saved project persists in the registry indefinitely — switching
+// but every saved project persists in the registry indefinitely: switching
 // away doesn't touch the old one, it just stops being what's on screen.
 async function switchToProject(newProject) {
   await saveProject(backend, project); // flush the outgoing project's latest edits first
@@ -1252,9 +1268,9 @@ async function splitProject() {
 }
 
 // Import (project panel menu): a real system file-picker dialog
-// (<input type="file"> — the native/platform picker, no custom UI of its
+// (<input type="file">: the native/platform picker, no custom UI of its
 // own), accepting the same whole-project .sprite archive
-// exportProjectSprite (Tab+Shift+E) writes — its inverse — or a
+// exportProjectSprite (Tab+Shift+E) writes: its inverse: or a
 // pre-archive plain-JSON whole-project export, for anything exported
 // before that format existed. Routed through saveProject+loadProject
 // rather than switched to directly, so an imported project picks up the
@@ -1264,7 +1280,7 @@ const importProject = () => pickFile('.sprite,.json,application/json', importPro
 async function importProjectFile(file) {
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B; // 'PK' — zip local-file-header signature
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B; // 'PK': zip local-file-header signature
     let data;
     if (isZip) {
       const entries = unzipSync(bytes);
@@ -1278,20 +1294,20 @@ async function importProjectFile(file) {
       data = JSON.parse(new TextDecoder().decode(bytes));
       data.files = data.files.map((f) => parseFile(f, null));
     }
-    // Fresh id — importing an exported copy of a still-open (or
+    // Fresh id: importing an exported copy of a still-open (or
     // previously-imported) project shouldn't collide with it in the registry.
     const imported = { ...data, id: crypto.randomUUID() };
     await saveProject(backend, imported);
     const p = await loadProject(backend, imported.id);
     if (p) await switchToProject(p);
   } catch (err) {
-    console.error('Import failed — not a project archive/JSON file:', err);
+    console.error('Import failed: not a project archive/JSON file:', err);
   }
 }
 
 async function newProject() {
   // Iterative naming (matches how new files/layers avoid colliding, just
-  // checked against the real saved-project registry instead of an index) —
+  // checked against the real saved-project registry instead of an index):
   // "New Project", then "New Project 2", "New Project 3", ... rather than
   // every click producing another project literally named "New Project".
   const registry = await listProjects(backend);
@@ -1306,12 +1322,13 @@ async function newProject() {
 // Spritesheet -> a new File in the current Collection (never into the open
 // File). The grid is auto-detected from transparent gutters; only if that
 // fails does a slide-out ask, carrying the numeric fields.
-async function importSpritesheet(file, { mode = 'frames', anchor } = {}) {
+async function importSpritesheet(file, { mode = 'frames', anchor, whole = false } = {}) {
   try {
     const bitmap = await decodeImage(file, { maxPixels: 16_000_000 });
     const image = bitmapPixels(bitmap);
     bitmap.close();
-    let grid = detectGrid(image.data, image.width, image.height);
+    // `whole`: the image is one canvas, not a sheet to slice: no detection, no question.
+    let grid = whole ? { cellW: image.width, cellH: image.height, margin: 0, spacing: 0 } : detectGrid(image.data, image.width, image.height);
     if (!grid) {
       const answer = await askSheetGrid(anchor, { cellW: image.width, cellH: image.height, margin: 0, spacing: 0, mode });
       if (!answer) return;
@@ -1339,7 +1356,7 @@ async function importSpritesheet(file, { mode = 'frames', anchor } = {}) {
 // under the pointer): Colors takes palette files and images (extract);
 // Layers takes images (reference); Canvas takes images (reference) and
 // .sprite projects; Projects takes images (spritesheet -> new File) and
-// .sprite projects. Timeline isn't a target — it has a button instead.
+// .sprite projects. Timeline isn't a target: it has a button instead.
 // Hovering a drag over a panel (or its edge) focuses it, which reveals it.
 const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
 
@@ -1393,18 +1410,35 @@ window.addEventListener('drop', (e) => { if (hasFiles(e)) e.preventDefault(); })
 function openProjectPicker(anchor) {
   const options = [
     { label: 'New', onClick: () => newProject() },
-    { label: 'Import', onClick: () => importProject() },
-    { label: 'Sheet > frames', onClick: () => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor })) },
-    { label: 'Sheet > layers', onClick: () => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'layers', anchor })) },
-    // Docks the actual project list beside Project (openProjectListPanel) —
+    { label: 'Import', onClick: () => openImportMenu(anchor) },
+    // Docks the actual project list beside Project (openProjectListPanel):
     // not flattened into this menu (projects aren't fixed one-off actions
     // like New/Import, and the list can be long).
     { label: 'Open', onClick: () => openProjectListPanel() },
   ];
   // Right (the default): snapped to the project panel's own outer edge
   // with a chevron pointing back at the button, same treatment as every
-  // other row menu — not the floating-popup feel `{ side: 'up' }` gave it.
+  // other row menu: not the floating-popup feel `{ side: 'up' }` gave it.
   openSlideOut(anchor, options);
+}
+
+// Chained slide-outs from the same anchor: each replaces the last, so
+// Import > Sheet reads as drilling down rather than stacking menus.
+function openImportMenu(anchor) {
+  openSlideOut(anchor, [
+    { label: 'Project', onClick: () => importProject() },
+    { label: 'Canvas', onClick: () => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor, whole: true })) },
+    { label: 'Sheet', onClick: () => openSheetMenu(anchor) },
+    { label: 'Reference', onClick: () => importReference() },
+    { label: 'Palette', onClick: () => palette.pickAndImport() },
+  ]);
+}
+
+function openSheetMenu(anchor) {
+  openSlideOut(anchor, [
+    { label: '> Frames', onClick: () => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor })) },
+    { label: '> Layers', onClick: () => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'layers', anchor })) },
+  ]);
 }
 
 function redrawLayersPanel(force = false) {
@@ -1437,7 +1471,7 @@ function redrawLayersPanel(force = false) {
     onRemoveReference: (id) => { removeReference(file, id); if (activeReferenceId === id) activeReferenceId = null; draw(); autosave(); },
     // Both can change what's actually composited (a deleted group's members
     // re-render at full visibility; a hidden group's members stop
-    // rendering), so a full draw() — which also redraws this panel — not
+    // rendering), so a full draw(): which also redraws this panel: not
     // just a plain redrawLayersPanel().
     onDeleteGroup: (id) => { deleteLayerGroup(file, id); draw(); autosave(); },
     onToggleGroupVisible: (id) => {
@@ -1484,8 +1518,8 @@ async function addReferenceFrom(image, handle) {
 }
 
 // Shift+click a layer (§ layers-panel.js buildLayerRow): select it and
-// every layer between it and the current active layer — but only within
-// one Group (including "no group" — an ungrouped layer's groupId is null
+// every layer between it and the current active layer: but only within
+// one Group (including "no group": an ungrouped layer's groupId is null
 // either way, so two ungrouped layers still count as the same context).
 // Different group is a no-op.
 function shiftSelectLayer(targetIndex) {
@@ -1504,7 +1538,7 @@ function shiftSelectLayer(targetIndex) {
 }
 
 // Alt+click a layer: add it to whatever's already multi-selected (starting
-// from just the current active layer if nothing was yet) — not restricted
+// from just the current active layer if nothing was yet): not restricted
 // to one group.
 function altSelectLayer(targetIndex) {
   const file = getActiveFile(project);
@@ -1520,7 +1554,7 @@ function dismissLayerSelection() {
 
 // Toggle-all, not "flip each independently": if any selected layer is
 // currently visible, hide the whole selection; only once they're all
-// already hidden does it show them all again — same aggregate rule
+// already hidden does it show them all again: same aggregate rule
 // onToggleGroupVisible already uses for a layer group's own single flag,
 // just computed across a set instead of read off one field. Also what a
 // selected layer's own thumbnail click does (layers-panel.js).
@@ -1533,7 +1567,7 @@ function toggleSelectedLayersVisibility() {
   draw(); autosave();
 }
 
-// Descending index order — deleting high indices first means earlier ones
+// Descending index order: deleting high indices first means earlier ones
 // never shift out from under the next delete. deleteLayer's own "at least
 // one layer" guard already stops short of emptying the file entirely.
 function removeSelectedLayers() {
@@ -1546,7 +1580,7 @@ function removeSelectedLayers() {
 
 // Hide/Remove for the whole multi-selection, anchored at whichever layer
 // was most recently added to it. Layers panel docks at the right edge, so
-// 'left' (not the default 'right', which would run the menu off-screen) —
+// 'left' (not the default 'right', which would run the menu off-screen):
 // same side its own "Add layer or group" menu already uses.
 function openLayerSelectionMenu(lastAddedIndex) {
   redrawLayersPanel(true); // the menu anchors on a row, so it must exist
@@ -1559,7 +1593,7 @@ function openLayerSelectionMenu(lastAddedIndex) {
 }
 
 // The layer-group header currently under keyboard focus (\ held, Up/Down
-// navigated onto it) — null whenever focus is on a layer, or \ hasn't been
+// navigated onto it): null whenever focus is on a layer, or \ hasn't been
 // used to navigate at all this hold.
 function focusedGroupId() {
   if (backslashFocusPos === null) return null;
@@ -1608,7 +1642,7 @@ function togglePlayback() {
 
 // Lets the mouse drive whichever tool the keyboard already has armed: a
 // held shape key (Q/W/A/S) sizes that shape by drag instead of painting,
-// and held Shift drags out a selection rect instead — both mirroring the
+// and held Shift drags out a selection rect instead: both mirroring the
 // existing keyboard-arrow versions of the same gestures.
 const mouseDragTools = {
   shapeActive: () => !!shapeState,
@@ -1616,7 +1650,7 @@ const mouseDragTools = {
   shapeDrag: (x, y) => { hoverPixel = { x, y }; updateShapePreview({ x, y }); },
   shapeEnd: () => endShape(),
   // Reads the PointerEvent's own live shiftKey/ctrlKey/altKey rather than
-  // our tracked `held` latch — a missed keyup (§ known stuck-Shift bug,
+  // our tracked `held` latch: a missed keyup (§ known stuck-Shift bug,
   // __spriteDebug below) used to only strand arrow-key rect-select; once
   // the mouse also gated on `held.shift`, the same desync stranded mouse
   // painting in selection mode too, with no key event left to self-heal it.
@@ -1654,14 +1688,14 @@ canvas.addEventListener('pointermove', (e) => {
     const hit = artboards[index];
     groupHoverTip = hit ? `${hit.name} ${hit.width}x${hit.height}` : null;
     // updateToolTag() isn't in the per-frame render loop while a group is
-    // showing (that loop is paused for it, § renderGroupCanvas) — same
+    // showing (that loop is paused for it, § renderGroupCanvas): same
     // reasoning onHoverTip's own listener already set synchronously here.
     updateToolTag();
     return;
   }
   const viewport = computeViewport(model, rect.width, rect.height);
   hoverPixel = screenToPixel(viewport, e.clientX - rect.left, e.clientY - rect.top);
-  // No render call here — the window-level input listener flags a render
+  // No render call here: the window-level input listener flags a render
   // and the animateCursor loop picks up the new hoverPixel on its own;
   // forcing a full draw() per pointermove was the original (expensive)
   // cause of the cursor lag this replaced.
@@ -1673,11 +1707,11 @@ canvas.addEventListener('pointerleave', () => {
   updateToolTag();
 });
 
-// Scroll wheel zooms (§6). Scale is snapped to whole numbers — the spec
+// Scroll wheel zooms (§6). Scale is snapped to whole numbers: the spec
 // calls for continuous zoom, but a fractional scale would leave subpixel
 // seams between adjacent pixel rects, breaking "pixels always render
 // perfectly square." Integer-only zoom is the pixel-safe simplification.
-// Below 1:1 (only reachable once `min` allows it — see minZoomScale) steps
+// Below 1:1 (only reachable once `min` allows it: see minZoomScale) steps
 // multiplicatively instead of by whole pixels, since a flat +/-1 step
 // stops meaning anything once scale is fractional.
 function zoomTo(nextScale) {
@@ -1726,7 +1760,7 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 // Double-click an artboard in the group grid (§ project panel group
-// select) to jump straight to editing that File — the grid is otherwise
+// select) to jump straight to editing that File: the grid is otherwise
 // entirely read-only (input.js's getReadOnly), so this lives here instead,
 // gated the same way.
 canvas.addEventListener('dblclick', (e) => {
@@ -1757,13 +1791,13 @@ function inBoundsPixel(p) {
 }
 
 function doCut() {
-  if (activeGroupId) return; // read-only group grid — nothing here to cut
+  if (activeGroupId) return; // read-only group grid: nothing here to cut
   doCopy();
   deleteSelectionOrHover();
 }
 
 function doPaste() {
-  if (!clipboard || activeGroupId) return; // read-only group grid — nothing here to paste into
+  if (!clipboard || activeGroupId) return; // read-only group grid: nothing here to paste into
   const at = hoverPixel || { x: 0, y: 0 };
   const snapshot = snapshotPixels(model);
   stamp(model, clipboard, at.x, at.y, false);
@@ -1780,9 +1814,9 @@ function doFlip(axis) {
   history.commit({ type: 'flip', layer: getActiveFile(project).activeLayerIndex, axis, before, after });
 }
 
-// [I] — inverts the RGB of every selected pixel, or just the pixel under
+// [I]: inverts the RGB of every selected pixel, or just the pixel under
 // the cursor when there's no selection. Editing-only (main.js's own keydown
-// handler already gates every canvas edit key on !activeGroupId — the
+// handler already gates every canvas edit key on !activeGroupId: the
 // read-only group grid has no cursor/selection of its own to invert).
 function invertColors() {
   const snapshot = snapshotPixels(model);
@@ -1820,7 +1854,7 @@ function moveSelection(dx, dy, moveContentToo) {
 }
 
 // Keyboard-driven rotate (§ new control scheme): hold R, then Left/Right
-// steps degrees — 1° per step (accelerating hold), or 15° per step with
+// steps degrees: 1° per step (accelerating hold), or 15° per step with
 // Shift+R. Pivot is the selection's own center, or the whole layer's if
 // nothing's selected (same fallback as flip). Left = CCW, right = CW.
 // Re-applies to the pristine snapshot on every step (rather than compounding
@@ -1878,7 +1912,7 @@ window.addEventListener('resize', resize);
 // zoom, grid, Q/W/A/S shape tools, and the four focus-based panels
 // (Projects/Colors/Layers/Timeline) are all wired. Multi-project open/new
 // and focused-category/group navigation are still gaps (see dispatchProjects
-// below). Mouse still works alongside this — left click/drag places (Alt:
+// below). Mouse still works alongside this: left click/drag places (Alt:
 // paints; or drives a held shape key / Shift-select instead, see
 // mouseDragTools), right click/drag erases (input.js), scroll zooms (below).
 
@@ -1916,8 +1950,8 @@ const held = {
 // arrow press) so switching modifiers mid-hold changes behavior live.
 const heldArrows = new Set();
 let arrowAnchor = null; // canvas-pixel anchor captured when Shift first went down, for the live rect preview
-let rectSelecting = false; // true once Shift+arrows actually drew a live rect — gates the commit on Shift's keyup, so a Shift press that never involved arrows (Shift+C, Shift+G, a stray tap) commits no selection
-let contentMoveActive = false; // shift+ctrl+arrows — batches into one undo commit on release
+let rectSelecting = false; // true once Shift+arrows actually drew a live rect: gates the commit on Shift's keyup, so a Shift press that never involved arrows (Shift+C, Shift+G, a stray tap) commits no selection
+let contentMoveActive = false; // shift+ctrl+arrows: batches into one undo commit on release
 // Ctrl+Space is ambiguous until it's clear whether arrows follow: no arrows
 // before Space releases = toggle playback (global); any arrow while both are
 // still held = pan instead (and cancels the pending playback toggle).
@@ -1968,7 +2002,7 @@ function arrowTick() {
     selectionApi.moveContentBy(dx, dy);
     return;
   }
-  // Every other combination just aims the cursor, stepped by brush size —
+  // Every other combination just aims the cursor, stepped by brush size:
   // the shift-family selection tools (rect) confirm on Shift's own keyup.
   moveCursorBy(dx * brushSize, dy * brushSize);
   if (held.shift && !held.ctrl && !held.alt && arrowAnchor) {
@@ -1984,9 +2018,9 @@ const arrowRepeater = createHoldRepeater(arrowTick);
 
 // --- Place / Paint / erase / fill ---
 // `erase` is momentary now (Z+arrows, Backspace/Delete), not a persisted
-// mode — every caller says explicitly which one it wants. Place vs Paint
-// (plain vs Alt-held) isn't passed in the same way — it reads `held.alt`
-// live, same as the mouse side reads the click event's own altKey — so
+// mode: every caller says explicitly which one it wants. Place vs Paint
+// (plain vs Alt-held) isn't passed in the same way: it reads `held.alt`
+// live, same as the mouse side reads the click event's own altKey: so
 // Alt+Space and Alt+Arrows (which route through here too) get the
 // antialiased brush for free without their callers needing to know that.
 function stampCurrentTool(x, y, erase = false) {
@@ -1998,7 +2032,7 @@ function stampCurrentTool(x, y, erase = false) {
 const stampRepeater = createHoldRepeater(() => stampCurrentTool(currentCursor().x, currentCursor().y));
 
 // Ctrl+Enter: flood fill at cursor, or (with an active selection) solid-fill
-// every selected pixel — same mask-walk `deleteSelectionOrHover` already
+// every selected pixel: same mask-walk `deleteSelectionOrHover` already
 // uses, just setting the primary color instead of clearing.
 function fillCurrentTool(x, y) {
   const snap = snapshotPixels(model);
@@ -2025,7 +2059,7 @@ function zoomStep(dir) {
 
 // --- Focus-based panels: Projects, Colors, Layers, Timeline ---
 // Each panel owns the whole keyboard while `focusedPanel` points at it (see
-// setFocus() above) — no held-key gate anymore. Phase 2 gap: no "focused
+// setFocus() above): no held-key gate anymore. Phase 2 gap: no "focused
 // category/group" concept exists yet, so new/delete-category and
 // new/delete-group act on the project's/active layer's *current* one rather
 // than an independently navigable one.
@@ -2038,7 +2072,7 @@ function renameInline(selector, getName, setName, redrawFn) {
   startInlineEdit(el, name, (v) => { if (v) { setName(v); redrawFn(); autosave(); } });
 }
 const renameActiveFile = () => renameInline('.file-row.selected .file-row-name', () => getActiveFile(project).name, (v) => { getActiveFile(project).name = v; }, redrawProjectPanel);
-// A single-file project reads as one thing to the user — its one .sprite
+// A single-file project reads as one thing to the user: its one .sprite
 // file should track the project's own name, not drift to whatever the file
 // was originally called.
 const renameProject = () => renameInline('.project-name', () => project.name, (v) => {
@@ -2071,7 +2105,7 @@ let fpsRepeater = null;
 
 // --- Q/W/A/S shape tools: hold, arrows resize from the cursor's position
 // when the key went down, Shift constrains to equal width/height, release
-// commits. Always paint (primary color) — no keyboard erase-shape variant. ---
+// commits. Always paint (primary color): no keyboard erase-shape variant. ---
 const SHAPE_KEYS = { q: 'rect', w: 'triangle', a: 'circle', s: 'line' };
 let shapeState = null; // { key, anchor, snapshot } while a shape key is held
 
@@ -2105,10 +2139,10 @@ function dispatchCanvas(e) {
   // Read-only group grid (§ project panel group select): the canvas isn't
   // showing the active file's own pixel space, so every paint/select/shape
   // keyboard tool below would edit a file the user can't even see. Zoom and
-  // the two backdrop-cycle keys still work here — they only change how the
+  // the two backdrop-cycle keys still work here: they only change how the
   // grid displays, not any file's actual pixels. Pan
   // (Ctrl+Space+arrows) is handled in arrowTick, not here. (Escape exits
-  // the group view — handled globally, above, regardless of focus.)
+  // the group view: handled globally, above, regardless of focus.)
   if (activeGroupId) {
     if (e.key === '+' && !e.repeat) { groupZoomStep(1); return; }
     if (e.key === '-' && !e.repeat) { groupZoomTo(1); return; }
@@ -2120,7 +2154,7 @@ function dispatchCanvas(e) {
     if (e.key === '_' && !e.repeat) { groupZoomStep(-1); return; }
     if (e.key === 'U' && e.shiftKey) { cycleGroupAppBg(); return; }
     // Registers the arrow key so arrowTick's Ctrl+Space+arrows pan branch
-    // can fire — everything else arrowTick does is gated on !activeGroupId.
+    // can fire: everything else arrowTick does is gated on !activeGroupId.
     if (e.key.startsWith('Arrow')) {
       e.preventDefault();
       if (!heldArrows.has(e.key)) { heldArrows.add(e.key); arrowRepeater.start(); }
@@ -2129,7 +2163,7 @@ function dispatchCanvas(e) {
     return;
   }
   // Q/W/A/S shape tools resizing take priority over everything else arrows
-  // do — 1px-precise, not stepped by brush size.
+  // do: 1px-precise, not stepped by brush size.
   if (shapeState && e.key.startsWith('Arrow')) {
     e.preventDefault();
     const [dx, dy] = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
@@ -2215,7 +2249,7 @@ function dispatchTimeline(e) {
     if (e.repeat) return;
     const dir = e.key === 'ArrowRight' ? 1 : -1;
     if (e.shiftKey) {
-      // Anchor is the frame you started selecting from — it stays the
+      // Anchor is the frame you started selecting from: it stays the
       // active/editing frame throughout; only the far edge moves.
       if (!frameSelection) frameSelection = { anchor: file.activeFrameIndex, to: file.activeFrameIndex };
       frameSelection.to = Math.max(0, Math.min(file.frames.length - 1, frameSelection.to + dir));
@@ -2357,7 +2391,7 @@ function dispatchLayers(e) {
   }
   if (e.key === '+' && !e.repeat) { commitLayerChange(file, () => addLayer(file, undefined, focusedGroupId())); return; }
   if (e.key === '=' && !e.repeat) {
-    // New group, positioned right above whatever's currently focused — so
+    // New group, positioned right above whatever's currently focused: so
     // if that's a layer, it becomes the group's first member.
     const before = visibleOrder(layerOrder(file));
     const focusedEntry = backslashFocusPos !== null ? before[backslashFocusPos] : null;
@@ -2386,7 +2420,7 @@ function dispatchLayers(e) {
 }
 
 // Colors panel's own `\` preset menu and `Return` chip editor need their own
-// small keydown listeners on the popup they open (Up/Down/Enter/Escape) —
+// small keydown listeners on the popup they open (Up/Down/Enter/Escape):
 // stopPropagation keeps those keys from also reaching this dispatcher.
 function dispatchColors(e) {
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -2404,7 +2438,7 @@ function dispatchColors(e) {
     let idx = 0;
     buttons[idx].focus();
     const onKey = (ke) => {
-      if (!panel.isConnected) { cleanup(); return; } // closed via an outside click — stop intercepting
+      if (!panel.isConnected) { cleanup(); return; } // closed via an outside click: stop intercepting
       if (ke.key === 'ArrowDown') { ke.preventDefault(); ke.stopPropagation(); idx = (idx + 1) % buttons.length; buttons[idx].focus(); }
       else if (ke.key === 'ArrowUp') { ke.preventDefault(); ke.stopPropagation(); idx = (idx - 1 + buttons.length) % buttons.length; buttons[idx].focus(); }
       else if (ke.key === 'Enter') { ke.preventDefault(); ke.stopPropagation(); buttons[idx].click(); cleanup(); }
@@ -2442,13 +2476,13 @@ function dispatchProjects(e) {
         const focused = list[tabFocusPos];
         if (focused.isHeader) {
           // Landing on a collection header shows it as the read-only group
-          // grid, same as clicking it — mirrors landing on a file below
+          // grid, same as clicking it: mirrors landing on a file below
           // making that file active.
           setActiveGroup(focused.item.id); // restores (or resets) that collection's own zoom/pan
         } else {
           project.activeFileIndex = project.files.indexOf(focused.item);
           setActiveGroup(null);
-          bindActiveFile(); selectionApi.clear(); // keep the current zoom/pan — only switching which file it applies to
+          bindActiveFile(); selectionApi.clear(); // keep the current zoom/pan: only switching which file it applies to
         }
         redrawProjectPanel(); draw();
       }
@@ -2481,7 +2515,7 @@ function dispatchProjects(e) {
 
 // --- Main keydown/keyup dispatch ---
 let leftCtrlDown = false;
-let leftCtrlUsed = false; // any other key pressed while left-Ctrl was held — a clean tap-alone returns focus to canvas
+let leftCtrlUsed = false; // any other key pressed while left-Ctrl was held: a clean tap-alone returns focus to canvas
 window.addEventListener('keydown', (e) => {
   const tag = document.activeElement && document.activeElement.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
@@ -2509,7 +2543,7 @@ window.addEventListener('keydown', (e) => {
   // Self-healing latch: every non-Shift key event carries the browser's own
   // truth about whether Shift is down right now, so a stale latch is caught
   // on the very next keypress instead of persisting. Shift's own keyup is
-  // not a reliable clearing point — a remapped Shift (or an xkb layout
+  // not a reliable clearing point: a remapped Shift (or an xkb layout
   // switch bound to it) can report a keyup whose e.key is not 'Shift' at
   // all, which never reaches the release branch below and leaves the latch
   // stuck, rectangle-selecting on every later arrow press.
@@ -2551,7 +2585,7 @@ window.addEventListener('keydown', (e) => {
     redrawProjectPanel(); draw();
     return;
   }
-  // Ctrl+Space (tap) toggles playback; Ctrl+Space+arrows pans instead — see
+  // Ctrl+Space (tap) toggles playback; Ctrl+Space+arrows pans instead: see
   // ctrlSpaceArmed/arrowTick, resolved on Space's own keyup below.
   if (e.key === ' ' && e.ctrlKey && !e.repeat) { e.preventDefault(); ctrlSpaceArmed = true; held.space = true; return; }
   if (leftCtrlDown && e.key.startsWith('Arrow') && !e.repeat) {
@@ -2564,7 +2598,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Tab' && !e.repeat) {
     e.preventDefault();
     if (e.shiftKey) { toggleHideAllPanels(); return; }
-    // Colors/Layers/Timeline aren't reachable while viewing a group — only
+    // Colors/Layers/Timeline aren't reachable while viewing a group: only
     // Projects is left to cycle to.
     const cycle = activeGroupId ? ['projects'] : PANEL_CYCLE;
     const from = focusedPanel === 'canvas' ? -1 : cycle.indexOf(focusedPanel);
@@ -2602,13 +2636,13 @@ window.addEventListener('keyup', (e) => {
   if (e.key === 'Shift') {
     if (e.code === 'ShiftLeft') held.leftShift = false;
     if (e.code === 'ShiftRight') held.rightShift = false;
-    // Only finalize once BOTH shift keys are up — checked via the browser's
+    // Only finalize once BOTH shift keys are up: checked via the browser's
     // own modifier state (e.getModifierState), not just our own
     // leftShift/rightShift bookkeeping. Relying solely on matching every
     // keydown's e.code to a later keyup's e.code is exactly the kind of
     // thing that can desync on a real keyboard/OS combo (one side's keyup
     // reporting a code that doesn't match what its keydown set) and leave
-    // held.shift stuck true forever — every arrow press after that keeps
+    // held.shift stuck true forever: every arrow press after that keeps
     // rectangle-selecting with no key actually held, un-fixable by Escape
     // since nothing ever clears held.shift itself. Trusting the browser's
     // own answer for "is Shift still down right now" sidesteps that class
@@ -2665,7 +2699,7 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// The browser only delivers a keyup while this page has focus — alt-tabbing,
+// The browser only delivers a keyup while this page has focus: alt-tabbing,
 // switching browser tabs, or a native dialog stealing focus while a
 // modifier is held all leave it stuck "down" forever otherwise (e.g. Shift
 // stuck true keeps arrowTick() rectangle-selecting on every arrow press,
@@ -2694,8 +2728,8 @@ function resetHeldKeys() {
 window.addEventListener('blur', resetHeldKeys);
 document.addEventListener('visibilitychange', () => { if (document.hidden) resetHeldKeys(); });
 
-// Hold I + left-click: samples a color from anywhere in the viewport —
-// canvas pixels, the transparent backdrop, palette chips, any UI surface —
+// Hold I + left-click: samples a color from anywhere in the viewport:
+// canvas pixels, the transparent backdrop, palette chips, any UI surface:
 // not just the canvas. Adds the sampled color as a new chip if the palette
 // doesn't already have it. (Tapping I alone instead adds whatever's under
 // the keyboard cursor, handled in dispatchCanvas above.)
@@ -2756,7 +2790,7 @@ document.addEventListener('pointerdown', (e) => {
 }, true);
 
 // Clicking anywhere outside the currently focused panel gives the keyboard
-// back to the canvas, same as Escape — but not a click inside a slide-out
+// back to the canvas, same as Escape: but not a click inside a slide-out
 // menu the panel itself opened (§ slide-out.js), which floats as its own
 // <body>-level node outside the panel's DOM but still belongs to it.
 document.addEventListener('pointerdown', (e) => {
@@ -2786,7 +2820,7 @@ document.addEventListener('contextmenu', (e) => {
 
 resize();
 
-// TEMPORARY diagnostic hook — remove once the stuck-Shift selection bug is
+// TEMPORARY diagnostic hook: remove once the stuck-Shift selection bug is
 // pinned down. Exposes the live modifier/selection state so a reproduction
 // on real hardware can be inspected from the console.
 window.__spriteDebug = () => ({

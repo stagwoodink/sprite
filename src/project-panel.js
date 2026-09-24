@@ -6,7 +6,7 @@ import { button, hoverTip, makeReorderable, startInlineEdit } from './ui.js';
 // Project panel (ui-design-system §7, design-doc §13). `state` is the
 // { project } holder in main.js; callbacks mutate it and call onChange to
 // re-render + re-bind the active file. File/collection order and grouping
-// are drag-and-drop only now — a file becomes a collection's member by
+// are drag-and-drop only now: a file becomes a collection's member by
 // being positioned directly beneath its header (§ ordering.js), the same
 // way dragging it back out above the header (or past the collection's last
 // member) ungroups it. No separate "move to collection" control.
@@ -22,14 +22,14 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   nameEl.addEventListener('click', () => startInlineEdit(nameEl, project.name, (v) => {
     if (!v) return;
     project.name = v;
-    // A single-file project reads as one thing to the user — its one
+    // A single-file project reads as one thing to the user: its one
     // .sprite file should track the project's own name.
     if (project.files.length === 1) project.files[0].name = v;
     callbacks.onChange();
   }));
 
   // Same glyph, same `.btn--reveal` hover treatment as every other row's
-  // "⋯" menu button (file, collection) — one menu-trigger look everywhere,
+  // "⋯" menu button (file, collection): one menu-trigger look everywhere,
   // not a bespoke always-visible one just for this row.
   const openBtn = button({ glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Select project', onClick: () => callbacks.onOpenProject(openBtn) });
 
@@ -39,7 +39,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   fileList.className = 'file-list';
 
   // Anchored to the bottom of the list area, same as the layers panel's
-  // stack — a short file list sits at the floor instead of floating at top.
+  // stack: a short file list sits at the floor instead of floating at top.
   const fileStack = document.createElement('div');
   fileStack.className = 'file-stack';
 
@@ -51,11 +51,11 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     row.dataset.fileIndex = fileIndex; // § multi-select menu anchor lookup
     row.addEventListener('click', (e) => {
       // Shift/Alt-click build a multi-file selection instead of switching
-      // the active file — see onShiftSelectFile/onAltSelectFile.
+      // the active file: see onShiftSelectFile/onAltSelectFile.
       if (e.shiftKey) { callbacks.onShiftSelectFile(fileIndex); return; }
       if (e.altKey) { callbacks.onAltSelectFile(fileIndex); return; }
       // No-op guard: onChange fully re-renders this panel (innerHTML=''),
-      // which was destroying nameEl mid-gesture — re-selecting the file
+      // which was destroying nameEl mid-gesture: re-selecting the file
       // that's already active isn't a real change, and rebuilding on
       // every click of a double-click was exactly what broke rename.
       if (fileIndex === project.activeFileIndex && !activeGroupId && !fileSelection) return;
@@ -83,14 +83,14 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     // Every per-file action folds into one menu instead of its own
     // always-reserved button slot.
     const menuBtn = button({
-      glyph: '⋯', icon: true, className: 'btn--reveal', title: 'File menu',
+      glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Canvas menu',
       onClick: (e) => {
         e.stopPropagation();
         const items = [
           { label: 'Resize canvas', onClick: () => openSizePopup(menuBtn, (w, h) => callbacks.onResizeFile(file, w, h)) },
         ];
         // The last file can't be removed (project.js: deleteFile is a no-op
-        // then anyway) — a project always has at least one file.
+        // then anyway): a project always has at least one file.
         if (project.files.length > 1) items.push({ label: 'Remove', onClick: () => callbacks.onRemoveFile(fileIndex) });
         items.push({ label: 'Export', onClick: () => callbacks.onExportFile && callbacks.onExportFile(file, fileIndex) });
         openSlideOut(menuBtn, items);
@@ -106,7 +106,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     const selected = collection.id === focusedCollectionId || collection.id === activeGroupId;
     row.className = 'collection-header tile reveal-on-hover' + (selected ? ' selected' : '');
     row.dataset.collectionId = collection.id;
-    // Same no-op guard as a file row's click — selecting the already-active
+    // Same no-op guard as a file row's click: selecting the already-active
     // group is not a real change.
     row.addEventListener('click', () => {
       if (collection.id === activeGroupId) return;
@@ -143,9 +143,9 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     // always-reserved button slot.
     const menuItems = [];
     // The last collection can't be deleted (project.js: deleteCollection is
-    // a no-op then anyway) — there's nowhere left for its files to go. A
+    // a no-op then anyway): there's nowhere left for its files to go. A
     // project always starts with exactly one, so this is the common case,
-    // not an edge case — the menu button itself disables rather than
+    // not an edge case: the menu button itself disables rather than
     // opening onto nothing.
     menuItems.push({ label: 'Columns', onClick: () => openGridsetPopup(menuBtn, collection, callbacks.onSetGridset) });
     menuItems.push({ label: 'Export', onClick: () => callbacks.onExportCollection(collection) });
@@ -161,7 +161,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   }
 
   // `pos` is the item's index into the *full* combined order (matching
-  // what onReorder/moveProjectItem expect) — collapsed members are simply
+  // what onReorder/moveProjectItem expect): collapsed members are simply
   // not rendered, not renumbered, so drag positions stay meaningful even
   // with hidden gaps.
   for (const entry of visibleOrder(projectOrder(project))) {
@@ -177,11 +177,11 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   addRow.className = 'tile-bar project-add-row';
   // Left click: new file (opens the size picker). Double click: match
   // whatever's most recently been worked on nearby (§ onAddFileCurrent).
-  // Right click: new collection, straight away — single-purpose gestures on
+  // Right click: new collection, straight away: single-purpose gestures on
   // one button instead of a menu in between.
   const addFileBtn = button({
-    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New file (dblclick: match current · right-click: new collection)',
-    onClick: () => openSizePopup(addFileBtn, (w, h, preset) => callbacks.onAddFile(w, h, preset), { onImport: () => callbacks.onImport(addFileBtn) }),
+    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New canvas',
+    onClick: () => openSizePopup(addFileBtn, (w, h, preset) => callbacks.onAddFile(w, h, preset), { onCollection: () => callbacks.onAddCollection(), onImport: () => callbacks.onImport(addFileBtn) }),
     onContextMenu: (e) => { e.preventDefault(); callbacks.onAddCollection(); },
   });
   addFileBtn.addEventListener('dblclick', () => { closeSlideOut(); callbacks.onAddFileCurrent(); });
@@ -195,7 +195,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
 }
 
 // Filled bar showing how close the Project is to what a low-end machine
-// handles comfortably (project.js's projectLoad). Advisory — it never
+// handles comfortably (project.js's projectLoad). Advisory: it never
 // blocks anything; the bar filling *is* the warning.
 function buildCapacityMeter(project, callbacks) {
   const load = projectLoad(project);
@@ -215,21 +215,22 @@ function buildCapacityMeter(project, callbacks) {
   return meter;
 }
 
-// Slide-out button stack (§13.2's "non-modal popup" — the rest of the UI
-// stays interactive around it), one button per size preset — largest at
+// Slide-out button stack (§13.2's "non-modal popup": the rest of the UI
+// stays interactive around it), one button per size preset: largest at
 // the top down to smallest at the bottom (reverse of NEW_FILE_SIZES' own
 // ascending order), so the picker's bottom-to-top reading is small-to-large
 // working up from the anchor it slides out of. The bottom row is a custom
-// W x H pair. `onPick(w, h, preset)` — `preset` is null for a custom size.
-// `onImport`, when given, adds a last "Import" row (new files only).
-export function openSizePopup(anchor, onPick, { onDismiss, onImport } = {}) {
+// W x H pair. `onPick(w, h, preset)`: `preset` is null for a custom size.
+// `onCollection` and `onImport`, when given, add a "Collection" and a last "Import" row (new canvas only).
+export function openSizePopup(anchor, onPick, { onDismiss, onCollection, onImport } = {}) {
   return openCustomSlideOut(anchor, (bar, close) => {
     for (const preset of [...NEW_FILE_SIZES].reverse()) {
       bar.append(button({ label: preset.label, fill: true, onClick: () => { onPick(preset.w, preset.h, preset); close(); } }));
     }
     bar.append(customSizeRow((w, h) => { onPick(w, h, null); close(); }));
+    if (onCollection) bar.append(button({ label: 'Collection', fill: true, onClick: () => { close(); onCollection(); } }));
     if (onImport) bar.append(button({ label: 'Import', fill: true, title: 'Spritesheet or .sprite', onClick: () => { close(); onImport(); } }));
-  }, { side: 'up', className: 'size-popup', onDismiss });
+  }, { className: 'size-popup', onDismiss });
 }
 
 // Two number fields (Tab between them) and Enter to commit. H mirrors W
@@ -262,7 +263,7 @@ function customSizeRow(onSubmit) {
   return row;
 }
 
-// Collection header menu's "Columns" — how many artboards the group
+// Collection header menu's "Columns": how many artboards the group
 // grid wraps after before starting a new row (§ renderer.js's
 // computeArtboardLayout `gridset`). 'Auto' clears it back to the default
 // square-ish layout.

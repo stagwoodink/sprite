@@ -4,7 +4,7 @@ import { computeMembership, moveBlock, nextOrder } from './ordering.js';
 import { referenceBytes } from './references.js';
 
 // Project = a directory containing Files + one shared Palette (§4, §5).
-// Every File must belong to a Collection — there's no "ungrouped" state —
+// Every File must belong to a Collection: there's no "ungrouped" state:
 // so the very first File also creates the very first Collection.
 export function createProject(name) {
   const preset = PRESETS[DEFAULT_PRESET];
@@ -13,7 +13,7 @@ export function createProject(name) {
     id: crypto.randomUUID(),
     name,
     palette: { name: preset.name, chips: [...preset.chips], primary: preset.chips[0] },
-    files: [{ ...createSpriteFile('sprite', 9, 9), order: 2000 }],
+    files: [{ ...createSpriteFile('sprite', DEFAULT_CANVAS_SIZE, DEFAULT_CANVAS_SIZE), order: 2000 }],
     collections: [collection],
     activeFileIndex: 0,
   };
@@ -23,7 +23,7 @@ export function activeFile(project) {
   return project.files[project.activeFileIndex];
 }
 
-// The combined, order-sorted [collection headers + files] view — the one
+// The combined, order-sorted [collection headers + files] view: the one
 // source of truth for both display order and file→collection membership
 // (§ ordering.js). Every panel render and every reorder goes through this.
 export function projectOrder(project) {
@@ -32,7 +32,7 @@ export function projectOrder(project) {
 
 // A fractional order value that lands at the end of `collectionId`'s own
 // block (same technique deleteCollection uses for its orphans) instead of
-// the very end of the whole project — lets a new File join whichever
+// the very end of the whole project: lets a new File join whichever
 // Collection is currently being worked on rather than always the last one.
 function orderAtEndOfCollection(project, collectionId) {
   const combined = projectOrder(project);
@@ -44,7 +44,7 @@ function orderAtEndOfCollection(project, collectionId) {
   return end < combined.length ? (lastOrder + combined[end].item.order) / 2 : lastOrder + 1000;
 }
 
-// Every File must live in a Collection — appending at the very end
+// Every File must live in a Collection: appending at the very end
 // (nextOrder) always lands a new File under whichever Collection is
 // currently last, since membership is "nearest preceding header." If
 // somehow there isn't one yet (e.g. migrated data), make one first rather
@@ -62,7 +62,7 @@ export function addExistingFile(project, file, collectionId) {
   project.activeFileIndex = project.files.length - 1;
 }
 
-// The bare name, then "name 2", "name 3" — never a "1" suffix on the first.
+// The bare name, then "name 2", "name 3": never a "1" suffix on the first.
 export function uniqueFileName(project, base) {
   const taken = new Set(project.files.map((f) => f.name));
   let name = base;
@@ -70,7 +70,7 @@ export function uniqueFileName(project, base) {
   return name;
 }
 
-// The Collection a newly added File lands under by default (§ addFile) —
+// The Collection a newly added File lands under by default (§ addFile):
 // whichever Collection is currently last in display order.
 export function lastCollection(project) {
   const combined = projectOrder(project);
@@ -78,22 +78,22 @@ export function lastCollection(project) {
   return headers.length ? headers[headers.length - 1].item : null;
 }
 
-// Most recently modified File within a given Collection (by `.updatedAt`,
-// stamped on commit — undo.js's commitCommand, and any other direct
-// structural edit) — backs the "New File" size picker's Current option,
-// which matches whatever's actively being worked on nearby instead of a
-// fixed default.
+// Most recently modified File (by `.updatedAt`, stamped on commit: undo.js's
+// commitCommand, and any other direct structural edit), within a given
+// Collection or, when `collectionId` is omitted, anywhere in the Project:
+// backs the New File button's double click, which matches whatever was last
+// being worked on instead of a fixed default.
 export function mostRecentFileIn(project, collectionId) {
   projectOrder(project); // refreshes every file's derived .groupId
   let best = null;
   for (const file of project.files) {
-    if (file.groupId !== collectionId) continue;
+    if (collectionId !== undefined && file.groupId !== collectionId) continue;
     if (!best || (file.updatedAt || 0) > (best.updatedAt || 0)) best = file;
   }
   return best;
 }
 
-// A collection is purely organizational — files nest under it in the panel
+// A collection is purely organizational: files nest under it in the panel
 // by position (§ ordering.js), it isn't a real filesystem directory.
 export function addCollection(project, name) {
   project.collections.push({
@@ -121,7 +121,7 @@ export function deleteCollection(project, id) {
   }
 }
 
-// Moves whatever sits at `fromPos` in `projectOrder(project)` to `toPos` —
+// Moves whatever sits at `fromPos` in `projectOrder(project)` to `toPos`:
 // a file, or a collection header (which brings its member files with it).
 // Positions are indices into that combined view, not raw array indices.
 export function moveProjectItem(project, fromPos, toPos) {
@@ -139,13 +139,15 @@ export function deleteFile(project, index) {
 // palette to match, the point of the name collision with Palette Presets.
 // The picker stops at Game Boy DMG; the custom fields go up to 256x256 (the
 // ceiling, chosen so long animations stay cheap: frame memory scales with
-// canvas area) — see docs/adr/0003-canvas-size-range.md.
+// canvas area): see docs/adr/0003-canvas-size-range.md.
 export const MIN_CANVAS = 6;
 export const MAX_CANVAS = 256;
 
+// Side of the square canvas a new project starts with, and the fallback for a new canvas with nothing to match.
+export const DEFAULT_CANVAS_SIZE = 8;
+
 export const NEW_FILE_SIZES = [
-  { label: '6x6', w: 6, h: 6 },
-  { label: '9x9', w: 9, h: 9 }, // the new-project starter file's default size
+  { label: '8x8', w: DEFAULT_CANVAS_SIZE, h: DEFAULT_CANVAS_SIZE },
   { label: '16x16', w: 16, h: 16 },
   { label: '24x24', w: 24, h: 24 },
   { label: '32x32', w: 32, h: 32 },
