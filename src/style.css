@@ -633,7 +633,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    active frame. */
 .frame-tile--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 /* Layers-panel Shift+Up/Down multi-select — same red outline convention. */
-.layer-row--selected, .layer-group-header--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
+.layer-row--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 /* Focus-based control scheme: Ctrl+Arrow (or Tab-cycle) hairline on
    whichever panel currently owns the keyboard. A CSS class + ::after on the
    panel itself isn't enough — `.panel-overlay`'s own z-index caps it to
@@ -887,7 +887,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.panel-header-btn { flex: 0 0 var(--block); }
 .panel-add-btn { font-family: var(--icon-font); }
 
 .file-list {
