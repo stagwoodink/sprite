@@ -23,8 +23,8 @@ SPACE = 3  # advance of the space, in pixels
 
 # Rows to move a glyph down so its tail hangs below the baseline. Descenders are drawn in
 # the cell with their tails inside it, so they sit too high until shifted: each is moved
-# until its top lands on the x-height (row 2), or on the i's dot row for the j.
-SHIFT = {'g': 2, 'p': 2, 'q': 1, 'y': 1, 'j': 1, ',': 1, ';': 1}
+# until its top lands on the x-height (row 2), or on the i's dot row for the j. The y sits one row lower than that, by eye.
+SHIFT = {'g': 2, 'p': 2, 'q': 1, 'y': 2, 'j': 1, ',': 1, ';': 1}
 
 
 def read_glyphs():
