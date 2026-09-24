@@ -1,6 +1,6 @@
 import { paintAt, linePixels, snapshotPixels, diffFromSnapshot } from './canvas-model.js';
 import { computeViewport, screenToPixel } from './viewport.js';
-import { createInvertedCursor } from './inverted-cursor.js';
+import { setCanvasCursor } from './inverted-cursor.js';
 import { paintOptions } from './paint-options.js';
 
 // Mouse-only interaction (CONTEXT.md: keyboard-first control scheme rebuild
@@ -18,19 +18,20 @@ export function createInputController(canvas, model, colors, onPlace, history, g
   let strokeSnapshot = null;
   let dragIntent = 'place'; // 'place' | 'erase' | 'shape' | 'select': decided once, on pointerdown
   let strokeAntialiased = false; // Place vs Paint for the active drag: frozen at pointerdown, like dragIntent
+  let hoverSelecting = false; // live Shift state while hovering: the selection tool is armed
   let hoverAntialiased = false; // live Alt state while just hovering (not dragging): drives the cursor preview
 
   function currentMode() {
     if (drawingButton === 2) return 'erase';
+    if (drawingButton === 0 ? dragIntent === 'select' : hoverSelecting) return 'selectRect';
+    const held = dragTools.heldTool && dragTools.heldTool();
+    if (held) return held;
     return (drawingButton === 0 ? strokeAntialiased : hoverAntialiased) ? 'paint' : 'place';
   }
 
-  const invertedCursor = createInvertedCursor(canvas);
   function updateCursor() {
-    // The group grid is read-only: no tool applies there, so keep the plain arrow.
-    const readOnly = !!(getReadOnly && getReadOnly());
-    canvas.style.cursor = readOnly ? 'default' : 'none';
-    invertedCursor.setMode(readOnly ? null : currentMode());
+    // The group grid is read-only: no tool applies there, and main.js sets its cursor.
+    if (!(getReadOnly && getReadOnly())) setCanvasCursor(currentMode());
   }
 
   function pointerPixel(e) {
@@ -57,7 +58,6 @@ export function createInputController(canvas, model, colors, onPlace, history, g
     const { x, y } = pointerPixel(e);
     drawingButton = e.button;
     strokeAntialiased = e.altKey;
-    updateCursor();
     // Left button defers to whatever keyboard tool is currently held (a
     // shape key, or Shift for a selection rect) before falling back to
     // placing/painting: right button always erases, regardless of held
@@ -75,13 +75,14 @@ export function createInputController(canvas, model, colors, onPlace, history, g
       else placeAt(x, y, strokeAntialiased);
     }
     lastPixel = { x, y };
+    updateCursor();
     onPlace();
   }
 
   // Bresenham-fills between samples so a fast drag doesn't leave gaps.
   function onPointerMove(e) {
     const hoverNow = pointerPixel(e);
-    if (drawingButton === null) hoverAntialiased = e.altKey;
+    if (drawingButton === null) { hoverAntialiased = e.altKey; hoverSelecting = !!(dragTools.selectActive && dragTools.selectActive(e)); }
     updateCursor();
     if (drawingButton === null) return;
     const { x, y } = hoverNow;
@@ -124,5 +125,5 @@ export function createInputController(canvas, model, colors, onPlace, history, g
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   updateCursor();
-  return { getMode: currentMode };
+  return { getMode: currentMode, updateCursor };
 }

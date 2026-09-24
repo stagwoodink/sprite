@@ -1,41 +1,79 @@
 import { cursorIcon } from './cursors.js';
+import { overText } from './text-hit.js';
 
-// A CSS `cursor` can't blend with what's under it, so over the canvas the OS
-// cursor is hidden and this icon follows the pointer instead, drawn with
-// `mix-blend-mode: difference` (white in, inverse of the backdrop out). Only a
-// compositor transform changes per move, so the cost stays flat however big the
-// canvas or project is.
-// `canvas` is the full-viewport drawing surface: the app background is part of it.
-export function createInvertedCursor(canvas) {
-  const img = document.createElement('img');
-  img.className = 'inverted-cursor';
-  img.alt = '';
-  img.hidden = true;
+// A CSS `cursor` can't blend with what's under it, so the OS cursor is hidden
+// everywhere (style.css, `.custom-cursor`) and this icon follows the pointer
+// instead, drawn with `mix-blend-mode: difference` (white in, inverse of the
+// backdrop out). Only a compositor transform changes per move, so the cost stays
+// flat however big the canvas or project is.
+//
+// What it shows: the `--cursor` custom property of the element under the pointer
+// (style.css), the tool mode over the canvas, or a forced cursor while a drag or
+// held key owns the pointer.
+const img = document.createElement('img');
+img.className = 'inverted-cursor';
+img.alt = '';
+img.hidden = true;
+
+let canvas = null;
+let canvasName = 'draw'; // what the canvas shows: the current tool mode, or 'click' or 'arrow' over the group grid
+let forced = null;
+let hotspot = { x: 0, y: 0 };
+let last = null; // the last pointer event, to redraw when only the icon changes
+let lastTarget = null;
+let targetName = 'arrow';
+let parentName = 'arrow'; // what a 'text-on-text' element shows off its text
+
+const readName = (el) => getComputedStyle(el).getPropertyValue('--cursor').trim() || 'arrow';
+
+function render() {
+  if (!last) return;
+  // A drag on the canvas captures the pointer, so `e.target` stays the canvas
+  // even after the pointer slides over a panel; hit-test then instead.
+  const captured = canvas.hasPointerCapture(last.pointerId);
+  const target = captured && last.target === canvas ? document.elementFromPoint(last.clientX, last.clientY) : last.target;
+  if (target !== lastTarget) {
+    lastTarget = target;
+    targetName = target ? readName(target) : 'arrow';
+    if (targetName === 'text-on-text') parentName = readName(target.parentElement);
+  }
+  // A name is only editable where its text is: elsewhere in its box it acts like the row around it.
+  const name = targetName === 'text-on-text' ? (overText(target, last) ? 'text' : parentName) : targetName;
+  const icon = cursorIcon(forced || (target === canvas ? canvasName : name));
+  if (img.src !== icon.src) img.src = icon.src;
+  hotspot = icon.hotspot;
+  // Whole device pixels, or the art resamples.
+  const dpr = window.devicePixelRatio || 1;
+  img.style.transform = `translate(${Math.round((last.clientX - hotspot.x) * dpr) / dpr}px, ${Math.round((last.clientY - hotspot.y) * dpr) / dpr}px)`;
+  img.hidden = false;
+}
+
+/** Starts showing the cursor everywhere; `drawingCanvas` is the surface whose cursor is set by tool. */
+export function installCursor(drawingCanvas) {
+  canvas = drawingCanvas;
   document.body.append(img);
-
-  let hotspot = { x: 0, y: 0 };
-  let active = false; // false while the mode is null, e.g. the read-only group grid
-
-  // A drag captures the pointer, so `e.target` stays the canvas even after the
-  // pointer slides over a panel; hit-test then (only during a drag) instead.
-  const overCanvas = (e) => (canvas.hasPointerCapture(e.pointerId) ? document.elementFromPoint(e.clientX, e.clientY) : e.target) === canvas;
-
+  document.documentElement.classList.add('custom-cursor');
   document.addEventListener('pointermove', (e) => {
     if (e.pointerType !== 'mouse') return;
-    img.hidden = !(active && overCanvas(e));
-    if (img.hidden) return;
-    img.style.transform = `translate(${e.clientX - hotspot.x}px, ${e.clientY - hotspot.y}px)`;
+    last = e;
+    render();
   });
+  // A click can change what the element under a still pointer is (a rename field
+  // becomes editable), so its cursor is read again.
+  const invalidate = () => { lastTarget = null; };
+  document.addEventListener('pointerdown', invalidate);
+  document.addEventListener('pointerup', invalidate);
   document.documentElement.addEventListener('pointerleave', () => { img.hidden = true; });
+}
 
-  return {
-    /** Shows the icon for `mode`; null hides it (and the caller restores the OS cursor). */
-    setMode(mode) {
-      active = mode !== null;
-      if (!active) { img.hidden = true; return; }
-      const icon = cursorIcon(mode);
-      hotspot = icon.hotspot;
-      if (img.src !== icon.src) img.src = icon.src;
-    },
-  };
+/** The cursor over the canvas: a tool mode name, or a plain cursor name over the group grid. */
+export function setCanvasCursor(name) {
+  canvasName = name;
+  render();
+}
+
+/** Shows `name` wherever the pointer is until called with null: for a drag or held key that owns the pointer. */
+export function forceCursor(name) {
+  forced = name;
+  render();
 }

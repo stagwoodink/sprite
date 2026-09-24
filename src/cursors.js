@@ -1,83 +1,60 @@
-// Modifier-mode cursor icons (design-doc §8: "hard requirement, not a nice-to-have").
-// Small inline SVGs so no asset files/build step are needed (luddite).
-// Pure white: inverted-cursor.js draws these with a difference blend, so white is what
-// makes the result an exact inversion of whatever is underneath.
-const ACCENT = '%23FFFFFF';
+// Cursor icons (design-doc §8: "hard requirement, not a nice-to-have"): pixel-art SVGs in
+// src/cursors/, each with its hotspot in art pixels. A file is the 6x6 drawing in pure white
+// and nothing else: inverted-cursor.js draws it with a difference blend, so white is what
+// makes the result an exact inversion of whatever is underneath, on any background.
+const FILE_CURSORS = {
+  arrow: [0.5, 2.5],
+  click: [1.5, 2.5],
+  text: [1.5, 3.5],
+  'drag-vertical': [1.5, 3],
+  grab: [2.5, 3.5],
+  crosshair: [2.5, 3.5],
+  dropper: [0.5, 1.5],
+  draw: [2.5, 3.5],
+  paint: [0.5, 1.5],
+  select: [0.5, 1.5],
+  magic: [1.5, 2.5],
+  erase: [2.5, 3.5],
+  rectangle: [2.5, 4],
+  triangle: [2.5, 4],
+  circle: [3, 3],
+  fill: [2.5, 3.5],
+};
+const GRID = 6, CSS_PX_PER_ART_PX = 3;
 
-function svgCursor(inner, size, hotspot) {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'>${inner}</svg>`;
-  return { src: `data:image/svg+xml,${svg}`, hotspot };
+// A cursor image is resampled unless each art pixel covers whole device pixels,
+// so the files are rescaled to the nearest whole number for this screen's pixel
+// ratio. Rebuilt when the ratio changes.
+const scaled = {}; // name -> { src, hotspot } at the current ratio
+let sources = null; // name -> svg text, fetched once
+
+async function fetchSources() {
+  const names = Object.keys(FILE_CURSORS);
+  const texts = await Promise.all(names.map((n) => fetch(`src/cursors/${n}.svg`).then((r) => r.text())));
+  sources = Object.fromEntries(names.map((n, i) => [n, texts[i]]));
 }
 
-// Every cursor below shares one 18x18 canvas and 1.5 stroke-width so no
-// tool's reticle reads as bigger/heavier than another's.
-const DOT = svgCursor(
-  `<circle cx='9' cy='9' r='2' fill='${ACCENT}'/><circle cx='9' cy='9' r='7' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
-  18, { x: 9, y: 9 },
-);
+function rescale() {
+  const dpr = window.devicePixelRatio || 1;
+  const cssPerArtPx = Math.max(1, Math.round(CSS_PX_PER_ART_PX * dpr)) / dpr;
+  const size = GRID * cssPerArtPx;
+  for (const [name, [hx, hy]] of Object.entries(FILE_CURSORS)) {
+    const svg = sources[name].replace(/width="\d+" height="\d+"/, `width="${size}" height="${size}"`);
+    scaled[name] = { src: `data:image/svg+xml,${encodeURIComponent(svg)}`, hotspot: { x: hx * cssPerArtPx, y: hy * cssPerArtPx } };
+  }
+}
 
-const BRUSH = svgCursor(
-  `<circle cx='9' cy='9' r='7' fill='none' stroke='${ACCENT}' stroke-width='1.5' stroke-dasharray='2,2'/>`,
-  18, { x: 9, y: 9 },
-);
+/** Loads the cursor files and keeps them pixel-sharp: call once, before the first cursor is shown. */
+export async function watchCursorScale() {
+  await fetchSources();
+  rescale();
+  const listen = () => matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', () => { rescale(); listen(); }, { once: true });
+  listen();
+}
 
-const BUCKET = svgCursor(
-  `<path d='M3 9 L9 3 L15 9 L9 15 Z' fill='none' stroke='${ACCENT}' stroke-width='1.5'/><circle cx='9' cy='9' r='1.5' fill='${ACCENT}'/>`,
-  18, { x: 3, y: 15 },
-);
+const FILE_MODES = { place: 'draw', selectRect: 'select', selectWand: 'magic' }; // tool modes named differently from their file
 
-const MARQUEE = svgCursor(
-  `<rect x='2' y='2' width='14' height='14' fill='none' stroke='${ACCENT}' stroke-width='1.5' stroke-dasharray='2,2'/>`,
-  18, { x: 2, y: 2 },
-);
-
-// Diamond motif, per the design system's suggestion to reuse the Stagwood
-// mark's rotated-square shape for status/selection glyphs (§1, iconography note).
-const WAND = svgCursor(
-  `<path d='M9 1 L17 9 L9 17 L1 9 Z' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
-  18, { x: 9, y: 9 },
-);
-
-const LASSO = svgCursor(
-  `<path d='M3 9 Q3 3 9 3 T15 9 Q15 14 9 14 Q5 14 4 11' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
-  18, { x: 3, y: 9 },
-);
-
-// Hold Delete + click/drag to erase (§9.2, extended on request).
-const ERASER = svgCursor(
-  `<rect x='2' y='2' width='14' height='14' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
-  18, { x: 9, y: 9 },
-);
-
-// Shape tools (Q/W/E, on request).
-const SHAPE_RECT = svgCursor(
-  `<rect x='2' y='2' width='14' height='14' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
-  18, { x: 2, y: 2 },
-);
-const SHAPE_TRIANGLE = svgCursor(
-  `<path d='M9 2 L16 16 L2 16 Z' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
-  18, { x: 2, y: 16 },
-);
-const SHAPE_CIRCLE = svgCursor(
-  `<circle cx='9' cy='9' r='7' fill='none' stroke='${ACCENT}' stroke-width='1.5'/>`,
-  18, { x: 2, y: 2 },
-);
-
-const ICONS = {
-  place: DOT, // precision: hard-edged square stamp
-  paint: BRUSH, // fluid: soft antialiased circular brush
-  fill: BUCKET,
-  antialiasedFill: BUCKET,
-  selectRect: MARQUEE,
-  selectWand: WAND,
-  selectPolygon: LASSO,
-  erase: ERASER,
-  shaperect: SHAPE_RECT,
-  shapetriangle: SHAPE_TRIANGLE,
-  shapecircle: SHAPE_CIRCLE,
-};
-
-/** `{ src, hotspot }` for a tool mode's cursor icon; unknown modes fall back to Place. */
-export function cursorIcon(mode) {
-  return ICONS[mode] || ICONS.place;
+/** `{ src, hotspot }` for a cursor by name: a file cursor ('arrow', 'grab', ...) or a tool mode ('place', 'selectRect', ...). */
+export function cursorIcon(name) {
+  return scaled[FILE_MODES[name] || name] || scaled.arrow;
 }
