@@ -1,7 +1,7 @@
 import { NEW_FILE_SIZES, MIN_CANVAS, MAX_CANVAS, clampCanvasSize, projectOrder, projectLoad, projectLoadBreakdown, formatBytes } from './project.js';
 import { visibleOrder } from './ordering.js';
 import { openSlideOut, openCustomSlideOut, closeSlideOut } from './slide-out.js';
-import { button, hoverTip, makeReorderable, startInlineEdit } from './ui.js';
+import { button, setIcon, hoverTip, makeReorderable, startInlineEdit } from './ui.js';
 
 // Project panel (ui-design-system §7, design-doc §13). `state` is the
 // { project } holder in main.js; callbacks mutate it and call onChange to
@@ -64,7 +64,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
-    handle.textContent = '⋮';
+    setIcon(handle, '⋮');
     makeReorderable(handle, row, pos, {
       listEl: fileStack,
       boundsEl: container,
@@ -115,7 +115,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
-    handle.textContent = '⋮';
+    setIcon(handle, '⋮');
     makeReorderable(handle, row, pos, {
       listEl: fileStack,
       boundsEl: container,
@@ -124,7 +124,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
 
     const arrow = document.createElement('span');
     arrow.className = 'fold-arrow';
-    arrow.textContent = collection.collapsed ? '▸' : '▾';
+    setIcon(arrow, collection.collapsed ? '▸' : '▾');
     arrow.addEventListener('click', (e) => {
       e.stopPropagation();
       collection.collapsed = !collection.collapsed;

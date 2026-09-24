@@ -1,7 +1,7 @@
 import { paintThumbnail } from './thumbnail.js';
 import { compositeFrameAt } from './sprite-file.js';
 import { BLOCK } from './grid.js';
-import { button, attachNativeDragReorder } from './ui.js';
+import { button, setIcon, attachNativeDragReorder } from './ui.js';
 
 const THUMB_H = BLOCK * 2; // frame tiles are 2 blocks tall
 
@@ -86,7 +86,7 @@ export function renderTimelinePanel(container, file, playback, callbacks, frameS
 
     const del = document.createElement('div');
     del.className = 'frame-delete';
-    del.textContent = '✕';
+    setIcon(del, '✕');
     del.addEventListener('click', (e) => { e.stopPropagation(); callbacks.onDelete(i); });
 
     tile.append(canvasEl, del);

@@ -1,3 +1,5 @@
+import { hasIcon, iconElement } from './icons.js';
+export { setIcon } from './icons.js';
 // Shared hover-tip channel: instead of a button's `title` becoming a native
 // browser tooltip, button() reports it here on hover/focus; main.js (which
 // owns the tool tag, the corner readout that already shows current
@@ -43,6 +45,7 @@ export function button({ glyph, label, title, icon = false, fill = false, select
   // big at the button's own font-size) can pass a Node instead: appended
   // as-is rather than stringified into textContent.
   if (glyph instanceof Node) el.append(glyph);
+  else if (hasIcon(glyph)) el.append(iconElement(glyph));
   else el.textContent = glyph != null ? glyph : label;
   el.disabled = disabled;
   if (title) {

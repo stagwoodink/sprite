@@ -65,6 +65,9 @@
      these on that grid whatever the display's pixel ratio. */
   --font-body: 16px;
   --font-header: 32px;
+  /* One pixel of an icon (icons.js): two device pixels at the 16px font size, so an
+     icon is always an even number of device pixels across and centres exactly. */
+  --icon-px: calc(var(--font-body) / 8);
 
   --unit: 4px; /* small, incidental spacing: tooltips, the Controls modal. Not the grid unit below. */
 
@@ -934,6 +937,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   text-overflow: ellipsis;
 }
 .panel-add-btn { font-family: var(--icon-font); }
+.icon { display: block; flex: none; fill: currentColor; pointer-events: none; }
 
 .file-list {
   flex: 1 1 auto;

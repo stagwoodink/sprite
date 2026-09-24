@@ -1,7 +1,7 @@
 // Layers panel (design-doc §11, ui-design-system §4).
 import { paintThumbnail } from './thumbnail.js';
 import { BLOCK } from './grid.js';
-import { button, makeReorderable, startInlineEdit } from './ui.js';
+import { button, setIcon, makeReorderable, startInlineEdit } from './ui.js';
 import { layerOrder, compositeLayerAt } from './sprite-file.js';
 import { visibleOrder } from './ordering.js';
 import { referencesOf, isResolved } from './references.js';
@@ -122,7 +122,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
-    handle.textContent = '⋮';
+    setIcon(handle, '⋮');
 
     const label = document.createElement('div');
     label.className = 'layer-label';
@@ -165,7 +165,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
-    handle.textContent = '⋮';
+    setIcon(handle, '⋮');
     makeReorderable(handle, row, pos, {
       listEl: stack,
       boundsEl: container,
@@ -178,7 +178,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
 
     const arrow = document.createElement('span');
     arrow.className = 'fold-arrow';
-    arrow.textContent = group.collapsed ? '▸' : '▾';
+    setIcon(arrow, group.collapsed ? '▸' : '▾');
     arrow.addEventListener('click', (e) => {
       e.stopPropagation();
       group.collapsed = !group.collapsed;
