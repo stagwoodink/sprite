@@ -157,6 +157,7 @@
   --z-raised: 1;
   --z-slideout: 1000;
   --z-tooltip: 30;
+  --z-focus: 100; /* above any child of a panel */
   --z-trigger: 5;
 
   /* Composite effects */
@@ -643,7 +644,17 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .layer-row--selected { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 /* Focus-based control scheme: Ctrl+Arrow (or Tab-cycle) ring on whichever panel
    currently owns the keyboard (main.js's syncFocusRing). */
-.kb-focused { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
+/* An overlay, not an outline: a browser paints an element's outline beneath its
+   positioned children (every row and button here), so the panel's content
+   covered it. z-index only has to beat the panel's own children. */
+.kb-focused::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: var(--stroke-strong) solid var(--accent); /* a border, not a shadow: borders snap to whole device pixels */
+  pointer-events: none;
+  z-index: var(--z-focus);
+}
 .frame-tile canvas { display: block; height: calc(var(--block) * 2); width: auto; image-rendering: pixelated; }
 
 .frame-delete {
