@@ -986,10 +986,10 @@ function currentCollectionId() {
 }
 
 // Shared by the size picker's fixed presets and its Current option: both
-// just resolve a (w, h) differently, then land the new File the same way.
+// just resolve a (w, h) differently, then land the new File the same way. An
+// open collection grid stays open and gains the new canvas.
 function commitNewFile(w, h, preset) {
-  const collectionId = currentCollectionId(); // read before exiting group view below
-  setActiveGroup(null); // a new file takes over the canvas even if a collection grid was open
+  const collectionId = currentCollectionId();
   addFile(project, `sprite${project.files.length + 1}`, w, h, collectionId);
   if (preset && preset.palette) palette.loadPreset(preset.palette); // console sizes bring their palette
   bindActiveFile();
@@ -1060,7 +1060,7 @@ function redrawProjectPanel() {
       await Promise.all(projectOrder(project).filter((e) => !e.isHeader && e.item.groupId === collection.id).map((e) => ensureLoaded(e.item)));
       openExport({ kind: 'collection', name: collection.name, artboards: groupArtboards(collection.id), gridset: collection.gridset });
     },
-    onReorder: (from, to) => { moveProjectItem(project, from, to); redrawProjectPanel(); autosave(); },
+    onReorder: (from, to) => { moveProjectItem(project, from, to); redrawProjectPanel(); draw(); autosave(); },
     onRemoveFile: (i) => {
       deleteFile(project, i);
       bindActiveFile(); resetView(); selectionApi.clear(); redrawProjectPanel(); draw();
@@ -1336,8 +1336,7 @@ async function importSpritesheet(file, { mode = 'frames', anchor, whole = false 
       mode = answer.mode;
     }
     const sheet = buildSheetFile(uniqueFileName(project, paletteNameFromFile(file.name)), image, grid, mode, project.palette.chips);
-    const collectionId = currentCollectionId(); // read before exiting group view below
-    setActiveGroup(null);
+    const collectionId = currentCollectionId();
     addExistingFile(project, sheet, collectionId);
     bindActiveFile();
     resetView();
