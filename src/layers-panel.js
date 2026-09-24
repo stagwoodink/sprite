@@ -31,14 +31,19 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
   const stack = document.createElement('div');
   stack.className = 'layer-stack';
 
-  // One "+" at the foot of the stack; its menu holds everything you can add.
+  // One "+" at the foot of the stack. Click opens a menu of everything you can
+  // add; right-click adds a group and Alt+click a reference straight away.
   const addBtn = button({
     glyph: '+', fill: true, className: 'panel-add-btn', title: 'New layer, group or reference',
-    onClick: () => openSlideOut(addBtn, [
-      { label: 'Layer', onClick: () => callbacks.onAddLayer() },
-      { label: 'Group', onClick: () => callbacks.onAddGroup() },
-      { label: 'Reference', onClick: () => callbacks.onImportReference() },
-    ], { side: 'left' }),
+    onClick: (e) => {
+      if (e.altKey) { callbacks.onImportReference(); return; }
+      openSlideOut(addBtn, [
+        { label: 'Layer', onClick: () => callbacks.onAddLayer() },
+        { label: 'Group', onClick: () => callbacks.onAddGroup() },
+        { label: 'Reference', onClick: () => callbacks.onImportReference() },
+      ], { side: 'left' });
+    },
+    onContextMenu: (e) => { e.preventDefault(); callbacks.onAddGroup(); },
   });
 
   function buildLayerRow(layer, i, pos, nested) {
