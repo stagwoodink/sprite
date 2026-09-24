@@ -1,6 +1,6 @@
 import { resumeFolder, createDefaultBackend } from './storage.js';
 import { releaseReferences } from './references.js';
-import { encodeFile, encodeStubMeta, stubFile, parseFile, chunkName, FORMAT_VERSION } from './sprite-format.js';
+import { encodeFile, encodeStubMeta, stubFile, parseFile, chunkName, needsTidy, tidyFile, FORMAT_VERSION } from './sprite-format.js';
 
 // Debounced write: autosave fires after every committed EditCommand, but
 // batched against rapid-fire commits (e.g. end-of-stroke) rather than
@@ -58,7 +58,7 @@ export async function loadProject(backend, projectId) {
     // File is a stub (sprite-format.js stubFile) that loads on first use, so
     // opening a big project stops costing memory and time for Files never
     // touched. Older formats are read in full: they need rewriting anyway.
-    const lazy = raw.version === FORMAT_VERSION && files.length !== meta.activeFileIndex;
+    const lazy = raw.version === FORMAT_VERSION && !needsTidy(raw) && files.length !== meta.activeFileIndex;
     if (lazy) {
       const stub = stubFile(raw);
       stub._load = () => loadStub(backend, projectId, fileName, raw, stub);
@@ -66,10 +66,12 @@ export async function loadProject(backend, projectId) {
       continue;
     }
     const file = await readFile(backend, projectId, fileName, raw);
-    // An older file is rewritten as v4 right away, so the old shape doesn't
-    // linger in storage until this file happens to be edited. Only once the
-    // new chunks are written are the old ones dropped.
-    if (raw.version !== FORMAT_VERSION) {
+    // An older file, or one holding hidden pixels, is rewritten right away, so
+    // the old shape doesn't linger in storage until this file happens to be
+    // edited. Only once the new chunks are written are the old ones dropped.
+    const tidy = needsTidy(file);
+    if (tidy) tidyFile(file);
+    if (raw.version !== FORMAT_VERSION || tidy) {
       await writeFile(backend, projectId, file);
       await dropLegacyChunks(backend, projectId, fileName, raw);
     }
@@ -91,7 +93,8 @@ export async function loadProject(backend, projectId) {
     file.layers.forEach((layer, li) => { layer.order ??= (li + 1) * 1000; });
     file.layerGroups.forEach((g, gi) => { g.order ??= (gi + 1) * 1000; });
   });
-  collections.forEach((c, i) => { c.order ??= (i + 1) * 1000; });
+  // `gridset` was a per-collection column count, since removed.
+  collections.forEach((c, i) => { c.order ??= (i + 1) * 1000; delete c.gridset; });
   // What's on disk now is what was just read, so the first autosave of a
   // freshly opened project needn't rewrite every File.
   files.forEach((file) => {

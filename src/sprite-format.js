@@ -64,6 +64,27 @@ export function encodeFile(file) {
   return { meta: buildMeta(file, frames), chunks };
 }
 
+// Older versions kept pixels outside the visible window hidden in a bigger
+// buffer; a canvas is now exactly what it shows. Readable from the meta alone,
+// so a lazy load can tell without reading any pixels.
+export const needsTidy = ({ canvasWidth, canvasHeight, visibleWidth, visibleHeight }) => canvasWidth !== visibleWidth || canvasHeight !== visibleHeight;
+
+// Crops a loaded File to its visible window, dropping the hidden pixels. Each
+// buffer keeps its chunk id, so rewriting the File replaces its chunks in place.
+export function tidyFile(file) {
+  const { visibleWidth: w, visibleHeight: h, canvasWidth: stride } = file;
+  for (const frame of file.frames) {
+    frame.layerPixels = frame.layerPixels.map((old) => {
+      const next = new Uint16Array(w * h);
+      for (let y = 0; y < h; y++) next.set(old.subarray(y * stride, y * stride + w), y * w);
+      if (old.cid) next.cid = old.cid;
+      return next;
+    });
+  }
+  file.canvasWidth = w;
+  file.canvasHeight = h;
+}
+
 // Persisted meta (or a bare v1 file object) -> the in-memory File.
 // `read(kind, id)` returns a chunk's bytes or null: ('chunk', name) for v4,
 // ('frame', id) for v3, or ('bin') for a v2 file's single sidecar. Older
