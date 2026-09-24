@@ -5,6 +5,7 @@ import { button, makeReorderable, startInlineEdit } from './ui.js';
 import { layerOrder, compositeLayerAt } from './sprite-file.js';
 import { visibleOrder } from './ordering.js';
 import { referencesOf, isResolved } from './references.js';
+import { openSlideOut } from './slide-out.js';
 
 const THUMB_H = BLOCK * 2; // layer tiles are 2 blocks tall
 
@@ -30,14 +31,15 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
   const stack = document.createElement('div');
   stack.className = 'layer-stack';
 
-  // Left click: new layer. Right click: new group, straight away — same
-  // two-gesture pattern the project panel's own "+" uses now.
+  // One "+" at the foot of the stack; its menu holds everything you can add.
   const addBtn = button({
-    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New layer (right-click: new group)',
-    onClick: () => callbacks.onAddLayer(),
-    onContextMenu: (e) => { e.preventDefault(); callbacks.onAddGroup(); },
+    glyph: '+', fill: true, className: 'panel-add-btn', title: 'New layer, group or reference',
+    onClick: () => openSlideOut(addBtn, [
+      { label: 'Layer', onClick: () => callbacks.onAddLayer() },
+      { label: 'Group', onClick: () => callbacks.onAddGroup() },
+      { label: 'Reference', onClick: () => callbacks.onImportReference() },
+    ], { side: 'left' }),
   });
-  stack.append(addBtn);
 
   function buildLayerRow(layer, i, pos, nested) {
     const row = document.createElement('div');
@@ -208,7 +210,10 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     }
   }
 
-  container.append(buildReferenceSection(), stack);
+  stack.append(addBtn);
+  const references = buildReferenceSection();
+  if (references) container.append(references);
+  container.append(stack);
   container.scrollTop = scrollTop;
   thumbCache = nextThumbs;
 
@@ -217,6 +222,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
   // there's simply nothing here to select. A row's ⤢ (or `:`) flips it
   // between fit-to-canvas and full size off to the right.
   function buildReferenceSection() {
+    if (!referencesOf(file).length) return null;
     const section = document.createElement('div');
     section.className = 'reference-section';
     const header = document.createElement('div');
@@ -224,7 +230,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     const title = document.createElement('div');
     title.className = 'layer-label';
     title.textContent = 'Reference';
-    header.append(title, button({ glyph: '+', icon: true, title: 'Add a reference image', onClick: () => callbacks.onImportReference() }));
+    header.append(title);
 
     section.append(header);
     for (const ref of referencesOf(file)) {
