@@ -144,25 +144,24 @@ export function render(ctx, model, viewW, viewH, { showGrid, showRuler, symmetry
 // each artboard fit independently to its own slot.
 const ARTBOARD_GAP = 4; // world px between cells: same value both axes, so the grid reads even
 
-// `gridset`, when given, wraps after that many columns (a Collection's own
-// preference, § project panel group select) instead of the default
-// auto square-ish layout. `gap` defaults to the on-screen grid's own
+// The column count is the square-ish one rounded up to an even number (never
+// more than there are artboards), so a grid never has an odd column. `gap` defaults to the on-screen grid's own
 // spacing but is a real parameter (not just the module constant) so
 // export.js's collection sheet export: which wants a fixed, unscaled 2px
 // gap regardless of what the live view uses: can reuse this exact same
 // column/row math instead of duplicating it.
-export function computeArtboardLayout(artboards, gridset, gap = ARTBOARD_GAP) {
+export function computeArtboardLayout(artboards, gap = ARTBOARD_GAP) {
   if (!artboards.length) return { cols: 0, rows: 0, cellW: 0, cellH: 0, stepX: 0, stepY: 0, totalW: 0, totalH: 0 };
   const cellW = Math.max(...artboards.map((b) => b.width));
   const cellH = Math.max(...artboards.map((b) => b.height));
-  const cols = gridset > 0 ? Math.min(gridset, artboards.length) : Math.ceil(Math.sqrt(artboards.length));
+  const cols = Math.min(artboards.length, Math.ceil(Math.ceil(Math.sqrt(artboards.length)) / 2) * 2);
   const rows = Math.ceil(artboards.length / cols);
   const stepX = cellW + gap;
   const stepY = cellH + gap;
   return { cols, rows, cellW, cellH, stepX, stepY, totalW: cols * stepX - gap, totalH: rows * stepY - gap };
 }
 
-export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'black', scale = 1, panX = 0, panY = 0, gridset } = {}) {
+export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'black', scale = 1, panX = 0, panY = 0 } = {}) {
   // The group grid has no single shared pixel grid spanning the whole
   // viewport (every artboard has its own) to pin a checker to, so this one
   // tiles in plain screen pixels (scale 1, origin 0,0) instead of the
@@ -171,7 +170,7 @@ export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'blac
   else { ctx.fillStyle = BG_SOLID[appBg] || SHADE_BLACK; ctx.fillRect(0, 0, viewW, viewH); }
   if (!artboards.length) return;
 
-  const layout = computeArtboardLayout(artboards, gridset);
+  const layout = computeArtboardLayout(artboards);
   const originX = viewW / 2 - (layout.totalW * scale) / 2 + panX;
   const originY = viewH / 2 - (layout.totalH * scale) / 2 + panY;
 
@@ -194,9 +193,9 @@ export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'blac
 // geometry the render itself uses, so a click always lands on what it
 // visually looks like it's over (double-click-to-open, § main.js). -1 if
 // none. Options must match whatever the grid was actually rendered with.
-export function hitTestArtboardGrid(viewW, viewH, artboards, { scale = 1, panX = 0, panY = 0, gridset } = {}, x, y) {
+export function hitTestArtboardGrid(viewW, viewH, artboards, { scale = 1, panX = 0, panY = 0 } = {}, x, y) {
   if (!artboards.length) return -1;
-  const layout = computeArtboardLayout(artboards, gridset);
+  const layout = computeArtboardLayout(artboards);
   const originX = viewW / 2 - (layout.totalW * scale) / 2 + panX;
   const originY = viewH / 2 - (layout.totalH * scale) / 2 + panY;
 
@@ -545,7 +544,7 @@ function drawCrosshair(ctx, hoverPixel, { topY, leftX }, scale, ox, oy, w, h) {
 // zoom the same way the grid does, so it never becomes an unreadable
 // smear of numbers at low zoom.
 function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX }, hoverPixel) {
-  ctx.font = snapFontSize(16, window.devicePixelRatio || 1) + 'px m3x6, monospace'; // 16 device px multiples only: see pixel-snap.js
+  ctx.font = snapFontSize(16, window.devicePixelRatio || 1) + 'px "Stagwood Sprite 64", monospace'; // 16 device px multiples only: see pixel-snap.js
   ctx.textBaseline = 'top';
 
   // Bar length matches the visible portion of the sprite: which is just

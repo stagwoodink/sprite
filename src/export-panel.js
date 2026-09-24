@@ -24,7 +24,7 @@ function savePrefs(prefs) {
 // Project panel, opened from a File's or Collection's own "⋯" menu (or the
 // whole-Project export shortcut). `target` is one of:
 //   { kind: 'file', file, fps }
-//   { kind: 'collection', name, artboards, gridset }
+//   { kind: 'collection', name, artboards }
 //   { kind: 'project', project }
 // File and Collection share the same Format/Scale row (each remembers its
 // own last-used choice); Project has no format/scale at all: a `.sprite`
@@ -118,7 +118,7 @@ export function renderExportPanel(container, target) {
     if (isFile) {
       await exportFile(target.file, { format, scale, mode, fps: target.fps, trim, outlines });
     } else {
-      await exportCollection(target.name, target.artboards, { format, scale, mode, gridset: target.gridset, trim, outlines });
+      await exportCollection(target.name, target.artboards, { format, scale, mode, trim, outlines });
     }
   }
 

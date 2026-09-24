@@ -252,7 +252,7 @@ export function exportCollection(collectionName, artboards, opts) {
   return runExport((onProgress) => exportCollectionImpl(collectionName, artboards, opts, onProgress));
 }
 
-async function exportCollectionImpl(collectionName, artboards, { format, scale = 1, mode = 'sheet', gridset, trim = false, outlines = false } = {}, onProgress) {
+async function exportCollectionImpl(collectionName, artboards, { format, scale = 1, mode = 'sheet', trim = false, outlines = false } = {}, onProgress) {
   // An empty Collection has nothing to lay out: computeArtboardLayout
   // degrades to a 0x0 sheet for zero artboards, and canvas.toBlob() on a
   // 0x0 canvas resolves with a null Blob rather than throwing, which would
@@ -260,9 +260,9 @@ async function exportCollectionImpl(collectionName, artboards, { format, scale =
   // why. Nothing to export, so nothing happens.
   if (!artboards.length) { onProgress(1); return; }
   if (trim) artboards = artboards.map(trimBoard);
-  if (format === 'svg') { exportCollectionSheetSvg(collectionName, artboards, scale, gridset, outlines); onProgress(1); return; }
+  if (format === 'svg') { exportCollectionSheetSvg(collectionName, artboards, scale, outlines); onProgress(1); return; }
   if (mode === 'files') return exportCollectionFiles(collectionName, artboards, format, scale, onProgress);
-  return exportCollectionSheet(collectionName, artboards, format, scale, gridset, onProgress);
+  return exportCollectionSheet(collectionName, artboards, format, scale, onProgress);
 }
 
 // One artboard cropped to its own content (each member trims independently:
@@ -277,8 +277,8 @@ function trimBoard(board) {
 // Same column/row math the on-screen group grid uses (computeArtboardLayout,
 // § renderer.js) but with a fixed 2px export gap instead of the live view's
 // own: see SHEET_GAP's comment.
-function layoutSheetCells(artboards, gridset) {
-  const layout = computeArtboardLayout(artboards, gridset, SHEET_GAP);
+function layoutSheetCells(artboards) {
+  const layout = computeArtboardLayout(artboards, SHEET_GAP);
   const cells = artboards.map((board, i) => {
     const col = i % layout.cols, row = Math.floor(i / layout.cols);
     return {
@@ -299,8 +299,8 @@ export function drawSheetCells(ctx, cells, scale, onProgress) {
   });
 }
 
-async function exportCollectionSheet(collectionName, artboards, format, scale, gridset, onProgress) {
-  const { cells, layout } = layoutSheetCells(artboards, gridset);
+async function exportCollectionSheet(collectionName, artboards, format, scale, onProgress) {
+  const { cells, layout } = layoutSheetCells(artboards);
   const w = layout.totalW, h = layout.totalH;
   const canvasEl = document.createElement('canvas');
   canvasEl.width = w * scale;
@@ -317,8 +317,8 @@ async function exportCollectionSheet(collectionName, artboards, format, scale, g
   return downloadResults([{ path: `${collectionName}.png`, blob }], `${collectionName}.png`);
 }
 
-function exportCollectionSheetSvg(collectionName, artboards, scale, gridset, outlines) {
-  const { cells, layout } = layoutSheetCells(artboards, gridset);
+function exportCollectionSheetSvg(collectionName, artboards, scale, outlines) {
+  const { cells, layout } = layoutSheetCells(artboards);
   const w = layout.totalW * scale, h = layout.totalH * scale;
   const parts = [];
   for (const { board, x, y } of cells) (outlines ? pushOutlines : pushRects)(parts, board.pixels, board.width, board.height, x, y, scale);
