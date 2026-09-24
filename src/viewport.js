@@ -1,10 +1,65 @@
 import { viewState } from './view-state.js';
 
+// Zoom is measured in CSS pixels per canvas pixel, but a canvas pixel only
+// draws crisp when it covers a whole number of *device* pixels: otherwise the
+// nearest-neighbor blit gives some pixels one device pixel more than their
+// neighbours and edges look soft. That is only a problem when devicePixelRatio
+// is not 1 (browser zoom, fractional OS scaling, hi-dpi), so everything below
+// takes it as a parameter and works in device pixels.
+const deviceRatio = () => globalThis.devicePixelRatio || 1;
+const EPS = 1e-9; // keeps 4.000000001 or 3.9999999 from landing on the wrong side of a stop
+
+/**
+ * `scale` snapped to a whole number of device pixels per canvas pixel. Zoomed
+ * out below one device pixel it snaps to 1/n instead (every n-th pixel is
+ * sampled), which is as sharp as a reduction gets. `dir`: -1 rounds toward
+ * zoomed out, 1 toward zoomed in, 0 to the nearest stop.
+ *
+ * The one exception: 100% (one CSS pixel per canvas pixel) is always a stop,
+ * even where that is a fractional number of device pixels, because being able
+ * to see the art at true size matters more than the crispness of one step.
+ */
+export function snapScale(scale, dpr = deviceRatio(), dir = 0) {
+  const device = scale * dpr;
+  let stop;
+  if (device >= 1) stop = Math.max(1, [Math.floor, Math.round, Math.ceil][dir + 1](device + (dir < 0 ? EPS : -EPS))) / dpr;
+  else stop = 1 / (Math.max(1, [Math.ceil, Math.round, Math.floor][dir + 1](1 / device + (dir < 0 ? -EPS : EPS))) * dpr);
+  const hundred = dir < 0 ? scale >= 1 && stop < 1 : dir > 0 ? scale <= 1 && stop > 1 : Math.abs(scale - 1) < Math.abs(scale - stop);
+  return hundred ? 1 : stop;
+}
+
+// The stop one notch in / out from `scale` (which need not be a stop itself),
+// or 100% if that lies in between.
+function adjacentStop(scale, dir, dpr) {
+  const device = scale * dpr;
+  const stop = device > 1 + EPS || (dir > 0 && device >= 1 - EPS)
+    ? Math.max(1, Math.round(device) + dir) / dpr
+    : 1 / (Math.max(1, Math.round(1 / device) - dir) * dpr);
+  return (scale - 1) * (stop - 1) < 0 ? 1 : stop;
+}
+
+/**
+ * Where a zoom step from `current` toward `next` lands: `next` snapped to a
+ * stop, but never the stop it started on, so a gentle wheel tick still moves.
+ */
+export function stepScale(current, next, dpr = deviceRatio()) {
+  const snapped = snapScale(next, dpr);
+  const start = snapScale(current, dpr);
+  if (next > current && snapped <= start) return adjacentStop(start, 1, dpr);
+  if (next < current && snapped >= start) return adjacentStop(start, -1, dpr);
+  return snapped;
+}
+
+/** A CSS-pixel length rounded to a whole device pixel, so an edge lands on a pixel boundary. */
+export function snapLength(px, dpr = deviceRatio()) {
+  return Math.round(px * dpr) / dpr;
+}
+
 // Shared screen<->canvas-pixel mapping, used by both the renderer and input
 // handling so they can never drift out of sync (§6: zoom-to-fit, free zoom,
 // pan).
-export function fitScale(model, viewW, viewH) {
-  return Math.max(1, Math.floor(Math.min(viewW / model.width, viewH / model.height)));
+export function fitScale(model, viewW, viewH, dpr = deviceRatio()) {
+  return Math.max(1, Math.floor(Math.min(viewW / model.width, viewH / model.height) * dpr + EPS) / dpr);
 }
 
 // Zoom in until at least MIN_VISIBLE_PX canvas pixels still span the
@@ -35,12 +90,12 @@ export function minZoomScale(model, viewW, viewH) {
 
 // Zoom/pan that centers the pixel-space box `b` ({minX, minY, w, h}) and
 // scales it to just fill the viewport, clamped to the usual zoom range.
-// Continuous scale, not integer-snapped (§1.3).
+// Snapped down to a stop so the region still fits.
 export function regionView(model, viewW, viewH, b) {
-  const zoom = Math.max(
+  const zoom = snapScale(Math.max(
     minZoomScale(model, viewW, viewH),
     Math.min(maxZoomScale(model, viewW, viewH), viewW / b.w, viewH / b.h),
-  );
+  ), deviceRatio(), -1);
   const cx = b.minX + b.w / 2, cy = b.minY + b.h / 2;
   return { zoom, panX: (model.width / 2 - cx) * zoom, panY: (model.height / 2 - cy) * zoom };
 }
@@ -55,8 +110,8 @@ export function computeViewport(model, viewW, viewH, state = viewState) {
   const h = model.height * scale;
   return {
     scale,
-    ox: Math.floor((viewW - w) / 2) + state.panX,
-    oy: Math.floor((viewH - h) / 2) + state.panY,
+    ox: snapLength(Math.floor((viewW - w) / 2) + state.panX),
+    oy: snapLength(Math.floor((viewH - h) / 2) + state.panY),
     fit,
   };
 }

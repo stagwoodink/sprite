@@ -3,7 +3,7 @@ import { parseFile } from './sprite-format.js';
 import { paintOptions, SYMMETRY_CYCLE } from './paint-options.js';
 import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
 import { createInputController } from './input.js';
-import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView } from './viewport.js';
+import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView, snapScale, stepScale } from './viewport.js';
 import { viewState, resetView, groupViewState, resetGroupView } from './view-state.js';
 import { createPalette } from './palette.js';
 import { maskFromRect, maskFromWand, maskFromColor, fullMask, toRenderSelection } from './selection.js';
@@ -464,7 +464,8 @@ function setActiveGroup(id) {
   document.body.classList.toggle('group-view', !!id);
   if (id) {
     const target = project.collections.find((c) => c.id === id);
-    if (target && target.zoom != null) { groupViewState.zoom = target.zoom; groupViewState.panX = target.panX || 0; groupViewState.panY = target.panY || 0; }
+    // Re-snapped: the saved zoom may predate whole-device-pixel stops, or come from another display.
+    if (target && target.zoom != null) { groupViewState.zoom = snapScale(target.zoom); groupViewState.panX = target.panX || 0; groupViewState.panY = target.panY || 0; }
     else resetGroupView();
     layersReveal.forceHide();
     timelineReveal.forceHide();
@@ -770,10 +771,19 @@ function commitLayerChange(file, mutate) {
   history.commit({ type: 'layers', before, after });
 }
 
+// The drawing surface in CSS pixels, as a whole number of device pixels. A
+// backing store even one device pixel off the size the browser actually
+// displays (clientWidth is rounded, and times a fractional devicePixelRatio it
+// truncates) gets stretched to fit, which softens rows and columns unevenly
+// across the whole canvas. Sizing from the real rect and drawing in units of
+// exactly that many device pixels keeps every blit 1:1.
+const view = { w: canvas.clientWidth, h: canvas.clientHeight }; // until the first resize() measures it exactly
 function resize() {
   canvasRect = canvas.getBoundingClientRect();
-  canvas.width = canvas.clientWidth * devicePixelRatio;
-  canvas.height = canvas.clientHeight * devicePixelRatio;
+  canvas.width = Math.round(canvasRect.width * devicePixelRatio);
+  canvas.height = Math.round(canvasRect.height * devicePixelRatio);
+  view.w = canvas.width / devicePixelRatio;
+  view.h = canvas.height / devicePixelRatio;
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   draw();
 }
@@ -810,7 +820,7 @@ function renderCanvas() {
   const display = { width: model.width, height: model.height, pixels: compositeFrame(file) };
   const onionFrames = computeOnionFrames(file);
   const brushCursor = { mode: (inputController && inputController.getMode()) || 'place', size: brushSize };
-  antsMarching = render(ctx, display, canvas.clientWidth, canvas.clientHeight, {
+  antsMarching = render(ctx, display, view.w, view.h, {
     showGrid, showRuler, symmetry: paintOptions.symmetry, references: drawableReferences(file), hoverPixel, selection: selectionRender, onionFrames, brushCursor, cursorPos: displayCursorPos, canvasBg: canvasBgCycler.get(), appBg: appBgCycler.get(),
   });
   updateToolTag();
@@ -887,14 +897,14 @@ function groupLayoutModel(artboards = groupArtboards()) {
 // below 1:1 to fit at all, and it should never fit flush to the viewport).
 const GROUP_FIT_PADDING = 96; // screen px margin on every side at "fit" zoom
 function groupFitScale(layoutModel, viewW, viewH) {
-  return Math.max(0.05, Math.min((viewW - GROUP_FIT_PADDING * 2) / layoutModel.width, (viewH - GROUP_FIT_PADDING * 2) / layoutModel.height));
+  return snapScale(Math.max(0.05, Math.min((viewW - GROUP_FIT_PADDING * 2) / layoutModel.width, (viewH - GROUP_FIT_PADDING * 2) / layoutModel.height)), undefined, -1);
 }
 
 function renderGroupCanvas() {
   const artboards = groupArtboards();
   const rect = canvas.getBoundingClientRect();
   const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(artboards), rect.width, rect.height);
-  renderArtboardGrid(ctx, canvas.clientWidth, canvas.clientHeight, artboards, {
+  renderArtboardGrid(ctx, view.w, view.h, artboards, {
     appBg: groupAppBgCycler.get(), scale, panX: groupViewState.panX, panY: groupViewState.panY, gridset: activeGridset(),
   });
   updateToolTag();
@@ -906,14 +916,14 @@ function groupZoomTo(nextScale) {
   const fit = groupFitScale(layoutModel, rect.width, rect.height);
   const min = minZoomScale(layoutModel, rect.width, rect.height);
   const max = maxZoomScale(layoutModel, rect.width, rect.height);
-  groupViewState.zoom = Math.max(min, Math.min(max, nextScale));
+  groupViewState.zoom = snapScale(Math.max(min, Math.min(max, nextScale)));
   if (Math.abs(groupViewState.zoom - fit) < 0.01) { groupViewState.zoom = fit; groupViewState.panX = 0; groupViewState.panY = 0; }
   draw();
 }
 function groupZoomStep(dir) {
   const rect = canvas.getBoundingClientRect();
   const current = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
-  groupZoomTo(current * (dir > 0 ? 1.15 : 1 / 1.15));
+  groupZoomTo(stepScale(current, current * (dir > 0 ? 1.15 : 1 / 1.15)));
 }
 
 function draw() {
@@ -1680,7 +1690,7 @@ canvas.addEventListener('pointermove', (e) => {
     const artboards = groupArtboards();
     const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
     const index = hitTestArtboardGrid(
-      canvas.clientWidth, canvas.clientHeight, artboards,
+      view.w, view.h, artboards,
       { scale, panX: groupViewState.panX, panY: groupViewState.panY, gridset: activeGridset() },
       e.clientX - rect.left, e.clientY - rect.top,
     );
@@ -1718,7 +1728,7 @@ function zoomTo(nextScale) {
   const fit = fitScale(model, rect.width, rect.height);
   const min = minZoomScale(model, rect.width, rect.height);
   const max = maxZoomScale(model, rect.width, rect.height);
-  viewState.zoom = Math.max(min, Math.min(max, nextScale));
+  viewState.zoom = snapScale(Math.max(min, Math.min(max, nextScale)));
   if (Math.abs(viewState.zoom - fit) < 0.01) { viewState.zoom = fit; viewState.panX = 0; viewState.panY = 0; }
   draw();
 }
@@ -1755,7 +1765,7 @@ canvas.addEventListener('wheel', (e) => {
 
   const rate = Math.min(wheelVelocity * 0.15, 0.5);
   const next = current * (zoomingIn ? 1 + rate : 1 - rate);
-  zoomTo(next < 1 && min >= 1 ? 1 : next);
+  zoomTo(stepScale(current, next < 1 && min >= 1 ? 1 : next));
 }, { passive: false });
 
 // Double-click an artboard in the group grid (§ project panel group
@@ -1768,7 +1778,7 @@ canvas.addEventListener('dblclick', (e) => {
   const artboards = groupArtboards();
   const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
   const index = hitTestArtboardGrid(
-    canvas.clientWidth, canvas.clientHeight, artboards,
+    view.w, view.h, artboards,
     { scale, panX: groupViewState.panX, panY: groupViewState.panY, gridset: activeGridset() },
     e.clientX - rect.left, e.clientY - rect.top,
   );
@@ -2053,7 +2063,7 @@ function fillCurrentTool(x, y) {
 function zoomStep(dir) {
   const rect = canvas.getBoundingClientRect();
   const current = viewState.zoom || fitScale(model, rect.width, rect.height);
-  zoomTo(current * (dir > 0 ? 1.15 : 1 / 1.15));
+  zoomTo(stepScale(current, current * (dir > 0 ? 1.15 : 1 / 1.15)));
 }
 
 // --- Focus-based panels: Projects, Colors, Layers, Timeline ---

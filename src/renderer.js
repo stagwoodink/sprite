@@ -1,6 +1,7 @@
 import { hexToRgb } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
 import { snapFontSize } from './pixel-snap.js';
+import { snapLength } from './viewport.js';
 
 // Shared solid-color set for every backdrop in the app: the app-wide
 // chrome background (Shift+U/Ctrl+U), the sprite's own backdrop (`u`,
@@ -645,6 +646,7 @@ function drawBoard(ctx, model, ox, oy, w, h) {
     boardCanvases.set(model.pixels, entry);
   }
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(entry.canvas, 0, 0, model.width, model.height, ox, oy, w, h);
+  // Only the origin needs snapping: at a snapped zoom the size is already whole device pixels.
+  ctx.drawImage(entry.canvas, 0, 0, model.width, model.height, snapLength(ox), snapLength(oy), w, h);
 }
 
