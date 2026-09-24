@@ -1,13 +1,14 @@
-// The pixel font (m3x6) only stays crisp when its size is a whole multiple of
-// its 6px cell in *device* pixels. A CSS size like 18px is 18.28 device pixels
-// at a devicePixelRatio of 1.015625 (any browser zoom, most Linux/Windows
-// scaling), which blurs every glyph. This resolves each font token to the
-// nearest multiple of 6 device pixels and writes it back in CSS pixels, so
-// the em-based grid (1 block = 1.5em) also lands on whole device pixels.
-const CELL = 6;
-const TOKENS = { '--font-small': 12, '--font-body': 18, '--font-title': 30, '--font-header': 36 }; // the stylesheet's sizes, at dpr 1
+// The pixel font (m3x6) draws each font pixel 1/16 em wide (measured: glyph
+// pixel = 64 of 1024 units), so it is only crisp at a whole multiple of 16
+// *device* pixels; every other size, including a CSS 16px on a screen whose
+// devicePixelRatio is 1.015625 (browser zoom, fractional OS scaling), is
+// resampled and blurred. This resolves each font token to the nearest multiple
+// of 16 device pixels and writes it back in CSS pixels, so the em-based grid
+// (1 block = 1.5em) also lands on whole device pixels.
+const CELL = 16;
+const TOKENS = { '--font-small': 16, '--font-body': 16, '--font-title': 32, '--font-header': 32 }; // the stylesheet's sizes, at dpr 1
 
-/** CSS px size for `base` CSS px that is a whole number of 6px cells on a screen with this pixel ratio. */
+/** CSS px size for `base` CSS px that is a whole number of 16px cells on a screen with this pixel ratio. */
 export function snapFontSize(base, dpr) {
   const cells = Math.max(1, Math.round(base * dpr / CELL));
   return cells * CELL / dpr;

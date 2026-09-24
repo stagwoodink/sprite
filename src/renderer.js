@@ -1,5 +1,6 @@
 import { hexToRgb } from './canvas-model.js';
 import { computeViewport } from './viewport.js';
+import { snapFontSize } from './pixel-snap.js';
 
 // Shared solid-color set for every backdrop in the app — the app-wide
 // chrome background (Shift+U/Ctrl+U), the sprite's own backdrop (`u`,
@@ -543,7 +544,7 @@ function drawCrosshair(ctx, hoverPixel, { topY, leftX }, scale, ox, oy, w, h) {
 // zoom the same way the grid does, so it never becomes an unreadable
 // smear of numbers at low zoom.
 function drawRuler(ctx, model, scale, ox, oy, w, h, viewW, viewH, { topY, leftX }, hoverPixel) {
-  ctx.font = '12px m3x6, monospace';
+  ctx.font = snapFontSize(16, window.devicePixelRatio || 1) + 'px m3x6, monospace'; // 16 device px multiples only: see pixel-snap.js
   ctx.textBaseline = 'top';
 
   // Bar length matches the visible portion of the sprite — which is just

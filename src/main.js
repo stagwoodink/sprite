@@ -28,7 +28,6 @@ import { createKeybindHelp } from './keybind-help.js';
 import { renderExportPanel } from './export-panel.js';
 import { renderOpenProjectPanel } from './open-project-panel.js';
 import { VERSION, GITHUB_ISSUES_URL, ITCH_IO_URL, DISCORD_URL } from './version.js';
-import { BLOCK } from './grid.js';
 import { loadUiPrefs, saveUiPrefs } from './ui-prefs.js';
 import { startInlineEdit, onHoverTip, button, flashTip, pickFile } from './ui.js';
 import { decodeImage, bitmapPixels } from './image-import.js';
@@ -243,8 +242,11 @@ function toggleTagsHidden() {
 // Timeline (top) and Palette (bottom) both shrink horizontally to clear
 // whichever side panel is open, rather than staying full width and
 // pushing anything — side panels just run the full viewport height.
-const SIDE_PANEL_WIDTH = BLOCK * 6; // must match --panel-width in style.css
-const PALETTE_HEIGHT = BLOCK;
+// Pushes are whole blocks of the live --block, not pixel constants: pixel-snap.js
+// resizes the block with the device pixel ratio, and a fixed pixel offset would drift from it.
+const SIDE_PANEL_BLOCKS = 6; // must match --panel-width in style.css
+const PALETTE_BLOCKS = 1;
+const blocks = (n) => (n ? `calc(var(--block) * ${n})` : '0px');
 
 // A shut slide-out can't be seen, so its rebuild (thumbnails and all) waits
 // until it opens; these mark it as owing one. Declared before the panels are
@@ -264,20 +266,20 @@ function updatePushes() {
   const exportOpen = !!(exportReveal && exportReveal.isFocused());
   const openProjectOpen = !!(openProjectReveal && openProjectReveal.isFocused());
   const secondSlotOpen = exportOpen || openProjectOpen;
-  if (exportPanel) exportPanel.style.setProperty('--export-left', (projectOpen ? SIDE_PANEL_WIDTH : 0) + 'px');
-  if (openProjectPanel) openProjectPanel.style.setProperty('--open-project-left', (projectOpen ? SIDE_PANEL_WIDTH : 0) + 'px');
+  if (exportPanel) exportPanel.style.setProperty('--export-left', blocks(projectOpen ? SIDE_PANEL_BLOCKS : 0));
+  if (openProjectPanel) openProjectPanel.style.setProperty('--open-project-left', blocks(projectOpen ? SIDE_PANEL_BLOCKS : 0));
   const pushedLeft = projectOpen || secondSlotOpen;
   const pushedRight = !!(layersReveal && layersReveal.isFocused());
-  const leftPush = (projectOpen ? SIDE_PANEL_WIDTH : 0) + (secondSlotOpen ? SIDE_PANEL_WIDTH : 0);
-  const rightPush = pushedRight ? SIDE_PANEL_WIDTH : 0;
+  const leftPush = blocks(((projectOpen ? 1 : 0) + (secondSlotOpen ? 1 : 0)) * SIDE_PANEL_BLOCKS);
+  const rightPush = blocks(pushedRight ? SIDE_PANEL_BLOCKS : 0);
   // The version tab always sits as far right/down as it can — right of the
   // layers panel when closed, flush with the window bottom when the
   // palette itself is closed, not pinned to the palette's height always.
   const paletteVisible = !!(paletteReveal && paletteReveal.isFocused());
-  const bottomPush = (paletteVisible ? PALETTE_HEIGHT : 0) + 'px';
+  const bottomPush = blocks(paletteVisible ? PALETTE_BLOCKS : 0);
   for (const el of [timelineBar, paletteBar]) {
-    el.style.setProperty('--push-left', leftPush + 'px');
-    el.style.setProperty('--push-right', rightPush + 'px');
+    el.style.setProperty('--push-left', leftPush);
+    el.style.setProperty('--push-right', rightPush);
     // Dark shadow line where an open side panel butts against this edge —
     // shows the side panel stacking in front of it (§ panel-edge treatment).
     el.classList.toggle('pushed-left', pushedLeft);
@@ -286,9 +288,9 @@ function updatePushes() {
   // Both corner tags always sit as far into their corner as they can — only
   // lifted above the palette when it's actually visible, only pulled in
   // from their side when that side panel is actually open.
-  versionTab.style.setProperty('--push-right', rightPush + 'px');
+  versionTab.style.setProperty('--push-right', rightPush);
   versionTab.style.setProperty('--push-bottom', bottomPush);
-  toolTag.style.setProperty('--push-left', leftPush + 'px');
+  toolTag.style.setProperty('--push-left', leftPush);
   toolTag.style.setProperty('--push-bottom', bottomPush);
 }
 

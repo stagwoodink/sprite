@@ -50,11 +50,13 @@
   --checker-light: #DEDEDE;
   --checker-dark: #CFCFCF;
 
-  /* m3x6 native grid: unitsPerEm 1024 with a 6px-tall glyph cell (see the "3x6"
-     naming convention shared with m5x7/m6x11) — font-size must be an integer
-     multiple of 6 or glyphs blur off-grid. */
-  --font-body: 18px;
-  --font-header: 36px;
+  /* m3x6 draws each of its pixels 1/16 em wide (unitsPerEm 1024, 64 units per
+     pixel; a capital is 6 pixels tall), so it is only crisp when font-size is
+     a whole multiple of 16 device pixels: 16, 32, 48. Any other size, 18 and
+     12 included, resamples every glyph and blurs it. pixel-snap.js keeps
+     these on that grid whatever the display's pixel ratio. */
+  --font-body: 16px;
+  --font-header: 32px;
 
   --unit: 4px; /* small, incidental spacing — tooltips, the Controls modal. Not the grid unit below. */
 
@@ -129,8 +131,8 @@
   --modal-w: 420px;
 
   /* Type */
-  --font-small: 12px;
-  --font-title: 30px;
+  --font-small: 16px; /* the font has no crisp size below 16 */
+  --font-title: 32px;
 
   /* Opacity */
   --opacity-fading: 0.6;
@@ -1036,8 +1038,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   max-height: var(--modal-max-h);
   overflow-y: auto;
   margin: auto;
-  /* Pixel font (m3x6): font-size must stay a multiple of 6 or glyphs blur
-     off-grid and anti-alias — 20/28 weren't. */
+  /* Pixel font (m3x6): font-size must stay a multiple of 16 device pixels or
+     glyphs blur (see --font-body). */
   font-size: var(--font-body);
 }
 .keybind-help-title {
