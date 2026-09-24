@@ -1672,7 +1672,6 @@ function redrawTimelinePanel() {
   timelineStale = false;
   renderTimelinePanel(timelineBar, file, playback, {
     onSetFps: (fps) => { playback.fps = fps; if (playback.playing) startPlayback(); },
-    onImportSheet: (anchor) => pickFile('image/*', (f) => importSpritesheet(f, { mode: 'frames', anchor })),
     onToggleOnion: () => { playback.onionSkin = !playback.onionSkin; draw(); },
     onToggleOnionSource: () => { playback.onionLayerOnly = !playback.onionLayerOnly; draw(); },
     onSelect: (i) => { file.activeFrameIndex = i; bindActiveFile(); draw(); }, // selection persists across frame switches (§9.3)
