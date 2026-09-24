@@ -1,4 +1,4 @@
-// The pixel font (m3x6) draws each font pixel 1/16 em wide (measured: glyph
+// The pixel font draws each font pixel 1/16 em wide (measured: glyph
 // pixel = 64 of 1024 units), so it is only crisp at a whole multiple of 16
 // *device* pixels; every other size, including a CSS 16px on a screen whose
 // devicePixelRatio is 1.015625 (browser zoom, fractional OS scaling), is
