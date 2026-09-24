@@ -6,16 +6,18 @@ import { zipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.j
 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
 import { encodeGifStream } from './gif-index.js';
 import { pushRects } from './svg-rects.js';
+import { pushOutlines } from './svg-outlines.js';
+import { contentBounds, unionBounds, cropPixels } from './trim.js';
 
 // Export (§14): PNG, GIF, SVG per File/Collection, plus a whole-Project
-// .sprite archive. Scale is an integer upscale, nearest-neighbor — no
+// .sprite archive. Scale is an integer upscale, nearest-neighbor: no
 // smoothing, so pixel edges stay hard.
 
 // --- progress + retry/error handling, shared by every export entry point --
 
 // main.js's tool tag subscribes here to show a progress bar while an
 // export runs, and a quiet "(export error)" marker if one ultimately
-// fails — see runExport below for the full lifecycle.
+// fails: see runExport below for the full lifecycle.
 let progressListener = null;
 export function onExportProgress(fn) { progressListener = fn; }
 function reportProgress(status) { if (progressListener) progressListener(status); }
@@ -23,7 +25,7 @@ function reportProgress(status) { if (progressListener) progressListener(status)
 const MAX_ATTEMPTS = 4; // 1 initial try + 3 silent retries
 
 // A transient hiccup (a GC pause, a momentarily-busy disk cache) most
-// often just works on a second try, so failures retry silently — no
+// often just works on a second try, so failures retry silently: no
 // interruption, the progress bar just keeps running. Only once every
 // attempt has failed does this decide whether the user can actually do
 // anything about it: a message worth prompting for (free up space, lower
@@ -84,11 +86,12 @@ function canvasToBlob(canvasEl, mime) {
   return new Promise((resolve) => canvasEl.toBlob(resolve, mime));
 }
 
-// Hand-rolled — no library needed at this pixel-grid scale.
-function pixelsToSvgString(pixels, w, h, scale) {
+// Hand-rolled: no library needed at this pixel-grid scale.
+// `outlines`: merged contour paths instead of one rect per run (svg-outlines.js).
+function pixelsToSvgString(pixels, w, h, scale, outlines) {
   const parts = [];
-  pushRects(parts, pixels, w, h, 0, 0, scale);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w * scale} ${h * scale}">${parts.join('')}</svg>`;
+  (outlines ? pushOutlines : pushRects)(parts, pixels, w, h, 0, 0, scale);
+  return `<svg xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w * scale} ${h * scale}">${parts.join('')}</svg>`;
 }
 
 // --- download plumbing ---------------------------------------------------
@@ -103,7 +106,7 @@ function downloadBlob(blob, filename) {
 }
 
 // A file name that already exists in the app (a layer's, a file's) isn't
-// guaranteed clean for a filesystem — strip path separators and other
+// guaranteed clean for a filesystem: strip path separators and other
 // characters most filesystems (and zip readers) choke on.
 function sanitizeName(name) {
   return String(name).replace(/[\\/:*?"<>|]+/g, '_').trim() || 'untitled';
@@ -111,8 +114,8 @@ function sanitizeName(name) {
 
 // Anything past this is large enough it's worth a "are you sure" beat
 // before committing the browser to holding it all in memory and writing it
-// out — a plain, blocking confirm is enough for a rare warning gate like
-// this, no need for a bespoke modal. Declining isn't a failure — it just
+// out: a plain, blocking confirm is enough for a rare warning gate like
+// this, no need for a bespoke modal. Declining isn't a failure: it just
 // returns, same as any other "nothing to do" no-op elsewhere in the app,
 // so runExport's retry loop never touches this path.
 const LARGE_EXPORT_BYTES = 25 * 1024 * 1024;
@@ -124,7 +127,7 @@ function confirmIfLarge(totalBytes, itemDesc) {
 
 // Single-file result: just download it (after the size check). Multi-file
 // result: zip it first (fflate, no existing zip writer in this codebase to
-// reuse — see the audit that led here), *then* size-check the zip itself
+// reuse: see the audit that led here), *then* size-check the zip itself
 // (compression can land either side of the raw total), then download.
 async function downloadSingle(blob, filename) {
   if (!confirmIfLarge(blob.size, filename)) return;
@@ -143,7 +146,7 @@ async function downloadZip(entries, zipFilename) {
 }
 
 // One or many blobs in: exactly one download out, zipped when there's more
-// than one — the one rule every export target (File/Collection/Project)
+// than one: the one rule every export target (File/Collection/Project)
 // below follows, so none of them need to special-case "did this produce
 // one file or several."
 async function downloadResults(entries, zipFilename) {
@@ -161,15 +164,30 @@ const encodeGif = (frames, w, h, scale, delayMs, onFrame) => encodeGifStream({
   frameCount: frames.length, wordsAt: (i) => frames[i], w, h, scale, delayMs, onFrame, gifenc,
 });
 
+// `trim`: crop away the empty margin. One box covers every image an export
+// produces from a source (all frames, all layers), so an animation or a layer
+// stack stays aligned instead of each image being cropped on its own. Returns
+// the source unchanged when trim is off or nothing is visible (an empty canvas
+// keeps its size rather than shrinking to nothing). `pixelsAt(i)` composites
+// image i on demand; only one is held at a time.
+function trimmed(trim, count, pixelsAt, w, h) {
+  if (!trim) return { pixelsAt, w, h };
+  let box = null;
+  for (let i = 0; i < count; i++) box = unionBounds(box, contentBounds(pixelsAt(i), w, h));
+  if (!box) return { pixelsAt, w, h };
+  return { pixelsAt: (i) => cropPixels(pixelsAt(i), w, box), w: box.x1 - box.x0, h: box.y1 - box.y0 };
+}
+
 // A File's own GIF: one plain image if it has just the one Frame, an
-// animated loop (at `fps`) if it has more — no separate mode/picker for
+// animated loop (at `fps`) if it has more: no separate mode/picker for
 // this, unlike PNG/SVG's canvas/layers/frames choice below, since a GIF is
 // inherently a sequence-or-not already.
-async function exportFileGif(file, scale, fps, onProgress) {
+async function exportFileGif(file, scale, fps, trim, onProgress) {
   // Frames are composited on demand and dropped after each write, so memory
   // holds one frame however long the animation is.
+  const frames = trimmed(trim, file.frames.length, (i) => compositeFrameAt(file, i), file.visibleWidth, file.visibleHeight);
   const bytes = encodeGifStream({
-    frameCount: file.frames.length, wordsAt: (i) => compositeFrameAt(file, i), w: file.visibleWidth, h: file.visibleHeight,
+    frameCount: file.frames.length, wordsAt: frames.pixelsAt, w: frames.w, h: frames.h,
     scale, delayMs: Math.round(1000 / fps), onFrame: (f) => onProgress(f * 0.9), gifenc,
   });
   await downloadResults([{ path: `${file.name}.gif`, blob: new Blob([bytes], { type: 'image/gif' }) }], `${file.name}.gif`);
@@ -179,37 +197,38 @@ async function exportFileGif(file, scale, fps, onProgress) {
 
 // `mode`: 'canvas' (today's single flattened image, the active Frame) |
 // 'layers' (every Layer of the active Frame, each its own file, in a
-// subfolder named after the File — named by the Layer) | 'frames' (every
-// Frame's full composite, same shape as 'layers'). PNG/SVG only — GIF has
+// subfolder named after the File: named by the Layer) | 'frames' (every
+// Frame's full composite, same shape as 'layers'). PNG/SVG only: GIF has
 // its own all-frames-or-one behavior above instead.
 export function exportFile(file, opts) {
   return runExport((onProgress) => exportFileImpl(file, opts, onProgress));
 }
 
-async function exportFileImpl(file, { format, scale = 1, mode = 'canvas', fps = 8 } = {}, onProgress) {
+async function exportFileImpl(file, { format, scale = 1, mode = 'canvas', fps = 8, trim = false, outlines = false } = {}, onProgress) {
   await ensureLoaded(file);
-  if (format === 'gif') return exportFileGif(file, scale, fps, onProgress);
+  if (format === 'gif') return exportFileGif(file, scale, fps, trim, onProgress);
 
   const toBlob = async (pixels, w, h) => {
-    if (format === 'svg') return new Blob([pixelsToSvgString(pixels, w, h, scale)], { type: 'image/svg+xml' });
+    if (format === 'svg') return new Blob([pixelsToSvgString(pixels, w, h, scale, outlines)], { type: 'image/svg+xml' });
     const canvasEl = pixelsToCanvas(pixels, w, h, scale, null);
     return canvasToBlob(canvasEl, 'image/png');
   };
   const ext = format === 'svg' ? 'svg' : 'png';
-  const w = file.visibleWidth, h = file.visibleHeight;
+  const fullW = file.visibleWidth, fullH = file.visibleHeight;
 
   if (mode === 'canvas') {
-    const blob = await toBlob(compositeFrame(file), w, h);
+    const { pixelsAt, w, h } = trimmed(trim, 1, () => compositeFrame(file), fullW, fullH);
+    const blob = await toBlob(pixelsAt(0), w, h);
     onProgress(0.9);
     return downloadResults([{ path: `${file.name}.${ext}`, blob }], `${file.name}.${ext}`);
   }
 
   const dir = sanitizeName(file.name);
   const items = mode === 'layers' ? file.layers : file.frames;
+  const { pixelsAt, w, h } = trimmed(trim, items.length, (i) => (mode === 'layers' ? compositeLayerAt(file, i, file.activeFrameIndex) : compositeFrameAt(file, i)), fullW, fullH);
   const entries = [];
   for (let i = 0; i < items.length; i++) {
-    const pixels = mode === 'layers' ? compositeLayerAt(file, i, file.activeFrameIndex) : compositeFrameAt(file, i);
-    const blob = await toBlob(pixels, w, h);
+    const blob = await toBlob(pixelsAt(i), w, h);
     const name = mode === 'layers' ? sanitizeName(file.layers[i].name) : `frame-${i + 1}`;
     entries.push({ path: `${dir}/${name}.${ext}`, blob });
     onProgress((i + 1) / items.length * 0.9);
@@ -219,35 +238,45 @@ async function exportFileImpl(file, { format, scale = 1, mode = 'canvas', fps = 
 
 // --- Collection export -----------------------------------------------------
 
-// `artboards`: [{ name, width, height, pixels }] — the same shape
+// `artboards`: [{ name, width, height, pixels }]: the same shape
 // main.js's groupArtboards() already builds for the on-screen group grid
 // (one entry per member File, its own current composite). `mode`: 'sheet'
 // (one combined raster laid out in the same grid the collection view
-// shows, 2px gap — fixed, independent of `scale`) | 'files' (each artboard
-// as its own file, zipped). SVG has no `mode` at all — always one combined
+// shows, 2px gap: fixed, independent of `scale`) | 'files' (each artboard
+// as its own file, zipped). SVG has no `mode` at all: always one combined
 // sheet, vector, since a "files" SVG export would just be File export's
 // canvas mode repeated per member, already covered there.
-const SHEET_GAP = 2; // export px, independent of scale — not the live view's ARTBOARD_GAP
+const SHEET_GAP = 2; // export px, independent of scale: not the live view's ARTBOARD_GAP
 
 export function exportCollection(collectionName, artboards, opts) {
   return runExport((onProgress) => exportCollectionImpl(collectionName, artboards, opts, onProgress));
 }
 
-async function exportCollectionImpl(collectionName, artboards, { format, scale = 1, mode = 'sheet', gridset } = {}, onProgress) {
-  // An empty Collection has nothing to lay out — computeArtboardLayout
+async function exportCollectionImpl(collectionName, artboards, { format, scale = 1, mode = 'sheet', gridset, trim = false, outlines = false } = {}, onProgress) {
+  // An empty Collection has nothing to lay out: computeArtboardLayout
   // degrades to a 0x0 sheet for zero artboards, and canvas.toBlob() on a
   // 0x0 canvas resolves with a null Blob rather than throwing, which would
   // otherwise crash downstream in downloadResults with nothing to show for
   // why. Nothing to export, so nothing happens.
   if (!artboards.length) { onProgress(1); return; }
-  if (format === 'svg') { exportCollectionSheetSvg(collectionName, artboards, scale, gridset); onProgress(1); return; }
+  if (trim) artboards = artboards.map(trimBoard);
+  if (format === 'svg') { exportCollectionSheetSvg(collectionName, artboards, scale, gridset, outlines); onProgress(1); return; }
   if (mode === 'files') return exportCollectionFiles(collectionName, artboards, format, scale, onProgress);
   return exportCollectionSheet(collectionName, artboards, format, scale, gridset, onProgress);
 }
 
+// One artboard cropped to its own content (each member trims independently:
+// unlike animation frames, they are separate images that do not line up). A
+// blank one keeps its size.
+function trimBoard(board) {
+  const box = contentBounds(board.pixels, board.width, board.height);
+  if (!box) return board;
+  return { ...board, pixels: cropPixels(board.pixels, board.width, box), width: box.x1 - box.x0, height: box.y1 - box.y0 };
+}
+
 // Same column/row math the on-screen group grid uses (computeArtboardLayout,
 // § renderer.js) but with a fixed 2px export gap instead of the live view's
-// own — see SHEET_GAP's comment.
+// own: see SHEET_GAP's comment.
 function layoutSheetCells(artboards, gridset) {
   const layout = computeArtboardLayout(artboards, gridset, SHEET_GAP);
   const cells = artboards.map((board, i) => {
@@ -288,12 +317,12 @@ async function exportCollectionSheet(collectionName, artboards, format, scale, g
   return downloadResults([{ path: `${collectionName}.png`, blob }], `${collectionName}.png`);
 }
 
-function exportCollectionSheetSvg(collectionName, artboards, scale, gridset) {
+function exportCollectionSheetSvg(collectionName, artboards, scale, gridset, outlines) {
   const { cells, layout } = layoutSheetCells(artboards, gridset);
   const w = layout.totalW * scale, h = layout.totalH * scale;
   const parts = [];
-  for (const { board, x, y } of cells) pushRects(parts, board.pixels, board.width, board.height, x, y, scale);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
+  for (const { board, x, y } of cells) (outlines ? pushOutlines : pushRects)(parts, board.pixels, board.width, board.height, x, y, scale);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
   return downloadResults([{ path: `${collectionName}.svg`, blob: new Blob([svg], { type: 'image/svg+xml' }) }], `${collectionName}.svg`);
 }
 
@@ -314,10 +343,10 @@ async function exportCollectionFiles(collectionName, artboards, format, scale, o
 // --- Project export ---------------------------------------------------
 
 // The whole Project as one portable .sprite archive (a zip, same shape
-// persistence.js already writes to storage — project.json plus one
-// <name>.sprite per File — bundled into a single downloadable file instead
+// persistence.js already writes to storage: project.json plus one
+// <name>.sprite per File: bundled into a single downloadable file instead
 // of storage-backend records). The Project's palette (this app has exactly
-// one shared palette per Project — see project.js's createProject — so
+// one shared palette per Project: see project.js's createProject: so
 // "every palette used" is just that one object) rides along inside
 // project.json, same as it already does in storage.
 export function exportProjectSprite(project) {
@@ -325,7 +354,7 @@ export function exportProjectSprite(project) {
 }
 
 async function exportProjectSpriteImpl(project, onProgress) {
-  // `<name>.sprite` paths deliberately unsanitized here — same convention
+  // `<name>.sprite` paths deliberately unsanitized here: same convention
   // persistence.js's own storage already uses for these exact files
   // (`fileName + '.sprite'`, storage.js), so `fileNames` in project.json
   // and each entry's own path always agree on import, byte for byte.

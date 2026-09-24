@@ -8,7 +8,7 @@ const COLLECTION_MODES = ['Sheet', 'Files'];
 const STORE_KEY = 'sprite-export-prefs';
 
 function loadPrefs() {
-  const defaults = { fileFormat: 'PNG', fileScale: 1, fileMode: 'Canvas', collectionFormat: 'PNG', collectionScale: 1, collectionMode: 'Sheet' };
+  const defaults = { fileFormat: 'PNG', fileScale: 1, fileMode: 'Canvas', collectionFormat: 'PNG', collectionScale: 1, collectionMode: 'Sheet', fileTrim: false, collectionTrim: false, fileOutlines: false, collectionOutlines: false };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(STORE_KEY)) };
   } catch {
@@ -27,7 +27,7 @@ function savePrefs(prefs) {
 //   { kind: 'collection', name, artboards, gridset }
 //   { kind: 'project', project }
 // File and Collection share the same Format/Scale row (each remembers its
-// own last-used choice); Project has no format/scale at all — a `.sprite`
+// own last-used choice); Project has no format/scale at all: a `.sprite`
 // archive is the only thing it produces.
 export function renderExportPanel(container, target) {
   container.innerHTML = '';
@@ -54,6 +54,8 @@ export function renderExportPanel(container, target) {
   const formatKey = isFile ? 'fileFormat' : 'collectionFormat';
   const scaleKey = isFile ? 'fileScale' : 'collectionScale';
   const modeKey = isFile ? 'fileMode' : 'collectionMode';
+  const trimKey = isFile ? 'fileTrim' : 'collectionTrim';
+  const outlinesKey = isFile ? 'fileOutlines' : 'collectionOutlines';
   const modes = isFile ? FILE_MODES : COLLECTION_MODES;
 
   const formatRow = document.createElement('div');
@@ -62,6 +64,10 @@ export function renderExportPanel(container, target) {
   scaleRow.className = 'export-btn-row tile-bar';
   const modeRow = document.createElement('div');
   modeRow.className = 'export-btn-row tile-bar';
+  const trimRow = document.createElement('div');
+  trimRow.className = 'export-btn-row tile-bar';
+  const outlinesRow = document.createElement('div');
+  outlinesRow.className = 'export-btn-row tile-bar';
 
   function rebuild() {
     formatRow.innerHTML = '';
@@ -78,10 +84,21 @@ export function renderExportPanel(container, target) {
         onClick: () => { prefs[scaleKey] = s; savePrefs(prefs); rebuild(); },
       }));
     });
+    outlinesRow.innerHTML = '';
+    outlinesRow.hidden = prefs[formatKey] !== 'SVG';
+    outlinesRow.append(button({
+      label: 'Outlines', fill: true, className: 'outlines-option', title: 'Merge into contours', selected: prefs[outlinesKey],
+      onClick: () => { prefs[outlinesKey] = !prefs[outlinesKey]; savePrefs(prefs); rebuild(); },
+    }));
+    trimRow.innerHTML = '';
+    trimRow.append(button({
+      label: 'Trim', fill: true, className: 'trim-option', title: 'Crop empty margins', selected: prefs[trimKey],
+      onClick: () => { prefs[trimKey] = !prefs[trimKey]; savePrefs(prefs); rebuild(); },
+    }));
     modeRow.innerHTML = '';
     // File: Layers/Frames breakdown applies to PNG/SVG only (GIF is always
     // simple-or-animated on its own, no mode). Collection: SVG is always
-    // one combined sheet (no Files mode — see export.js's own comment).
+    // one combined sheet (no Files mode: see export.js's own comment).
     modeRow.hidden = isFile ? prefs[formatKey] === 'GIF' : prefs[formatKey] === 'SVG';
     modes.forEach((m) => {
       modeRow.append(button({
@@ -96,15 +113,17 @@ export function renderExportPanel(container, target) {
     const format = prefs[formatKey].toLowerCase();
     const scale = prefs[scaleKey];
     const mode = prefs[modeKey].toLowerCase();
+    const trim = prefs[trimKey];
+    const outlines = prefs[outlinesKey];
     if (isFile) {
-      await exportFile(target.file, { format, scale, mode, fps: target.fps });
+      await exportFile(target.file, { format, scale, mode, fps: target.fps, trim, outlines });
     } else {
-      await exportCollection(target.name, target.artboards, { format, scale, mode, gridset: target.gridset });
+      await exportCollection(target.name, target.artboards, { format, scale, mode, gridset: target.gridset, trim, outlines });
     }
   }
 
   const confirm = button({ label: 'Export', fill: true, className: 'export-confirm', onClick: () => runExport() });
 
-  body.append(formatRow, scaleRow, modeRow, confirm);
+  body.append(formatRow, scaleRow, modeRow, outlinesRow, trimRow, confirm);
   container.append(title, body);
 }
