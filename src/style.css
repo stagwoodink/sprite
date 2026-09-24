@@ -95,6 +95,7 @@
   --accent-a75: rgba(190, 20, 37, 0.75);
   --black: #000000;
   --black-a0: rgba(0, 0, 0, 0);
+  --black-a03: rgba(0, 0, 0, 0.03);
   --black-a10: rgba(0, 0, 0, 0.1);
   --black-a30: rgba(0, 0, 0, 0.3);
   --black-a35: rgba(0, 0, 0, 0.35);
@@ -164,7 +165,7 @@
   --bevel-chip-pressed: inset 0 1px 0 0 var(--white-a20), inset -1px 0 0 0 var(--black-a30), inset 0 -7px 0 0 var(--black-a35);
   --drag-insert: inset 0 2px 0 var(--accent);
   --edge-highlight-top: inset 0 1px 0 var(--panel-edge-highlight);
-  --edge-shadow-above: 0 calc(var(--border-width) * -1) 0 var(--panel-edge-shadow); /* a hairline just outside a panel's top edge */
+  --edge-shadow-above: 0 calc(var(--border-width) * -1) 0 var(--black-a03); /* a hairline just outside a panel's top edge */
   --shadow-drag: 0 4px 12px var(--black-a50);
 }
 
