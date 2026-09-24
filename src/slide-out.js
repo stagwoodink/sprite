@@ -199,6 +199,11 @@ function finishOpen(bar, anchor, side, { onDismiss, snapWidth } = {}) {
   return close;
 }
 
+// Export always leads a menu and Remove always closes it, wherever a caller
+// listed them: the destructive item sits in one predictable place. Array#sort
+// is stable, so every other item keeps the order it was given.
+const edgeRank = ({ label }) => (label === 'Export' ? 0 : /^Remove/.test(label) ? 2 : 1);
+
 export function openSlideOut(anchor, buttons, { side = 'right', onDismiss } = {}) {
   if (openAnchorEl === anchor) { closeSlideOut(); return null; }
   closeSlideOut();
@@ -207,7 +212,7 @@ export function openSlideOut(anchor, buttons, { side = 'right', onDismiss } = {}
   bar.className = 'slide-out-bar panel';
 
   let close;
-  for (const { label, onClick, accent } of buttons) {
+  for (const { label, onClick, accent } of [...buttons].sort((a, b) => edgeRank(a) - edgeRank(b))) {
     // Close first: an item that opens a follow-up menu from the same anchor
     // (Columns) would otherwise hit the anchor-toggle above and close itself.
     const btn = button({ label, fill: true, selected: accent, onClick: () => { close(); onClick(); } });

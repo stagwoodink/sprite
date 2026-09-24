@@ -87,7 +87,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
       onClick: (e) => {
         e.stopPropagation();
         const items = [
-          { label: 'Resize canvas', onClick: () => openSizePopup(menuBtn, (w, h) => callbacks.onResizeFile(file, w, h)) },
+          { label: 'Resize', onClick: () => openSizePopup(menuBtn, (w, h) => callbacks.onResizeFile(file, w, h)) },
         ];
         // The last file can't be removed (project.js: deleteFile is a no-op
         // then anyway): a project always has at least one file.
@@ -149,7 +149,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     // opening onto nothing.
     menuItems.push({ label: 'Columns', onClick: () => openGridsetPopup(menuBtn, collection, callbacks.onSetGridset) });
     menuItems.push({ label: 'Export', onClick: () => callbacks.onExportCollection(collection) });
-    if (project.collections.length > 1) menuItems.push({ label: 'Delete collection', onClick: () => callbacks.onDeleteCollection(collection.id) });
+    if (project.collections.length > 1) menuItems.push({ label: 'Remove', onClick: () => callbacks.onDeleteCollection(collection.id) });
     const menuBtn = button({
       glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Collection menu',
       disabled: menuItems.length === 0,

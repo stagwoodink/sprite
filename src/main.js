@@ -1123,7 +1123,7 @@ function openFileSelectionMenu(lastAddedIndex) {
   if (!anchor || !fileSelection) return;
   const files = [...fileSelection].map((i) => project.files[i]).filter(Boolean);
   openSlideOut(anchor, [
-    { label: 'Resize canvas', onClick: () => openMultiResizePopup(anchor, files) },
+    { label: 'Resize', onClick: () => openMultiResizePopup(anchor, files) },
     { label: 'Export', onClick: () => exportSelectedFiles(files) },
     { label: 'Remove all', onClick: () => removeSelectedFiles(files) },
   ], { onDismiss: dismissFileSelection });
