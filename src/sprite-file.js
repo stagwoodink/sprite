@@ -1,6 +1,7 @@
 import { createColorTable, packedTable, bufferId, blendPacked } from './canvas-model.js';
 import { computeMembership, moveBlock, nextOrder } from './ordering.js';
 import { indexedBounds, unionBounds } from './trim.js';
+import { nextName } from './names.js';
 
 // SpriteFile / Layer / Frame data model (design-doc §5).
 export function createLayer(name = 'Layer 1', order = 1000) {
@@ -233,7 +234,7 @@ function orderInGroup(file, groupId) {
 
 export function addLayer(file, name, groupId) {
   if (!file.layerGroups.length) addLayerGroup(file);
-  file.layers.push(createLayer(name || `Layer ${file.layers.length + 1}`, orderInGroup(file, groupId)));
+  file.layers.push(createLayer(name || nextName('Layer', file.layers.map((l) => l.name)), orderInGroup(file, groupId)));
   for (const frame of file.frames) {
     frame.layerPixels.push(new Uint16Array(file.canvasWidth * file.canvasHeight));
   }
@@ -248,7 +249,7 @@ export function deleteLayer(file, index) {
 }
 
 export function addLayerGroup(file, name) {
-  file.layerGroups.push(createLayerGroup(name || `Group ${file.layerGroups.length + 1}`, nextOrder(file.layerGroups, file.layers)));
+  file.layerGroups.push(createLayerGroup(name || nextName('Group', file.layerGroups.map((g) => g.name)), nextOrder(file.layerGroups, file.layers)));
 }
 
 // Every Layer must always belong to *some* Group, so the last one can't be

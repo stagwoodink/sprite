@@ -2,6 +2,7 @@ import { createSpriteFile } from './sprite-file.js';
 import { PRESETS, DEFAULT_PRESET } from './palettes-presets.js';
 import { computeMembership, moveBlock, nextOrder } from './ordering.js';
 import { referenceBytes } from './references.js';
+import { nextName } from './names.js';
 
 // Project = a directory containing Files + one shared Palette (§4, §5).
 // Every File must belong to a Collection: there's no "ungrouped" state:
@@ -13,7 +14,7 @@ export function createProject(name) {
     id: crypto.randomUUID(),
     name,
     palette: { name: preset.name, chips: [...preset.chips], primary: preset.chips[0] },
-    files: [{ ...createSpriteFile('sprite', DEFAULT_CANVAS_SIZE, DEFAULT_CANVAS_SIZE), order: 2000 }],
+    files: [{ ...createSpriteFile('Canvas 1', DEFAULT_CANVAS_SIZE, DEFAULT_CANVAS_SIZE), order: 2000 }],
     collections: [collection],
     activeFileIndex: 0,
   };
@@ -104,7 +105,7 @@ export function mostRecentFileIn(project, collectionId) {
 export function addCollection(project, name) {
   project.collections.push({
     id: crypto.randomUUID(),
-    name: name || `Collection ${project.collections.length + 1}`,
+    name: name || nextName('Collection', project.collections.map((c) => c.name)),
     collapsed: false,
     order: nextOrder(project.collections, project.files),
   });
