@@ -880,7 +880,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* The footer (add row, meter, header) keeps its size when the file list is longer than the panel: as flex items they would
    otherwise all give up a share of the overflow, and the new canvas button ended up a few pixels tall. */
 #project-panel > :not(.file-list) { flex-shrink: 0; }
-.project-add-row { height: calc(var(--block) - var(--meter-h) + var(--border-width)); }
+.project-add-row { height: calc(var(--block) - var(--meter-h)); }
 .project-add-row .btn { height: 100%; }
 .capacity-meter { height: var(--meter-h); background: var(--accent-dark); border-top: var(--border-width) solid var(--hairline); }
 /* min-width: a sliver is always lit, even at 0% load: purely for looks */
