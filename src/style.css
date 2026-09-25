@@ -1255,6 +1255,26 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* The project icon labels the project header: an icon, not a button. */
 /* A row's menu button is a bare icon like the grab handle and fold arrow: no bevel or fill (the icon's own colours are the .icon--menu rules). */
 .btn.row-menu, .btn.row-menu:hover, .btn.row-menu:active { background: none; border-width: 0; }
+/* Asks for a working folder (main.js): the icon breathes between its dim colour and the accent, and while the panel is
+   shut a short accent bar at its foot, on the left edge, does the same. Still, not moving, if the user prefers less motion. */
+@keyframes nudge-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.project-icon.nudge .icon { background: var(--accent); animation: nudge-pulse 1.4s ease-in-out infinite; }
+.edge-trigger-left.nudge::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--space-3);
+  height: var(--block);
+  background: var(--accent);
+  animation: nudge-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-icon.nudge .icon, .edge-trigger-left.nudge::after { animation: none; opacity: 1; }
+}
+/* the project header's menu icon sits a device pixel higher than the row menus' */
+.project-menu .icon { transform: translateY(calc(var(--icon-px) / -2)); }
 .project-icon { flex: 0 0 var(--block); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
 /* A light line above and a shadow line below, so a header reads as a raised
    divider between the rows it groups instead of one more row. Inset shadows,

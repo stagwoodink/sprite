@@ -75,6 +75,17 @@ try {
   backend = { write: async () => {}, read: async () => null, delete: async () => {}, list: async () => [] };
 }
 const uiPrefs = await loadUiPrefs(backend);
+
+// The Projects button pulses red until it is pressed, but only where the browser can connect a
+// folder at all and none is connected yet. Its edge trigger pulses too while the panel is shut.
+const canNudgeWorkDir = () => !!window.showDirectoryPicker && backend.kind === 'idb' && !uiPrefs.workDirNudged;
+document.getElementById('project-trigger').classList.toggle('nudge', canNudgeWorkDir());
+function stopWorkDirNudge() {
+  if (uiPrefs.workDirNudged) return;
+  uiPrefs.workDirNudged = true;
+  saveUiPrefs(uiPrefs);
+  document.querySelectorAll('.nudge').forEach((el) => el.classList.remove('nudge'));
+}
 let activeReferenceId = null; // the reference `:` acts on: the one last added or clicked
 
 // Floats above the palette's right edge; slides left with it when the
@@ -1141,6 +1152,7 @@ function redrawProjectPanel() {
     },
     onOpenProject: (anchor) => openProjectPicker(anchor),
     workDirName: backend.name,
+    nudgeWorkDir: canNudgeWorkDir(),
     onPickWorkDir: window.showDirectoryPicker && pickWorkDir,
   }, focusedCollectionId(), activeGroupId, fileSelection);
 }
@@ -1148,6 +1160,7 @@ function redrawProjectPanel() {
 // The backend is chosen once at startup (chooseBackend), so a new folder takes
 // effect through a reload, after the outgoing project's edits are flushed.
 async function pickWorkDir() {
+  stopWorkDirNudge();
   try {
     await saveProject(backend, project);
     if (!await connectFolder()) return;

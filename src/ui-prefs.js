@@ -17,6 +17,7 @@ const DEFAULTS = {
   // of its own (every artboard is always transparent): just its own `U`
   // backdrop, separate from the single-file canvas's above.
   groupAppBg: 'white',
+  workDirNudged: false, // the pulse asking for a working folder is over, once the user has pressed the button
 };
 
 let folder = null; // the connected-folder backend that mirrors prefs, if any
