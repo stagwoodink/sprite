@@ -270,27 +270,52 @@ function cursorLuma(model, pos, canvasBg) {
 // eased/trailing display position, not necessarily the exact hovered
 // pixel): main.js's animation loop owns that easing, this just draws
 // wherever it's told.
+// The paint brush's shape on the canvas: a pixel-art circle drawn on a 6x6 grid, stretched over the brush's
+// size (one canvas pixel at size 1). The place brush is the plain square, the same drawing filled solid.
+const PAINT_SHAPE = ['..XX..', '.XXXX.', 'XXXXXX', 'XXXXXX', '.XXXX.', '..XX..'];
+let paintShapePaths = null;
+function getPaintShapePaths() {
+  if (paintShapePaths) return paintShapePaths;
+  const fill = new Path2D(), edge = new Path2D();
+  const ink = (x, y) => PAINT_SHAPE[y] !== undefined && PAINT_SHAPE[y][x] === 'X';
+  PAINT_SHAPE.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      if (!ink(x, y)) continue;
+      fill.rect(x, y, 1, 1);
+      // Only the edges that face an empty cell, so the outline has no lines across the inside.
+      if (!ink(x, y - 1)) { edge.moveTo(x, y); edge.lineTo(x + 1, y); }
+      if (!ink(x, y + 1)) { edge.moveTo(x, y + 1); edge.lineTo(x + 1, y + 1); }
+      if (!ink(x - 1, y)) { edge.moveTo(x, y); edge.lineTo(x, y + 1); }
+      if (!ink(x + 1, y)) { edge.moveTo(x + 1, y); edge.lineTo(x + 1, y + 1); }
+    }
+  });
+  return (paintShapePaths = { fill, edge });
+}
+
 function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy, luma) {
   if (mode !== 'place' && mode !== 'paint') return;
-  const cx = ox + (pos.x + 0.5) * scale;
-  const cy = oy + (pos.y + 0.5) * scale;
-  const drawShape = () => {
+  // The brush's square in screen px: centred on the hovered pixel for paint, offset the way the stamp is for place.
+  const side = size * scale;
+  const left = mode === 'paint' ? ox + (pos.x + 0.5) * scale - side / 2 : ox + (pos.x - Math.floor(size / 2)) * scale;
+  const top = mode === 'paint' ? oy + (pos.y + 0.5) * scale - side / 2 : oy + (pos.y - Math.floor(size / 2)) * scale;
+  const drawShape = (stroke) => {
     if (mode === 'paint') {
-      const r = Math.max(0.5, size / 2);
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+      const { fill, edge } = getPaintShapePaths();
+      const cell = side / PAINT_SHAPE.length;
+      ctx.translate(left, top);
+      ctx.scale(cell, cell);
+      if (stroke) { ctx.lineWidth = 1 / cell; ctx.stroke(edge); } else ctx.fill(fill);
+    } else if (stroke) {
+      ctx.strokeRect(left, top, side, side);
     } else {
-      const half = Math.floor(size / 2);
-      ctx.beginPath();
-      ctx.rect(ox + (pos.x - half) * scale, oy + (pos.y - half) * scale, size * scale, size * scale);
+      ctx.fillRect(left, top, side, side);
     }
   };
 
   ctx.save();
   ctx.globalCompositeOperation = 'difference';
   ctx.fillStyle = '#FFFFFF';
-  drawShape();
-  ctx.fill();
+  drawShape(false);
   ctx.restore();
 
   if (luma >= CURSOR_MID_LO && luma <= CURSOR_MID_HI) {
@@ -300,8 +325,7 @@ function drawBrushCursor(ctx, pos, { mode, size }, scale, ox, oy, luma) {
     ctx.save();
     ctx.strokeStyle = luma > 128 ? '#000000' : '#FFFFFF';
     ctx.lineWidth = 1;
-    drawShape();
-    ctx.stroke();
+    drawShape(true);
     ctx.restore();
   }
 }
