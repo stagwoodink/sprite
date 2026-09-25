@@ -36,7 +36,7 @@ function isCacheableRequest(request) {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return false;
   if (url.search) return false;
-  return url.pathname === '/' || CACHEABLE_EXT.test(url.pathname);
+  return url.pathname.endsWith('/') || CACHEABLE_EXT.test(url.pathname); // the page root, which on GitHub Pages is a subpath like /sprite/
 }
 
 self.addEventListener('fetch', (event) => {
