@@ -91,11 +91,13 @@ export function positionSlideOut(bar, anchor, side) {
     clampCross(bar, chevron, 'top', rect.top, rect.height, bar.getBoundingClientRect().height, window.innerHeight);
     fromTransform = 'translateX(-12px)';
   } else if (side === 'left') {
-    bar.style.right = window.innerWidth - panelRect.left + 'px';
+    // From the panel's edge and the bar's own width, not from the window's right edge: the window
+    // width in device pixels is usually fractional, which put the bar between two pixels and blurred it.
+    bar.style.left = snapPx(panelRect.left - bar.getBoundingClientRect().width) + 'px';
     clampCross(bar, chevron, 'top', rect.top, rect.height, bar.getBoundingClientRect().height, window.innerHeight);
     fromTransform = 'translateX(12px)';
   } else if (side === 'up') {
-    bar.style.bottom = window.innerHeight - rect.top + 'px';
+    bar.style.top = snapPx(rect.top - bar.getBoundingClientRect().height) + 'px'; // from the anchor, not the window bottom: see 'left'
     clampCross(bar, chevron, 'left', rect.left, rect.width, bar.getBoundingClientRect().width, rightLimit(), leftLimit());
     fromTransform = 'translateY(12px)';
   } else {
