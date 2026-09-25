@@ -4,6 +4,9 @@ A minimalist pixel-art editor that runs in the browser. Icons, tiny sprites and 
 
 Plain JavaScript, HTML and CSS. No framework, no build step, no dependencies to install.
 
+**Try it:** https://stagwoodink.github.io/sprite/ (it works offline once loaded).  
+**Found a bug?** [Report it](https://github.com/stagwoodink/sprite/issues/new?template=bug_report.yml). **Questions:** [Discord](https://discord.gg/TFvXQdrjYM).
+
 ## Philosophy
 
 - **One tool.** There is no toolbox. The same brush stamps, paints, erases, fills, selects and draws shapes depending on the modifier keys you hold.
@@ -186,3 +189,7 @@ Press `?` in the app to see this list. `Ctrl`(left)+Arrow focuses a panel (Timel
 | `Shift+Enter` | Rename project |
 | `e` / `E` | Export canvas / project |
 | `\` | Open project picker |
+
+## License
+
+The source is public so it can be read, but this is not open source. You can read it, run the app and keep everything you make with it. Copying, modifying, redistributing or reusing any of it needs written permission. See [LICENSE](LICENSE).
