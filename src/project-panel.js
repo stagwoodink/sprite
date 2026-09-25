@@ -12,6 +12,9 @@ import { button, setIcon, hoverTip, makeReorderable, startInlineEdit } from './u
 // way dragging it back out above the header (or past the collection's last
 // member) ungroups it. No separate "move to collection" control.
 export function renderProjectPanel(container, project, callbacks, focusedCollectionId, activeGroupId, fileSelection) {
+  // The rebuild would otherwise snap the list back to the top: folding or unfolding a
+  // collection leaves it where it was, and the rows open downward from the header.
+  const scrollTop = container.querySelector('.file-list')?.scrollTop ?? 0;
   container.innerHTML = '';
 
   const header = document.createElement('div');
@@ -205,6 +208,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   // stack, so it stays anchored above the panel footer instead of scrolling
   // away with a long file list.
   container.append(fileList, addRow, buildCapacityMeter(project, callbacks), header);
+  fileList.scrollTop = scrollTop;
 }
 
 // Filled bar showing how close the Project is to what a low-end machine
