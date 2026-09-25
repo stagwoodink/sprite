@@ -4,8 +4,8 @@ A minimalist pixel-art editor that runs in the browser. Icons, tiny sprites and 
 
 Plain JavaScript, HTML and CSS. No framework, no build step, no dependencies to install.
 
-**Try it:** https://stagwoodink.github.io/sprite/ (it works offline once loaded).  
-**Found a bug?** [Report it](https://github.com/stagwoodink/sprite/issues/new?template=bug_report.yml). **Questions:** [Discord](https://discord.gg/TFvXQdrjYM).
+**Try it:** https://xanderstagwood.github.io/sprite/ (it works offline once loaded).  
+**Found a bug?** [Report it](https://github.com/xanderstagwood/sprite/issues/new?template=bug_report.yml). **Questions:** [Discord](https://discord.gg/TFvXQdrjYM).
 
 ## Philosophy
 
