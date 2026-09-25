@@ -83,8 +83,8 @@ Press `?` in the app to see this list. `Ctrl`(left)+Arrow focuses a panel (Timel
 | `?` | Toggle controls help modal |
 | `Shift+Tab` | Cycle focus: Timeline → Layers → Colors → Projects  |
 | `Tab` | Pin/unpin every panel at once |
-| `~` | Pin/unpin the corner tags |
-| `` ` `` (hold) + Left/Right | Select a version-tab button; `Enter` launches it |
+| `` ` `` | Pin/unpin the corner tags |
+| `~` (hold) + Left/Right | Select a help tag button; `Enter` or `Space` launches it |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste |
 | `Ctrl+A` | Select all |

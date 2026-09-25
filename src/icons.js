@@ -37,6 +37,7 @@ export const iconElement = (name) => {
   if (file === 'heart') el.classList.add('icon--lift'); // drawn a device pixel low in its block
   if (file === 'sprite') el.classList.add('icon--lift-2');
   if (file === 'heart') el.classList.add('icon--heart');
+  if (file === 'menu') el.classList.add('icon--menu'); // three pixels wide, drawn against the left of its box
   return el;
 };
 

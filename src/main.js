@@ -1,7 +1,7 @@
 import { setPixel, setPixelIndex, colorIndex, getPixel, touch, paintAt, floodFill, mirroredPoints, snapshotPixels, diffFromSnapshot, hexToRgb, rgbToHex, packedToHex } from './canvas-model.js';
 import { parseFile } from './sprite-format.js';
 import { paintOptions, SYMMETRY_CYCLE } from './paint-options.js';
-import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid } from './renderer.js';
+import { render, renderArtboardGrid, computeArtboardLayout, hitTestArtboardGrid, slotAtPoint } from './renderer.js';
 import { createInputController } from './input.js';
 import { computeViewport, screenToPixel, maxZoomScale, minZoomScale, fitScale, regionView, snapScale, stepScale, trueScale, zoomPercent } from './viewport.js';
 import { viewState, resetView, groupViewState, resetGroupView } from './view-state.js';
@@ -14,6 +14,7 @@ import {
   addCollection, deleteCollection, NEW_FILE_SIZES, projectOrder, moveProjectItem,
   lastCollection, mostRecentFileIn, splitByCollection, addExistingFile, uniqueFileName, renameFile,
 } from './project.js';
+import { nextName } from './names.js';
 import {
   activePixels, compositeFrame, resizeCanvas, trimCanvas, addLayer, deleteLayer,
   addFrame, deleteFrame, duplicateFrame, reorderFrame, ghostSource,
@@ -57,9 +58,9 @@ const exportPanel = document.getElementById('export-panel');
 const openProjectPanel = document.getElementById('open-project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
-const versionTab = document.getElementById('version-tab');
+const helpTag = document.getElementById('help-tag');
 const toolTag = document.getElementById('tool-tag');
-versionTab.classList.add('panel');
+helpTag.classList.add('panel');
 toolTag.classList.add('panel');
 
 // The backend is picked before any UI is built because preferences can live in
@@ -80,7 +81,7 @@ let activeReferenceId = null; // the reference `:` acts on: the one last added o
 // Buttons, not <a href>: the browser's status bubble showing a hovered link's URL
 // covers the tool tag, which is where these buttons' tips appear.
 const openLink = (glyph, title, url) => button({ glyph, icon: true, title, onClick: () => window.open(url, '_blank', 'noopener') });
-const versionLink = openLink('sprite', `Sprite v${VERSION}`, ITCH_IO_URL);
+const landingBtn = openLink('sprite', `Sprite v${VERSION}`, ITCH_IO_URL);
 const bugBtn = openLink('bug', 'Report an issue.', GITHUB_ISSUES_URL);
 const discordBtn = openLink('discord', 'App Support (Discord)', DISCORD_URL);
 const kofiBtn = openLink('heart', 'Become a supporter. (Kofi)', KOFI_URL);
@@ -88,26 +89,26 @@ const kofiBtn = openLink('heart', 'Become a supporter. (Kofi)', KOFI_URL);
 // Toggles the same Controls modal as "?".
 const helpBtn = button({ glyph: 'help', icon: true, title: 'Controls', onClick: () => keybindHelp.toggle() });
 
-versionTab.append(versionLink, bugBtn, discordBtn, kofiBtn, helpBtn);
+helpTag.append(landingBtn, bugBtn, discordBtn, kofiBtn, helpBtn);
 
-// Hold-`+Left/Right selects a version-tab button, Return activates it:
+// Hold-`+Left/Right selects a help-tag button, Return activates it:
 // "everything keyboard-accessible". `~` (Global) separately pins/unpins the
 // corner tags.
-const versionNavItems = [versionLink, bugBtn, discordBtn, kofiBtn, helpBtn];
-let versionNavIndex = 0;
-let heldBacktick = false;
-function updateVersionNavHighlight() {
-  versionNavItems.forEach((el, i) => el.classList.toggle('version-nav-focused', heldBacktick && i === versionNavIndex));
+const helpNavItems = [landingBtn, bugBtn, discordBtn, kofiBtn, helpBtn];
+let helpNavIndex = 0;
+let helpNavHeld = false;
+function updateHelpNavHighlight() {
+  helpNavItems.forEach((el, i) => el.classList.toggle('help-nav-focused', helpNavHeld && i === helpNavIndex));
 }
 
-// Tool reference tag: mirrors version-tab on the opposite corner. Left
+// Tool reference tag: mirrors help-tag on the opposite corner. Left
 // side: current tool + brush size. Right: zoom %, then the primary swatch.
 // Content refreshed from renderCanvas() (cheap: a handful of
 // textContent/background writes).
 const toolLabel = document.createElement('div');
 toolLabel.className = 'tool-tag-label';
 const zoomIcon = document.createElement('div');
-zoomIcon.className = 'version-tab-icon';
+zoomIcon.className = 'tag-icon';
 setIcon(zoomIcon, '⌕');
 const zoomLabel = document.createElement('div');
 zoomLabel.className = 'tool-tag-label tool-tag-label--divider';
@@ -222,11 +223,11 @@ function updateToolTag() {
 
 // Corner-tag hide/show state: `~` (Global) pins/unpins both at once.
 let tagsHidden = uiPrefs.tagsHidden;
-versionTab.classList.toggle('hidden-tag', tagsHidden);
+helpTag.classList.toggle('hidden-tag', tagsHidden);
 toolTag.classList.toggle('hidden-tag', tagsHidden);
 function toggleTagsHidden() {
   tagsHidden = !tagsHidden;
-  versionTab.classList.toggle('hidden-tag', tagsHidden);
+  helpTag.classList.toggle('hidden-tag', tagsHidden);
   toolTag.classList.toggle('hidden-tag', tagsHidden);
   uiPrefs.tagsHidden = tagsHidden;
   saveUiPrefs(uiPrefs);
@@ -265,7 +266,7 @@ function updatePushes() {
   const pushedRight = !!(layersReveal && layersReveal.isFocused());
   const leftPush = blocks(((projectOpen ? 1 : 0) + (secondSlotOpen ? 1 : 0)) * SIDE_PANEL_BLOCKS);
   const rightPush = blocks(pushedRight ? SIDE_PANEL_BLOCKS : 0);
-  // The version tab always sits as far right/down as it can: right of the
+  // The help tag always sits as far right/down as it can: right of the
   // layers panel when closed, flush with the window bottom when the
   // palette itself is closed, not pinned to the palette's height always.
   const paletteVisible = !!(paletteReveal && paletteReveal.isFocused());
@@ -281,22 +282,22 @@ function updatePushes() {
   // Both corner tags always sit as far into their corner as they can: only
   // lifted above the palette when it's actually visible, only pulled in
   // from their side when that side panel is actually open.
-  versionTab.style.setProperty('--push-right', versionPush ? `max(${rightPush}, ${versionPush}px)` : rightPush);
-  versionTab.style.setProperty('--push-bottom', bottomPush);
+  helpTag.style.setProperty('--push-right', helpTagPush ? `max(${rightPush}, ${helpTagPush}px)` : rightPush);
+  helpTag.style.setProperty('--push-bottom', bottomPush);
   toolTag.style.setProperty('--push-left', slideOutPush ? `max(${leftPush}, ${slideOutPush}px)` : leftPush);
   toolTag.style.setProperty('--push-bottom', bottomPush);
 }
 
 // An open slide-out that covers the tool tag's corner shoves the tag past
-// its own right edge instead of hiding it. The version tag does the same to the
+// its own right edge instead of hiding it. The help tag does the same to the
 // left (a menu from the layers panel opens leftward over it).
-let slideOutPush = 0, versionPush = 0;
+let slideOutPush = 0, helpTagPush = 0;
 document.addEventListener('slideout-bounds', (e) => {
-  const bar = e.detail, tag = toolTag.getBoundingClientRect(), version = versionTab.getBoundingClientRect();
+  const bar = e.detail, tag = toolTag.getBoundingClientRect(), helpRect = helpTag.getBoundingClientRect();
   const covers = bar && bar.top < tag.bottom && bar.bottom > tag.top && bar.left < tag.right;
-  const coversVersion = bar && bar.top < version.bottom && bar.bottom > version.top && bar.right > version.left;
+  const coversHelpTag = bar && bar.top < helpRect.bottom && bar.bottom > helpRect.top && bar.right > helpRect.left;
   slideOutPush = covers ? snapPx(bar.right) : 0;
-  versionPush = coversVersion ? snapPx(window.innerWidth - bar.left) : 0;
+  helpTagPush = coversHelpTag ? snapPx(window.innerWidth - bar.left) : 0;
   updatePushes();
 });
 
@@ -365,13 +366,13 @@ function closeExportErrorModal() {
   setTimeout(() => el.remove(), 180); // matches keybind-help.js's TRANSITION_MS
 }
 
-// Shift+Tab: pin/unpin every panel at once. A plain toggle on whether *any*
+// Tab: pin/unpin every panel at once. A plain toggle on whether *any*
 // panel is currently pinned: the earlier stash-and-restore-exact-prior-state
 // version was a no-op whenever nothing happened to be pinned yet, which read
 // as broken.
 function toggleHideAllPanels() {
   // Colors/Layers/Timeline are removed outright in group view (setActiveGroup)
-  //: Shift+Tab shouldn't be able to pin them back open behind the scenes.
+  //: Tab shouldn't be able to pin them back open behind the scenes.
   const reveals = activeGroupId ? [projectReveal] : [projectReveal, layersReveal, timelineReveal, paletteReveal];
   const anyPinned = reveals.some((r) => r.isPinned());
   for (const r of reveals) {
@@ -392,12 +393,28 @@ const PANEL_CYCLE = ['timeline', 'layers', 'colors', 'projects'];
 // shows only once the keyboard is in use (a key press) or focus was moved by it.
 let focusFromMouse = false;
 document.addEventListener('keydown', () => { if (focusFromMouse) { focusFromMouse = false; syncFocusRing(); } }, true);
+// Two presses of the same panel's Ctrl+Arrow within this many ms make a double tap.
+const DOUBLE_TAP_MS = 350;
+let lastFocusTap = { panel: null, at: 0 };
 function setFocus(panel, { mouse = false } = {}) {
   focusFromMouse = mouse;
+  const reveal = PANEL_REVEAL[panel];
+  const now = performance.now();
+  const doubleTap = !mouse && !!reveal && lastFocusTap.panel === panel && now - lastFocusTap.at < DOUBLE_TAP_MS;
+  if (!mouse && reveal) lastFocusTap = { panel: doubleTap ? null : panel, at: now }; // a third press starts a new count
   if (focusedPanel === panel) {
-    // Focusing the panel that's already focused pins/unpins it instead of
-    // no-op-ing: "call it twice in a row" toggles whether it stays open.
-    if (PANEL_REVEAL[panel]) PANEL_REVEAL[panel].togglePin();
+    // Only a real double tap of the same panel's key toggles whether it stays
+    // open; a single press on the panel that already has focus does nothing.
+    // Unpinning has to close it and hand the keyboard back to the canvas: the
+    // focus itself would otherwise keep it open, and the unpin would look like nothing happened.
+    if (!doubleTap) return;
+    if (reveal.isPinned()) {
+      reveal.forceHide();
+      focusedPanel = 'canvas';
+      syncFocusRing();
+    } else {
+      reveal.setPinned(true);
+    }
     return;
   }
   if (PANEL_REVEAL[focusedPanel]) PANEL_REVEAL[focusedPanel].setKeyHeld(false);
@@ -930,12 +947,21 @@ function groupFitScale(layoutModel, viewW, viewH) {
   return snapScale(Math.max(0.05, Math.min((viewW - GROUP_FIT_PADDING * 2) / layoutModel.width, (viewH - GROUP_FIT_PADDING * 2) / layoutModel.height)), undefined, -1);
 }
 
+// Dragging a canvas around the collection grid to reorder it: `from` is its slot when
+// picked up, `to` the slot it hovers over (the others shift to make room), and (x, y)
+// the pointer in canvas pixels. Nothing changes in the project until it is dropped.
+let gridDrag = null; // { from, to, startX, startY, x, y, started }
+const GRID_DRAG_THRESHOLD = 4; // px before a press becomes a drag
+
 function renderGroupCanvas() {
   const artboards = groupArtboards();
+  const dragging = gridDrag && gridDrag.started;
+  if (dragging) artboards.splice(gridDrag.to, 0, ...artboards.splice(gridDrag.from, 1));
   const rect = canvas.getBoundingClientRect();
   const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(artboards), rect.width, rect.height);
   renderArtboardGrid(ctx, view.w, view.h, artboards, {
     appBg: groupAppBgCycler.get(), scale, panX: groupViewState.panX, panY: groupViewState.panY,
+    lift: dragging ? { index: gridDrag.to, x: gridDrag.x, y: gridDrag.y } : null,
   });
   updateToolTag();
 }
@@ -1030,7 +1056,7 @@ function currentCollectionId() {
 // open collection grid stays open and gains the new canvas.
 function commitNewFile(w, h, preset) {
   const collectionId = currentCollectionId();
-  addFile(project, `sprite${project.files.length + 1}`, w, h, collectionId);
+  addFile(project, nextName('Canvas', project.files.map((f) => f.name)), w, h, collectionId);
   if (preset && preset.palette) palette.loadPreset(preset.palette); // console sizes bring their palette
   bindActiveFile();
   resetView();
@@ -1745,8 +1771,55 @@ const mouseDragTools = {
 };
 inputController = createInputController(canvas, model, colors, renderCanvas, history, () => brushSize, () => selectionMask, mouseDragTools, () => !!activeGroupId);
 
+// Pressing on a canvas in the grid picks it up; past a few pixels it becomes a drag.
+function groupGridView() {
+  const rect = canvas.getBoundingClientRect();
+  const artboards = groupArtboards();
+  const scale = groupViewState.zoom || groupFitScale(groupLayoutModel(), rect.width, rect.height);
+  return { rect, artboards, opts: { scale, panX: groupViewState.panX, panY: groupViewState.panY } };
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (!activeGroupId || e.button !== 0) return;
+  const { rect, artboards, opts } = groupGridView();
+  const from = hitTestArtboardGrid(view.w, view.h, artboards, opts, e.clientX - rect.left, e.clientY - rect.top);
+  if (from < 0) return;
+  gridDrag = { from, to: from, startX: e.clientX, startY: e.clientY, x: 0, y: 0, started: false };
+  canvas.setPointerCapture(e.pointerId);
+});
+
+function endGridDrag(commit) {
+  const drag = gridDrag;
+  gridDrag = null;
+  if (!drag || !drag.started) return;
+  forceCursor(null);
+  if (commit && drag.to !== drag.from) {
+    // Slots are positions among this collection's canvases; the project orders them among everything.
+    const positions = projectOrder(project).flatMap((entry, pos) => (!entry.isHeader && entry.item.groupId === activeGroupId ? [pos] : []));
+    moveProjectItem(project, positions[drag.from], positions[drag.to]);
+    redrawProjectPanel();
+    autosave();
+  }
+  draw();
+}
+canvas.addEventListener('pointerup', () => endGridDrag(true));
+canvas.addEventListener('pointercancel', () => endGridDrag(false));
+
 canvas.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
+  if (gridDrag && activeGroupId) {
+    if (!gridDrag.started) {
+      if (Math.hypot(e.clientX - gridDrag.startX, e.clientY - gridDrag.startY) < GRID_DRAG_THRESHOLD) return;
+      gridDrag.started = true;
+      forceCursor('grab');
+    }
+    const { artboards, opts } = groupGridView();
+    gridDrag.x = e.clientX - rect.left;
+    gridDrag.y = e.clientY - rect.top;
+    gridDrag.to = slotAtPoint(view.w, view.h, artboards, opts, gridDrag.x, gridDrag.y);
+    draw();
+    return;
+  }
   if (activeGroupId) {
     // § tool tag tip: name + canvas size of whichever artboard the mouse
     // is over, same hit-test double-click (canvas dblclick, below) uses.
@@ -2685,16 +2758,16 @@ window.addEventListener('keydown', (e) => {
     setFocus(cycle[(from + 1) % cycle.length]);
     return;
   }
-  if (e.key === '~') { toggleTagsHidden(); return; }
-  if (e.key === '`' && !e.repeat) { heldBacktick = true; versionNavIndex = 0; updateVersionNavHighlight(); }
-  if (heldBacktick && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+  if (e.key === '`' && !e.repeat) { toggleTagsHidden(); return; }
+  if (e.key === '~' && !e.repeat) { helpNavHeld = true; helpNavIndex = 0; updateHelpNavHighlight(); }
+  if (helpNavHeld && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault();
     const dir = e.key === 'ArrowRight' ? 1 : -1;
-    versionNavIndex = (versionNavIndex + dir + versionNavItems.length) % versionNavItems.length;
-    updateVersionNavHighlight();
+    helpNavIndex = (helpNavIndex + dir + helpNavItems.length) % helpNavItems.length;
+    updateHelpNavHighlight();
     return;
   }
-  if (heldBacktick && e.key === 'Enter' && !e.repeat) { versionNavItems[versionNavIndex].click(); return; }
+  if (helpNavHeld && (e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); helpNavItems[helpNavIndex].click(); return; }
 
   // --- Per-panel dispatch ---
   if (focusedPanel === 'projects') { dispatchProjects(e); return; }
@@ -2775,7 +2848,7 @@ window.addEventListener('keyup', (e) => {
   if (SHAPE_KEYS[e.key.toLowerCase()]) { endShape(); return; }
   if (e.key === 'Enter') setHeldFill(false);
   if (e.key === 'i' || e.key === 'I') { setHeldD(false); return; }
-  if (e.key === '`') { heldBacktick = false; updateVersionNavHighlight(); return; }
+  if (e.code === 'Backquote') { helpNavHeld = false; updateHelpNavHighlight(); return; } // e.key may already read ` if Shift came up first
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     if (focusedPanel === 'timeline' && fpsRepeater) { fpsRepeater.stop(); fpsRepeater = null; }
   }
@@ -2800,8 +2873,8 @@ function resetHeldKeys() {
   panningKeyboard = false;
   leftCtrlDown = false;
   leftCtrlUsed = false;
-  heldBacktick = false;
-  updateVersionNavHighlight();
+  helpNavHeld = false;
+  updateHelpNavHighlight();
   if (fpsRepeater) { fpsRepeater.stop(); fpsRepeater = null; }
   if (rotating) endRotate();
   if (shapeState) endShape();

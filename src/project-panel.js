@@ -31,8 +31,8 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
 
   // The project icon says where projects are stored: a button that picks the
   // working directory where the browser can, otherwise a label warning that
-  // storage is temporary. The menu button has the same look and `.btn--reveal`
-  // hover treatment as every other row's menu button (canvas, collection).
+  // storage is temporary. The menu button looks the same as every other row's
+  // menu button (canvas, collection), and like them is always showing.
   const workDirTip = callbacks.workDirName || 'Choose working directory';
   const projectIcon = callbacks.onPickWorkDir
     ? button({ glyph: 'project', icon: true, className: 'project-icon', title: workDirTip, onClick: callbacks.onPickWorkDir })
@@ -42,7 +42,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     setIcon(projectIcon, 'project');
     hoverTip(projectIcon, 'Temporary storage, recommend regular backups.');
   }
-  const openBtn = button({ glyph: 'menu', icon: true, className: 'btn--reveal', title: 'Select project (\\)', onClick: () => callbacks.onOpenProject(openBtn) });
+  const openBtn = button({ glyph: 'menu', icon: true, title: 'Select project (\\)', onClick: () => callbacks.onOpenProject(openBtn) });
 
   header.append(projectIcon, nameEl, openBtn);
 
@@ -54,11 +54,11 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   const fileStack = document.createElement('div');
   fileStack.className = 'file-stack';
 
-  function buildFileRow(file, fileIndex, pos, nested) {
+  function buildFileRow(file, fileIndex, pos) {
     const row = document.createElement('div');
     const multiSelected = !!(fileSelection && fileSelection.has(fileIndex));
     const selected = !activeGroupId && (multiSelected || fileIndex === project.activeFileIndex);
-    row.className = 'file-row tile reveal-on-hover' + (nested ? ' file-row--nested' : '') + (selected ? ' selected' : '');
+    row.className = 'file-row tile reveal-on-hover' + (selected ? ' selected' : '');
     row.dataset.fileIndex = fileIndex; // § multi-select menu anchor lookup
     row.addEventListener('click', (e) => {
       // Shift/Alt-click build a multi-file selection instead of switching
@@ -94,7 +94,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     // Every per-file action folds into one menu instead of its own
     // always-reserved button slot.
     const menuBtn = button({
-      glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Canvas menu',
+      glyph: '⋯', icon: true, className: 'row-menu', title: 'Canvas menu',
       onClick: (e) => {
         e.stopPropagation();
         const items = [
@@ -164,12 +164,12 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
     menuItems.push({ label: 'Export', onClick: () => callbacks.onExportCollection(collection) });
     if (project.collections.length > 1) menuItems.push({ label: 'Remove', keys: '_', onClick: () => callbacks.onDeleteCollection(collection.id) });
     const menuBtn = button({
-      glyph: '⋯', icon: true, className: 'btn--reveal', title: 'Collection menu',
+      glyph: '⋯', icon: true, className: 'row-menu', title: 'Collection menu',
       disabled: menuItems.length === 0,
       onClick: (e) => { e.stopPropagation(); openSlideOut(menuBtn, menuItems); },
     });
 
-    row.append(handle, arrow, nameEl, menuBtn);
+    row.append(handle, nameEl, arrow, menuBtn);
     return row;
   }
 
@@ -182,7 +182,7 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
       fileStack.append(buildCollectionHeader(entry.item, entry.pos));
     } else {
       const fileIndex = project.files.indexOf(entry.item);
-      fileStack.append(buildFileRow(entry.item, fileIndex, entry.pos, entry.item.groupId != null));
+      fileStack.append(buildFileRow(entry.item, fileIndex, entry.pos));
     }
   }
 

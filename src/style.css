@@ -49,6 +49,8 @@
   --text-primary: var(--gray-1);
   --text-secondary: var(--gray-4);
   --text-muted: var(--gray-5);
+  --text-tertiary: var(--gray-6); /* between the secondary text and the faint controls: canvas names at rest */
+  --text-faint: var(--gray-7); /* barely there: controls that should not compete with the content */
 
   --checker-light: #DEDEDE;
   --checker-dark: #CFCFCF;
@@ -174,6 +176,7 @@
   --bevel-chip-pressed: inset 0 1px 0 0 var(--white-a20), inset -1px 0 0 0 var(--black-a30), inset 0 -7px 0 0 var(--black-a35);
   --edge-highlight-top: inset 0 1px 0 var(--panel-edge-highlight);
   --edge-shadow-above: 0 calc(var(--border-width) * -1) 0 var(--black-a03); /* a hairline just outside a panel's top edge */
+  --edge-shadow-below: 0 var(--border-width) 0 var(--black-a03); /* the same hairline just outside a panel's bottom edge */
   --shadow-drag: 0 4px 12px var(--black-a50);
 }
 
@@ -409,6 +412,11 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   transition: width var(--dur-slow) ease;
 }
 .side-panel.panel-hidden { width: 0; }
+/* A panel on the left collapses toward the screen edge like the right-hand one: its content keeps its
+   full width and is pinned to the panel's moving (right) edge, so it travels off the page with it instead
+   of staying put while the box wipes shut over it. */
+.panel-overlay-left.side-panel { align-items: flex-end; }
+.panel-overlay-left.side-panel > * { width: calc(var(--panel-width) - var(--border-width)); }
 /* Outer-edge highlight: a lightened tint of the panel's own fill,
    separating it from the canvas/viewport behind it. Only while visible:
    border-left/right renders full-height regardless of width, so a
@@ -430,6 +438,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    height dependency, so a collapsed (height:0) panel would otherwise
    still render as a persistent hairline instead of fully disappearing. */
 #timeline-bar:not(.panel-hidden) { border-top: var(--border-width) solid var(--panel-edge-highlight); }
+/* The palette bar's hairline, mirrored under the timeline. */
+#timeline-bar:not(.panel-hidden) { box-shadow: var(--edge-shadow-below); }
 #timeline-bar.panel-hidden { height: 0; }
 
 /* ---- Palette bar (bottom edge, shrinks around open side panels) ------ */
@@ -453,7 +463,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    edge when the palette is closed, only pushed up above it when the
    palette is actually there: same idea for the layers panel and
    --push-right. main.js keeps both custom properties in sync. */
-#version-tab {
+#help-tag {
   position: absolute;
   right: var(--push-right, 0);
   bottom: var(--push-bottom, 0);
@@ -477,18 +487,18 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    shadow paints beneath the tag's children, so any solid child (the swatch,
    a hovered link) covered it. The overlay sits above them and ignores the
    pointer. Both corner tags are absolutely positioned, so it anchors to them. */
-#version-tab::after, #tool-tag::after {
+#help-tag::after, #tool-tag::after {
   content: '';
   position: absolute;
   inset: 0;
   box-shadow: var(--edge-highlight-top);
   pointer-events: none;
 }
-#version-tab.hidden-tag { display: none; }
+#help-tag.hidden-tag { display: none; }
 /* Hold-`+Left/Right keyboard focus (main.js): same treatment a real
    :focus-visible ring would give, just driven by our own held-key state
    instead of actual DOM focus. */
-.version-nav-focused { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
+.help-nav-focused { outline: var(--stroke-strong) solid var(--accent); outline-offset: var(--outline-offset); }
 /* The report-bug/Discord/help buttons are plain `.btn`s, whose universal
    height is a full block: but this tag is a `.panel` with its own 1px
    border eating into that space, so a full-block-tall child overflows
@@ -498,8 +508,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    its readout, which isn't itself clickable. Real icon buttons use
    `.btn.btn--icon` instead, for the hover/focus/border treatment. A
    plain full block, same as every other icon in the app: the tag
-   itself (not this) accounts for its own border, see #version-tab. */
-.version-tab-icon {
+   itself (not this) accounts for its own border, see #help-tag. */
+.tag-icon {
   width: var(--block);
   display: flex;
   align-items: center;
@@ -509,7 +519,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   color: var(--text-secondary);
 }
 
-/* Tool reference tag: same idea as #version-tab, mirrored to the bottom
+/* Tool reference tag: same idea as #help-tag, mirrored to the bottom
    left: hugs the corner, pushed right by the Project panel instead of
    left by the Layers panel. "`" toggles both tags at once. */
 #tool-tag {
@@ -517,7 +527,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   left: var(--push-left, 0);
   bottom: var(--push-bottom, 0);
   z-index: var(--z-tag);
-  height: var(--block); /* see #version-tab */
+  height: var(--block); /* see #help-tag */
   padding-top: var(--border-width);
   display: flex;
   align-items: stretch;
@@ -529,7 +539,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
      a real bevel edge) keeps it subtle: this edge doesn't sit against an
      open/closed panel the way a side panel's does. */
   border-right-color: var(--hairline);
-  /* Top edge 1px in from the corner: see #version-tab. */
+  /* Top edge 1px in from the corner: see #help-tag. */
   border-top: none;
 }
 #tool-tag.hidden-tag { display: none; }
@@ -860,7 +870,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 }
 
 /* ---- Palette-preset slide-out (opened by the hamburger) -------------- */
-.palette-preset-panel { min-width: calc(var(--block) * 2); }
 .palette-preset-panel .btn { justify-content: flex-start; }
 .palette-preset-panel .palette-rule { border-top: var(--border-width) solid var(--hairline); }
 .palette-row { display: flex; }
@@ -868,7 +877,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* ---- Project capacity meter: plain filled rectangle, no gradient ------ */
 /* The add-file row gives up the meter's height so the two together stay one
    block tall, keeping the panel's footer on the grid. */
-.project-add-row { height: calc(var(--block) - var(--meter-h) + var(--border-width)); }
+.project-add-row { height: calc(var(--block) - var(--meter-h)); }
 .project-add-row .btn { height: 100%; }
 .capacity-meter { height: var(--meter-h); background: var(--accent-dark); border-top: var(--border-width) solid var(--hairline); }
 /* min-width: a sliver is always lit, even at 0% load: purely for looks */
@@ -940,17 +949,25 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   mask: center / 100% 100% no-repeat;
   pointer-events: none;
 }
-/* A key icon inside a line of text: sits on the baseline, as tall as a capital. */
-.btn .icon { background: var(--text-secondary); }
-.btn:hover .icon, .btn:focus-visible .icon, .btn.selected .icon, .btn.active .icon { background: var(--text-primary); }
+/* Every icon you can act on is dim like the grab handles and fold arrows: faint at rest, full on hover or focus,
+   dark red when its button is switched on (the accent fill it sits on). */
+.btn .icon { background: var(--text-faint); }
+.btn:hover .icon, .btn:focus-visible .icon { background: var(--text-primary); }
+.btn.selected .icon, .btn.active .icon { background: var(--accent-dark); }
+.btn.selected:hover .icon, .btn.active:hover .icon { background: var(--text-primary); }
 /* the heart sits a device pixel low in its block: lift it */
 .icon--lift { transform: translateY(calc(var(--icon-px) / -2)); }
 /* the app icon sits two device pixels low */
 .icon--lift-2 { transform: translateY(calc(var(--icon-px) * -1)); }
-/* the version tag's icons all sit a device pixel higher; `translate` adds to the lifts above rather than replacing them */
-#version-tab .icon { translate: 0 calc(var(--icon-px) / -2); }
+/* the help tag's icons all sit a device pixel higher; `translate` adds to the lifts above rather than replacing them */
+#help-tag .icon { translate: 0 calc(var(--icon-px) / -2); }
+/* The menu icon is centred: its bars are 3 of the 6 pixels wide, so half the spare room moves it over. In a selected tile every button icon is dark red, like the handle. */
+.icon--menu { translate: calc(var(--icon-px) * 1.5) 0; }
+.tile.selected .btn .icon, .tile.active .btn .icon { background: var(--accent-dark); }
+.tile.selected .btn:hover .icon, .tile.active .btn:hover .icon { background: var(--text-primary); }
 .btn:hover .icon--heart { background: var(--accent); }
 .icon--new { transform: translateY(calc(var(--icon-px) / -2)); } /* its top row is empty: lift it so the drawing centres */
+/* A key icon inside a line of text: sits on the baseline, as tall as a capital. */
 .icon--inline { display: inline-block; vertical-align: baseline; --icon-px: calc(var(--font-body) / 16); }
 
 .file-list {
@@ -961,11 +978,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 }
 .file-stack { margin-top: auto; }
 .file-row { box-shadow: inset 0 calc(var(--border-width) * -1) 0 var(--black-a10); overflow: hidden; }
-/* Nested under a collection/group header: indent the handle and name (not
-   the trailing resize/export buttons), so a nested file visibly sits inside
-   its collection instead of reading as just another top-level row. */
-.file-row--nested .drag-handle { margin-left: calc(var(--pad) * 1.5); }
-.file-row--nested .file-row-name { padding-left: calc(var(--pad) * 1.5); }
 .layer-row--nested .layer-label { padding-left: calc(var(--pad) * 2); }
 
 .file-row-name {
@@ -1005,15 +1017,16 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* Same left/right inset every other row/label in the app gives its text
    (.file-row-name, .project-name, etc.): a fill button sized to a bare
    text width would otherwise read as edge-to-edge cramped. */
-.slide-out-bar .btn { padding: 0 var(--pad); }
-/* .btn centers its label, which lands on a half device pixel whenever the
-   label's width and the block-snapped bar width differ by an odd amount,
-   blurring the pixel font. */
+/* The pixel font ends every word with a blank column (one font pixel, 1/16 em) after the last glyph,
+   so the right padding is that much smaller to leave the same room to the ink on both sides. */
+.slide-out-bar .btn { padding: 0 calc(var(--pad) - 1em / 16) 0 var(--pad); }
+/* Left-aligned, not centred: the bar is exactly as wide as its longest label plus the padding either
+   side, so the shorter labels leave their spare room on the right. */
 .slide-out-bar .btn--fill { justify-content: flex-start; }
 /* `.btn--fill`'s own 2-block floor is for its other callers (export
    format/scale, "Add layer or group"): a slide-out menu is deliberately
-   allowed to snap to a single block when that's all its longest label
-   needs (slide-out.js's snapToBlockWidth is what actually sets the width). */
+   allowed to be as narrow as its longest label needs (slide-out.js's
+   pinToContentWidth is what actually sets the width). */
 .slide-out-bar .btn--fill { min-width: 0; }
 
 /* Chevron pointing back at whichever tile/anchor opened the bar: flush
@@ -1213,9 +1226,15 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   align-items: center;
   justify-content: center;
   font-size: var(--font-body);
-  color: var(--text-secondary);
+  color: var(--text-faint);
 }
 .drag-handle:hover { color: var(--text-primary); }
+/* The dots are the icon's left-hand column: shift the icon so they sit in the middle of the handle's block, with equal room either side. */
+.drag-handle .icon { translate: calc(var(--icon-px) * 2.5) 0; }
+/* On the red of a selected or menu-owning row the faint grey has about the same value as the fill: a dark red instead, so it recedes but reads. */
+.tile.selected .drag-handle, .tile.active .drag-handle,
+.tile.selected .fold-arrow, .tile.active .fold-arrow { color: var(--accent-dark); }
+.tile.selected .drag-handle:hover, .tile.active .drag-handle:hover { color: var(--text-primary); }
 
 /* Collection/group header fold toggle: the one clickable element that
    collapses/expands; the name text itself only renames (double-click), it
@@ -1229,19 +1248,13 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   align-items: center;
   justify-content: center;
   font-size: var(--font-body);
-  color: var(--text-secondary);
+  color: var(--text-faint);
 }
-.collection-header .fold-arrow, .layer-group-header .fold-arrow {
-  /* The same space either side of the icon: 1em from the grab handle's dots (which
-     end half an em into their box) and 1em to the name. */
-  flex: 0 0 auto;
-  width: calc(var(--icon-px) * 6 + 1em);
-  justify-content: flex-start;
-}
-.fold-arrow + .file-row-name, .fold-arrow + .layer-label { padding-left: 0; }
 .fold-arrow:hover,
 .collection-header.selected:hover .fold-arrow, .layer-group-header.selected:hover .fold-arrow { color: var(--text-primary); }
 /* The project icon labels the project header: an icon, not a button. */
+/* A row's menu button is a bare icon like the grab handle and fold arrow: no bevel or fill (the icon's own colours are the .icon--menu rules). */
+.btn.row-menu, .btn.row-menu:hover, .btn.row-menu:active { background: none; border-width: 0; }
 .project-icon { flex: 0 0 var(--block); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
 /* A light line above and a shadow line below, so a header reads as a raised
    divider between the rows it groups instead of one more row. Inset shadows,
@@ -1286,7 +1299,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   align-items: center;
   justify-content: center;
 }
-.eye-pip { color: var(--text-secondary); }
+.eye-pip { color: var(--text-faint); }
 .eye-pip:hover { color: var(--text-primary); }
 .eye-pip.hidden-indicator { color: var(--accent-dark); }
 .eye-pip.hidden-indicator:hover { color: var(--accent-light); }
@@ -1306,6 +1319,7 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 }
 /* Names are dim until their row is hovered, selected, or being renamed. */
 .file-row-name, .layer-label, .project-name { color: var(--text-secondary); }
+.file-row .file-row-name { color: var(--text-tertiary); }
 .tile:hover .file-row-name, .tile:hover .layer-label, .project-header:hover .project-name,
 .tile.selected .file-row-name, .tile.active .file-row-name, .tile.selected .layer-label, .tile.active .layer-label, .project-header.active .project-name,
 .file-row-name[contenteditable="true"], .layer-label[contenteditable="true"], .project-name[contenteditable="true"] { color: var(--text-primary); }

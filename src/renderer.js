@@ -161,7 +161,9 @@ export function computeArtboardLayout(artboards, gap = ARTBOARD_GAP) {
   return { cols, rows, cellW, cellH, stepX, stepY, totalW: cols * stepX - gap, totalH: rows * stepY - gap };
 }
 
-export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'black', scale = 1, panX = 0, panY = 0 } = {}) {
+// `lift`, while a canvas is being dragged: `{ index, x, y }`. Its own cell shows it faded,
+// and it is drawn again, centred on (x, y), following the pointer.
+export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'black', scale = 1, panX = 0, panY = 0, lift = null } = {}) {
   // The group grid has no single shared pixel grid spanning the whole
   // viewport (every artboard has its own) to pin a checker to, so this one
   // tiles in plain screen pixels (scale 1, origin 0,0) instead of the
@@ -184,8 +186,29 @@ export function renderArtboardGrid(ctx, viewW, viewH, artboards, { appBg = 'blac
 
     // No per-artboard fill: every artboard is transparent, showing the one
     // shared backdrop (`appBg`, filled once above) straight through.
+    if (lift && lift.index === i) ctx.globalAlpha = 0.3;
     drawBoard(ctx, board, ox, oy, w, h);
+    ctx.globalAlpha = 1;
   });
+
+  if (lift) {
+    const board = artboards[lift.index];
+    ctx.globalAlpha = 0.85;
+    drawBoard(ctx, board, lift.x - (board.width * scale) / 2, lift.y - (board.height * scale) / 2, board.width * scale, board.height * scale);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// The grid slot (an index into `artboards`) nearest screen point (x, y): the cell it
+// falls in, clamped to the grid. Unlike hitTestArtboardGrid it also answers for the gaps
+// and margins, so a dragged canvas always has somewhere to land.
+export function slotAtPoint(viewW, viewH, artboards, { scale = 1, panX = 0, panY = 0 } = {}, x, y) {
+  const layout = computeArtboardLayout(artboards);
+  const originX = viewW / 2 - (layout.totalW * scale) / 2 + panX;
+  const originY = viewH / 2 - (layout.totalH * scale) / 2 + panY;
+  const col = Math.max(0, Math.min(layout.cols - 1, Math.floor((x - originX) / (layout.stepX * scale))));
+  const row = Math.max(0, Math.min(layout.rows - 1, Math.floor((y - originY) / (layout.stepY * scale))));
+  return Math.min(artboards.length - 1, row * layout.cols + col);
 }
 
 // Screen-space hit test for renderArtboardGrid's own layout: which

@@ -186,8 +186,8 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
       startInlineEdit(label, group.name, (v) => { if (v) { group.name = v; callbacks.onRename(); } });
     });
 
-    // Fold arrow directly between the grab handle and the name.
-    row.append(handle, arrow, label, eyePip);
+    // The fold arrow sits at the right edge, after the visibility pip.
+    row.append(handle, label, eyePip, arrow);
     // A click selects the group. A double click on empty space in the row folds or
     // unfolds it; on the name's text it renames instead (above).
     row.addEventListener('click', () => { if (group.id !== focusedGroupId) callbacks.onSelectGroup(group.id); });

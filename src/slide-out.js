@@ -106,31 +106,15 @@ export function positionSlideOut(bar, anchor, side) {
   return fromTransform;
 }
 
-// A throwaway element is the simplest reliable way to read `--block` in
-// actual pixels: it's defined in `em`, so its resolved size depends on
-// font-size context, and a custom property's raw value (getComputedStyle's
-// getPropertyValue) comes back as the unresolved string "1.5em", not a
-// usable number.
-function blockSizePx() {
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed; visibility:hidden; width:var(--block);';
-  document.body.append(probe);
-  const px = probe.getBoundingClientRect().width;
-  probe.remove();
-  return px;
-}
-
-// Rounds `bar`'s width up to the nearest whole block and pins it there:
-// every button in the list is `fill` (100% of the bar), so this is what
-// makes them all snap to the same block-multiple width together: a menu
-// whose longest label fits in one block renders every item at one block
-// wide, a menu needing three blocks renders every item three blocks wide.
-// Must run after `bar` (and its buttons) are actually in the document:
+// Pins `bar`'s width to its widest item: text plus the same padding on the
+// left and the right (`.slide-out-bar .btn`), rounded up to a whole device
+// pixel. Every button in the list is `fill` (100% of the bar), so they all come
+// out the width of the longest label, left-aligned, with no spare room on the
+// right. Must run after `bar` (and its buttons) are actually in the document:
 // a detached element has no layout size to measure.
-function snapToBlockWidth(bar) {
-  const blockPx = blockSizePx();
-  const natural = bar.getBoundingClientRect().width;
-  bar.style.width = Math.ceil(natural / blockPx) * blockPx + 'px';
+function pinToContentWidth(bar) {
+  const dpr = window.devicePixelRatio || 1;
+  bar.style.width = Math.round(bar.getBoundingClientRect().width * dpr) / dpr + 'px'; // round, not ceil: a float error of 0.000001 would add a whole pixel
 }
 
 // Whichever row/header owns a currently-open slide-out gets the same red
@@ -201,10 +185,10 @@ function finishOpen(bar, anchor, side, { onDismiss, snapWidth } = {}) {
   activeOwnerPanel?.dispatchEvent(new CustomEvent('slideout-open'));
 
   // In the document (off-screen/invisible via the position+opacity set
-  // right after) before measuring: snapToBlockWidth and positionSlideOut
+  // right after) before measuring: pinToContentWidth and positionSlideOut
   // both need real layout geometry, which a detached element doesn't have.
   document.body.append(bar);
-  if (snapWidth) snapToBlockWidth(bar);
+  if (snapWidth) pinToContentWidth(bar);
   const fromTransform = positionSlideOut(bar, anchor, side);
   announceBounds(bar);
   bar.style.transform = fromTransform;
