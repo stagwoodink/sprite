@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in Sprite is broken or behaves wrongly.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. New canvas 16x16
+        2. ...
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Sprite version
+      description: The number in the help tag's Sprite button tip, for example v0.5.3.
+    validations:
+      required: false
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and system
+      placeholder: Chrome 130 on Linux
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or console output
+      description: Drag images in, or paste any red errors from the browser console (F12).
+    validations:
+      required: false

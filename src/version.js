@@ -4,8 +4,8 @@
 // bump PATCH, a breaking change bumps MINOR, never auto-bump to 1.0.0).
 export const VERSION = '0.5.3';
 
-export const GITHUB_ISSUES_URL = 'https://github.com/stagwoodink/sprite/issues';
+export const GITHUB_ISSUES_URL = 'https://github.com/stagwoodink/sprite/issues/new?template=bug_report.yml';
 export const ITCH_IO_URL = 'https://xanderstagwood.itch.io/sprite';
 // ponytail: placeholder page, replace with the real Ko-fi URL.
 export const KOFI_URL = 'https://ko-fi.com/xanderstagwood';
-export const DISCORD_URL = 'https://discord.gg/ytPJyq7kdw';
+export const DISCORD_URL = 'https://discord.gg/TFvXQdrjYM';
