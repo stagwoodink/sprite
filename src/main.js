@@ -76,27 +76,29 @@ try {
 }
 const uiPrefs = await loadUiPrefs(backend);
 
-// The Projects button pulses red until it is pressed, but only where the browser can connect a
-// folder at all and none is connected yet. Its edge trigger pulses too while the panel is shut.
-const canNudgeWorkDir = () => !!window.showDirectoryPicker && backend.kind === 'idb' && !uiPrefs.workDirNudged;
-document.getElementById('project-trigger').classList.toggle('nudge', canNudgeWorkDir());
-function stopWorkDirNudge() {
-  if (uiPrefs.workDirNudged) return;
-  uiPrefs.workDirNudged = true;
+// First-run hints: one control at a time pulses, chosen by body[data-hint] (style.css). Steps only
+// move forward, and jump ahead if the user gets there first (Alt++ before ever opening the menu).
+const HINT_STEPS = ['folder', 'menu', 'new', 'colors', 'kofi', 'done'];
+function setHint(step) {
+  if (HINT_STEPS.indexOf(step) <= HINT_STEPS.indexOf(uiPrefs.hint)) return;
+  uiPrefs.hint = step;
+  document.body.dataset.hint = step;
   saveUiPrefs(uiPrefs);
-  document.querySelectorAll('.nudge').forEach((el) => el.classList.remove('nudge'));
 }
+document.body.dataset.hint = uiPrefs.hint;
+if (backend.kind === 'fsa') setHint('menu'); // a folder is already connected
 let activeReferenceId = null; // the reference `:` acts on: the one last added or clicked
 
 // Floats above the palette's right edge; slides left with it when the
 // layers panel pushes the palette over.
 // Buttons, not <a href>: the browser's status bubble showing a hovered link's URL
 // covers the tool tag, which is where these buttons' tips appear.
-const openLink = (glyph, title, url) => button({ glyph, icon: true, title, onClick: () => window.open(url, '_blank', 'noopener') });
+const openLink = (glyph, title, url, className) => button({ glyph, icon: true, title, className, onClick: () => window.open(url, '_blank', 'noopener') });
 const landingBtn = openLink('sprite', `Sprite v${VERSION}`, ITCH_IO_URL);
 const bugBtn = openLink('bug', 'Report an issue.', GITHUB_ISSUES_URL);
 const discordBtn = openLink('discord', 'App Support (Discord)', DISCORD_URL);
-const kofiBtn = openLink('heart', 'Become a supporter. (Kofi)', KOFI_URL);
+const kofiBtn = openLink('heart', 'Become a supporter. (Kofi)', KOFI_URL, 'kofi-btn');
+kofiBtn.addEventListener('click', () => { if (uiPrefs.hint === 'kofi') setHint('done'); });
 
 // Toggles the same Controls modal as "?".
 const helpBtn = button({ glyph: 'help', icon: true, title: 'Controls', onClick: () => keybindHelp.toggle() });
@@ -345,6 +347,7 @@ paletteReveal = createRevealablePanel(paletteBar, document.getElementById('palet
 });
 updatePushes(); // final pass: the four constructions above ran with partial info
 const keybindHelp = createKeybindHelp();
+paletteBar.addEventListener('click', (e) => { if (e.target.closest('.palette-hamburger')) setHint('kofi'); });
 
 // Minimal generic modal for the export-error label's "click for more info"
 // (openExportErrorModal above). Mirrors keybind-help.js's proven
@@ -1152,7 +1155,7 @@ function redrawProjectPanel() {
     },
     onOpenProject: (anchor) => openProjectPicker(anchor),
     workDirName: backend.name,
-    nudgeWorkDir: canNudgeWorkDir(),
+    onReadBackupWarning: () => setHint('menu'),
     onPickWorkDir: window.showDirectoryPicker && pickWorkDir,
   }, focusedCollectionId(), activeGroupId, fileSelection);
 }
@@ -1160,7 +1163,7 @@ function redrawProjectPanel() {
 // The backend is chosen once at startup (chooseBackend), so a new folder takes
 // effect through a reload, after the outgoing project's edits are flushed.
 async function pickWorkDir() {
-  stopWorkDirNudge();
+  setHint('menu');
   try {
     await saveProject(backend, project);
     if (!await connectFolder()) return;
@@ -1439,6 +1442,7 @@ async function importProjectFile(file) {
 }
 
 async function newProject() {
+  setHint('colors');
   // Iterative naming (matches how new files/layers avoid colliding, just
   // checked against the real saved-project registry instead of an index):
   // "New Project", then "New Project 2", "New Project 3", ... rather than
@@ -1540,8 +1544,9 @@ window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault()
 window.addEventListener('drop', (e) => { if (hasFiles(e)) e.preventDefault(); });
 
 function openProjectPicker(anchor) {
+  setHint('new');
   const options = [
-    { label: 'New', keys: 'Alt++', onClick: () => newProject() },
+    { label: 'New', className: 'hint-target', keys: 'Alt++', onClick: () => newProject() },
     { label: 'Import', onClick: () => openImportMenu(anchor) },
     // Docks the actual project list beside Project (openProjectListPanel):
     // not flattened into this menu (projects aren't fixed one-off actions

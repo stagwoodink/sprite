@@ -238,10 +238,10 @@ export function openSlideOut(anchor, buttons, { side = 'right', onDismiss } = {}
   let close;
   const items = [...buttons].sort((a, b) => distanceRank(a) - distanceRank(b));
   if (side === 'up' || anchor.getBoundingClientRect().top > window.innerHeight / 2) items.reverse();
-  for (const { label, onClick, accent, keys } of items) {
+  for (const { label, onClick, accent, keys, className } of items) {
     // Close first: an item that opens a follow-up menu from the same anchor
     // (Columns) would otherwise hit the anchor-toggle above and close itself.
-    const btn = button({ label, title: keys, fill: true, selected: accent, onClick: () => { close(); onClick(); } });
+    const btn = button({ label, title: keys, fill: true, selected: accent, className, onClick: () => { close(); onClick(); } });
     bar.append(btn);
   }
 

@@ -38,12 +38,16 @@ export function renderProjectPanel(container, project, callbacks, focusedCollect
   // menu button (canvas, collection), and like them is always showing.
   const workDirTip = callbacks.workDirName || 'Choose working directory';
   const projectIcon = callbacks.onPickWorkDir
-    ? button({ glyph: 'project', icon: true, className: 'project-icon' + (callbacks.nudgeWorkDir ? ' nudge' : ''), title: workDirTip, onClick: callbacks.onPickWorkDir })
+    ? button({ glyph: 'project', icon: true, className: 'project-icon', title: workDirTip, onClick: callbacks.onPickWorkDir })
     : document.createElement('div');
   if (!callbacks.onPickWorkDir) {
     projectIcon.className = 'project-icon';
     setIcon(projectIcon, 'project');
     hoverTip(projectIcon, 'Temporary storage, recommend regular backups.');
+    // Long enough to have read the tip counts as having seen the warning.
+    let readTimer;
+    projectIcon.addEventListener('mouseenter', () => { readTimer = setTimeout(callbacks.onReadBackupWarning, 1500); });
+    projectIcon.addEventListener('mouseleave', () => clearTimeout(readTimer));
   }
   const openBtn = button({ glyph: 'menu', icon: true, className: 'project-menu', title: 'Select project (\\)', onClick: () => callbacks.onOpenProject(openBtn) });
 

@@ -1258,11 +1258,16 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* The project icon labels the project header: an icon, not a button. */
 /* A row's menu button is a bare icon like the grab handle and fold arrow: no bevel or fill (the icon's own colours are the .icon--menu rules). */
 .btn.row-menu, .btn.row-menu:hover, .btn.row-menu:active { background: none; border-width: 0; }
-/* Asks for a working folder (main.js): the icon breathes between its dim colour and the accent, and while the panel is
-   shut a short accent bar at its foot, on the left edge, does the same. Still, not moving, if the user prefers less motion. */
+/* First-run hints (main.js setHint): body[data-hint] names the one control that breathes between its dim colour and the
+   accent. While the project panel is shut, a short accent bar at the foot of its edge, on the left, does the same.
+   With reduced motion the pulse is off and the control stays solid accent. */
 @keyframes nudge-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-.project-icon.nudge .icon { background: var(--accent); animation: nudge-pulse 1.4s ease-in-out infinite; }
-.edge-trigger-left.nudge::after {
+body[data-hint="folder"] .project-icon .icon,
+body:is([data-hint="menu"], [data-hint="new"]) .project-menu .icon,
+body[data-hint="colors"] .palette-hamburger .icon,
+body[data-hint="kofi"] .kofi-btn .icon { background: var(--accent); animation: nudge-pulse 1.4s ease-in-out infinite; }
+body[data-hint="new"] .hint-target { animation: nudge-pulse 1.4s ease-in-out infinite; }
+body:is([data-hint="folder"], [data-hint="menu"], [data-hint="new"]) .edge-trigger-left::after {
   content: '';
   position: absolute;
   left: 0;
@@ -1274,7 +1279,8 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .project-icon.nudge .icon, .edge-trigger-left.nudge::after { animation: none; opacity: 1; }
+  body[data-hint] .icon, body[data-hint] .hint-target, body[data-hint] .edge-trigger-left::after { animation: none; opacity: 1; }
+  body[data-hint="new"] .hint-target { background: var(--accent); }
 }
 /* the project header's menu icon sits a device pixel higher than the row menus' */
 .project-menu .icon { transform: translateY(calc(var(--icon-px) / -2)); }
