@@ -80,10 +80,14 @@ export function startInlineEdit(el, initial, onCommit) {
   sel.removeAllRanges();
   sel.addRange(range);
 
+  let done = false;
   function finish(commit) {
+    if (done) return;
+    done = true;
     el.contentEditable = 'false';
     el.removeEventListener('keydown', onKeydown);
     el.removeEventListener('blur', onBlur);
+    document.removeEventListener('pointerdown', onOutside, true);
     if (commit) {
       const value = el.textContent.trim();
       el.textContent = value || initial; // reflect immediately; the caller's re-render overwrites this if it changes
@@ -97,8 +101,12 @@ export function startInlineEdit(el, initial, onCommit) {
     if (e.key === 'Escape') { e.preventDefault(); finish(false); }
   }
   function onBlur() { finish(true); }
+  // A click anywhere else ends the edit. Blur alone misses clicks on things that
+  // don't take focus and cancel the default action (the canvas, panel gaps).
+  function onOutside(e) { if (!el.contains(e.target)) finish(true); }
   el.addEventListener('keydown', onKeydown);
   el.addEventListener('blur', onBlur, { once: true });
+  document.addEventListener('pointerdown', onOutside, true);
 }
 
 // A floating copy of `row` that follows the cursor while dragging: the
