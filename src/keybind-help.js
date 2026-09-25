@@ -7,8 +7,8 @@ import { hoverTip } from './ui.js';
 const GROUPS = [
   ['Global', [
     ['?', 'Show/hide this modal'],
-    ['Tab', 'Cycle focus through panels (Timeline > Layers > Colors > Projects)'],
-    ['Shift+Tab', 'Pin/unpin every panel at once'],
+    ['Shift+Tab', 'Cycle focus through panels (Timeline > Layers > Colors > Projects)'],
+    ['Tab', 'Pin/unpin every panel at once'],
     ['~', 'Pin/unpin the corner tags'],
     ['`', 'Hold + Left/Right to select a version-tab button, Return to launch'],
     ['Ctrl+Z / Ctrl+Shift+Z', 'Undo / Redo'],

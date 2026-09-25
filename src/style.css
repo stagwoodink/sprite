@@ -41,6 +41,7 @@
      side panel visually stacks in front of a top/bottom one. */
   --panel-edge-highlight: #2E2E33;
   --panel-edge-shadow: rgba(0, 0, 0, 0.4);
+  --panel-edge-shadow-solid: color-mix(in srgb, #000 40%, var(--bg-elevated)); /* the same shade laid over a panel, for a shape that sits over whatever is behind it */
   --accent: #BE1425; /* sampled from spec/stagwood.png, dominant red pixel */
   --accent-shadow: #7A0C18;
   --accent-light: #CE4F5C; /* accent mixed 25% toward white, for versatility */
@@ -265,23 +266,10 @@
 /* Pointer-based reorder feedback (see makeReorderable in ui.js): the row
    being dragged fades in place (the floating .drag-ghost is what actually
    tracks the cursor), the rows slide to open the gap, and dragging past the
-   panel's edge marks it for removal with a red X: the same "dragged off = remove" cue the palette
+   panel's edge marks it for removal with the remove icon: the same "dragged off = remove" cue the palette
    chips already use. */
 .tile.dragging { opacity: var(--opacity-muted); }
 .tile.removing { opacity: 1; }
-.tile.removing::after {
-  content: '✕';
-  font-family: var(--icon-font);
-  position: absolute;
-  inset: 0;
-  z-index: var(--z-raised);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-a75); /* var(--accent) at partial opacity */
-  color: var(--text-primary);
-  font-size: var(--font-body);
-}
 
 .drag-ghost {
   z-index: var(--z-modal);
@@ -679,6 +667,9 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 /* Native drag-and-drop reorder (ui.js's attachNativeDragReorder): same
    dim-while-dragging convention as `.tile.dragging`/`.chip.dragging`. */
 .frame-tile.dragging { opacity: var(--opacity-muted); }
+/* Dragged off the timeline: removed on release. The tile's ::after is its active marker, so the red is its own fill showing through a faded thumbnail. */
+.frame-tile.removing { opacity: 1; background: var(--accent); }
+.frame-tile.removing canvas { opacity: var(--opacity-muted); }
 .frame-tile::after {
   content: '';
   position: absolute;
@@ -709,23 +700,6 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
   z-index: var(--z-focus);
 }
 .frame-tile canvas { display: block; height: calc(var(--block) * 2); width: auto; image-rendering: pixelated; }
-
-.frame-delete {
-  font-family: var(--icon-font);
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: var(--block);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-hover);
-  color: var(--accent);
-  font-size: var(--font-body);
-  --cursor: click;
-}
-.frame-tile:hover .frame-delete { display: flex; }
 
 .frame-insert-gap {
   flex: 0 0 0;
@@ -782,18 +756,25 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
 .chip.dragging { opacity: var(--opacity-muted); }
 /* Dragged past the palette's edge: about to be dropped/removed. */
 .chip.removing { opacity: 1; }
-.chip.removing::after {
-  content: '✕';
-  font-family: var(--icon-font);
+/* Dragged off the panel: a red wash with the remove icon over it. */
+.tile.removing::after, .chip.removing::after {
+  content: '';
   position: absolute;
   inset: 0;
   z-index: var(--z-raised);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: var(--accent-a75); /* var(--accent) at partial opacity */
-  color: var(--text-primary);
-  font-size: var(--font-body);
+}
+.tile.removing::before, .chip.removing::before, .frame-tile.removing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  z-index: calc(var(--z-raised) + 1);
+  width: calc(var(--icon-px) * 6);
+  height: calc(var(--icon-px) * 6);
+  background: var(--text-primary);
+  -webkit-mask: url('icons/remove.svg') center / 100% 100% no-repeat;
+  mask: url('icons/remove.svg') center / 100% 100% no-repeat;
 }
 
 /* No primary/secondary "in use" indicator (§1.3): deliberately deferred,
@@ -1053,9 +1034,10 @@ body.group-view #palette-trigger, body.group-view #palette-bar {
    not a generic gray, so it reads as that edge folding out to a point
    rather than an unrelated triangle floating in front of the panel. */
 .slide-out-bar[data-side="right"] .slide-out-chevron { left: calc(var(--space-12) * -1); transform: translateY(-50%); border-right-color: var(--panel-edge-highlight); }
-.slide-out-bar[data-side="left"] .slide-out-chevron { right: calc(var(--space-12) * -1); transform: translateY(-50%); border-left-color: var(--panel-edge-shadow); }
-.slide-out-bar[data-side="up"] .slide-out-chevron { bottom: calc(var(--space-8) * -1); transform: translateX(-50%); border-top-color: var(--panel-edge-shadow); }
-.slide-out-bar[data-side="down"] .slide-out-chevron { top: calc(var(--space-8) * -1); transform: translateX(-50%); border-bottom-color: var(--panel-edge-highlight); }
+.slide-out-bar[data-side="left"] .slide-out-chevron { right: calc(var(--space-12) * -1); transform: translateY(-50%); border-left-color: var(--panel-edge-shadow-solid); }
+/* The triangle is the near half of its 12px box, so the box goes fully past the bar's outer edge (padding edge + border) to sit flush against it. */
+.slide-out-bar[data-side="up"] .slide-out-chevron { bottom: calc((var(--space-12) + var(--border-width)) * -1); transform: translateX(-50%); border-top-color: var(--panel-edge-shadow-solid); }
+.slide-out-bar[data-side="down"] .slide-out-chevron { top: calc((var(--space-12) + var(--border-width)) * -1); transform: translateX(-50%); border-bottom-color: var(--panel-edge-highlight); }
 
 /* ---- Export panel (§14) ----------------------------------------------
    A docked full-height side panel (like Project/Layers), not a floating

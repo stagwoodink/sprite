@@ -36,11 +36,11 @@ import { detectGrid, buildSheetFile } from './spritesheet.js';
 import { askSheetGrid } from './spritesheet-panel.js';
 import { paletteNameFromFile } from './palette-parse.js';
 import { isImageFile } from './image-import.js';
-import { addReference, removeReference, resolveReference, drawableReferences, referencesOf } from './references.js';
+import { addReference, removeReference, reorderReference, resolveReference, drawableReferences, referencesOf } from './references.js';
 import { exportFile, exportCollection, exportProjectSprite, onExportProgress } from './export.js';
 import { unzipSync } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 import { SHAPE_OUTLINES, constrainSquare } from './shapes.js';
-import { openSlideOut } from './slide-out.js';
+import { openSlideOut, snapPx } from './slide-out.js';
 import { visibleOrder } from './ordering.js';
 import { watchPixelSnap } from './pixel-snap.js';
 import { watchCursorScale } from './cursors.js';
@@ -113,6 +113,8 @@ const zoomLabel = document.createElement('div');
 zoomLabel.className = 'tool-tag-label tool-tag-label--divider';
 const primarySwatch = document.createElement('div');
 primarySwatch.className = 'tool-tag-swatch';
+primarySwatch.addEventListener('mouseenter', () => showTip(colors.primary()));
+primarySwatch.addEventListener('mouseleave', () => showTip(null));
 // Export progress (§14, export.js's onExportProgress): a small bar that
 // takes the tool label's place while an export is running, so it doesn't
 // need its own reserved slot the rest of the time.
@@ -279,19 +281,22 @@ function updatePushes() {
   // Both corner tags always sit as far into their corner as they can: only
   // lifted above the palette when it's actually visible, only pulled in
   // from their side when that side panel is actually open.
-  versionTab.style.setProperty('--push-right', rightPush);
+  versionTab.style.setProperty('--push-right', versionPush ? `max(${rightPush}, ${versionPush}px)` : rightPush);
   versionTab.style.setProperty('--push-bottom', bottomPush);
   toolTag.style.setProperty('--push-left', slideOutPush ? `max(${leftPush}, ${slideOutPush}px)` : leftPush);
   toolTag.style.setProperty('--push-bottom', bottomPush);
 }
 
 // An open slide-out that covers the tool tag's corner shoves the tag past
-// its own right edge instead of hiding it.
-let slideOutPush = 0;
+// its own right edge instead of hiding it. The version tag does the same to the
+// left (a menu from the layers panel opens leftward over it).
+let slideOutPush = 0, versionPush = 0;
 document.addEventListener('slideout-bounds', (e) => {
-  const bar = e.detail, tag = toolTag.getBoundingClientRect();
+  const bar = e.detail, tag = toolTag.getBoundingClientRect(), version = versionTab.getBoundingClientRect();
   const covers = bar && bar.top < tag.bottom && bar.bottom > tag.top && bar.left < tag.right;
-  slideOutPush = covers ? bar.right : 0;
+  const coversVersion = bar && bar.top < version.bottom && bar.bottom > version.top && bar.right > version.left;
+  slideOutPush = covers ? snapPx(bar.right) : 0;
+  versionPush = coversVersion ? snapPx(window.innerWidth - bar.left) : 0;
   updatePushes();
 });
 
@@ -1530,6 +1535,7 @@ function redrawLayersPanel(force = false) {
       resolveReference(ref, { interactive: true }).finally(() => draw());
     },
     onToggleReferenceMode: (id) => toggleReferenceMode(id),
+    onReorderReference: (from, to) => { reorderReference(file, from, to); draw(); autosave(); },
     onRemoveReference: (id) => { removeReference(file, id); if (activeReferenceId === id) activeReferenceId = null; draw(); autosave(); },
     // Both can change what's actually composited (a deleted group's members
     // re-render at full visibility; a hidden group's members stop
@@ -2671,7 +2677,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Tab' && !e.repeat) {
     e.preventDefault();
-    if (e.shiftKey) { toggleHideAllPanels(); return; }
+    if (!e.shiftKey) { toggleHideAllPanels(); return; }
     // Colors/Layers/Timeline aren't reachable while viewing a group: only
     // Projects is left to cycle to.
     const cycle = activeGroupId ? ['projects'] : PANEL_CYCLE;

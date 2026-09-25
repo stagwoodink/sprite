@@ -22,13 +22,43 @@ import { button } from './ui.js';
 // No margin: every docked panel/edge in this app sits flush at 0, and a
 // clamped bar has to match that: an arbitrary few-px gap here read as the
 // menu floating loose instead of belonging to the grid.
-function clampCross(bar, chevron, axis, anchorStart, anchorSize, barSize, viewportSize) {
-  let start = anchorStart;
-  if (start + barSize > viewportSize) {
-    start = Math.max(0, viewportSize - barSize);
-  }
+// The bar runs from `low` (a docked panel's edge, or 0) to `viewportSize` (the
+// far limit): it is kept inside them, and a bar within a few device pixels of
+// either edge is pulled flush to it, since a sliver of gap reads as a mistake.
+// The chevron is placed from the bar's padding edge, so the bar's own border is
+// taken off to keep it centred on the anchor.
+function clampCross(bar, chevron, axis, anchorStart, anchorSize, barSize, viewportSize, low = 0) {
+  const near = 3 / (window.devicePixelRatio || 1);
+  let start = Math.max(anchorStart, low);
+  if (start + barSize > viewportSize - near) start = Math.max(low, viewportSize - barSize);
+  else if (start - low < near) start = low;
+  start = snapPx(start);
   bar.style[axis] = start + 'px';
-  chevron.style[axis] = (anchorStart + anchorSize / 2 - start) + 'px';
+  const border = axis === 'left' ? bar.clientLeft : bar.clientTop;
+  chevron.style[axis] = snapPx(anchorStart + anchorSize / 2 - start - border) + 'px';
+}
+
+// Whole device pixels: a menu (or the corner tags it shoves) that comes to rest
+// between two pixels is resampled and blurs. Only for positions with no edge to
+// match: the side a menu touches its anchor or panel on stays exactly on that
+// edge, or rounding it would leave a gap.
+export function snapPx(px) {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.round(px * dpr) / dpr;
+}
+
+// Where a menu opening up or down has to start on the left: the edge of an open
+// panel on that side (the project panel is 0 wide, and so at 0, while closed).
+function leftLimit() {
+  const panel = document.querySelector('.panel-overlay-left');
+  return panel ? panel.getBoundingClientRect().right : 0;
+}
+
+// Where a menu opening up or down has to stop on the right: the viewport's edge, or the
+// edge of an open panel on that side, so it sits flush against it instead of under it.
+function rightLimit() {
+  const panel = document.querySelector('.panel-overlay-right');
+  return panel ? Math.min(window.innerWidth, panel.getBoundingClientRect().left) : window.innerWidth;
 }
 
 // Positions `bar` on the given side, adds a chevron pointing at the anchor,
@@ -66,11 +96,11 @@ export function positionSlideOut(bar, anchor, side) {
     fromTransform = 'translateX(12px)';
   } else if (side === 'up') {
     bar.style.bottom = window.innerHeight - rect.top + 'px';
-    clampCross(bar, chevron, 'left', rect.left, rect.width, bar.getBoundingClientRect().width, window.innerWidth);
+    clampCross(bar, chevron, 'left', rect.left, rect.width, bar.getBoundingClientRect().width, rightLimit(), leftLimit());
     fromTransform = 'translateY(12px)';
   } else {
     bar.style.top = rect.bottom + 'px';
-    clampCross(bar, chevron, 'left', rect.left, rect.width, bar.getBoundingClientRect().width, window.innerWidth);
+    clampCross(bar, chevron, 'left', rect.left, rect.width, bar.getBoundingClientRect().width, rightLimit(), leftLimit());
     fromTransform = 'translateY(-12px)';
   }
   return fromTransform;
@@ -117,8 +147,10 @@ let activeAnchor = null;
 // the panel can't otherwise tell the difference between "the mouse left
 // for good" and "the mouse is just over the menu I opened."
 let activeOwnerPanel = null;
+// Only a row lights up. A standalone button (the palettes menu, the add buttons)
+// keeps its normal look while its menu is open.
 function anchorRow(anchor) {
-  return anchor.closest('.tile, .project-header') || anchor;
+  return anchor.closest('.tile, .project-header');
 }
 function clearActiveSlideOut() {
   if (activeAnchor) activeAnchor.classList.remove('active');
@@ -164,7 +196,7 @@ export function closeSlideOut() {
 function finishOpen(bar, anchor, side, { onDismiss, snapWidth } = {}) {
   openAnchorEl = anchor;
   activeAnchor = anchorRow(anchor);
-  activeAnchor.classList.add('active');
+  activeAnchor?.classList.add('active');
   activeOwnerPanel = anchor.closest('.panel-overlay');
   activeOwnerPanel?.dispatchEvent(new CustomEvent('slideout-open'));
 

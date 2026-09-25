@@ -74,15 +74,15 @@ or any static server (`python3 -m http.server`). Use a Chromium-based browser fo
 
 ## Controls
 
-Press `?` in the app to see this list. `Ctrl`(left)+Arrow focuses a panel (Timeline, Layers, Colors, Projects for Up, Right, Down, Left). A focused panel owns the keyboard until `Tab` moves to another panel or a tap of left `Ctrl` returns focus to the canvas. Hovering a panel focuses it too.
+Press `?` in the app to see this list. `Ctrl`(left)+Arrow focuses a panel (Timeline, Layers, Colors, Projects for Up, Right, Down, Left). A focused panel owns the keyboard until `Shift+Tab` moves to another panel or a tap of left `Ctrl` returns focus to the canvas. Hovering a panel focuses it too.
 
 ### Global
 
 | Input | Action |
 |---|---|
 | `?` | Toggle controls help modal |
-| `Tab` | Cycle focus: Timeline → Layers → Colors → Projects  |
-| `Shift+Tab` | Pin/unpin every panel at once |
+| `Shift+Tab` | Cycle focus: Timeline → Layers → Colors → Projects  |
+| `Tab` | Pin/unpin every panel at once |
 | `~` | Pin/unpin the corner tags |
 | `` ` `` (hold) + Left/Right | Select a version-tab button; `Enter` launches it |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
