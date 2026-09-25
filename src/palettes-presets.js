@@ -17,12 +17,13 @@ export const PRESETS = {
     chips: ['#01121C', '#20594A', '#6DA56E', '#D8F7D8'],
   },
   stagwood: {
-    // Dark red, red, almost-white, almost-black: the brand's 4 colors
-    // (CONTEXT.md's Palette Preset definition). Red is the exact accent
+    // Almost-black, almost-white, red, dark red: the brand's 4 colors
+    // (CONTEXT.md's Palette Preset definition), black first so a new
+    // project starts drawing in black. Red is the exact accent
     // sampled from spec/stagwood.png; the other three reuse the app's own
     // existing tokens for the same roles rather than inventing new hexes.
     name: 'Stagwood',
-    chips: ['#7A0C18', '#BE1425', '#F2F2F0', '#121214'],
+    chips: ['#121214', '#F2F2F0', '#BE1425', '#7A0C18'],
   },
 };
 

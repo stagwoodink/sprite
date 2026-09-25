@@ -59,8 +59,11 @@ export function snapLength(px, dpr = deviceRatio()) {
 // Shared screen<->canvas-pixel mapping, used by both the renderer and input
 // handling so they can never drift out of sync (§6: zoom-to-fit, free zoom,
 // pan).
+// The canvas takes at most FIT_FILL of the window on its tighter side, so the default view leaves at least
+// a fifth of the window as space around it (more, since the scale is floored to a whole number of device pixels).
+const FIT_FILL = 0.8;
 export function fitScale(model, viewW, viewH, dpr = deviceRatio()) {
-  return Math.max(1, Math.floor(Math.min(viewW / model.width, viewH / model.height) * dpr + EPS)) / dpr;
+  return Math.max(1, Math.floor(Math.min(viewW / model.width, viewH / model.height) * FIT_FILL * dpr + EPS)) / dpr;
 }
 
 // Zoom in until at least MIN_VISIBLE_PX canvas pixels still span the
