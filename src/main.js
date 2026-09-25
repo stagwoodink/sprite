@@ -58,6 +58,7 @@ const exportPanel = document.getElementById('export-panel');
 const openProjectPanel = document.getElementById('open-project-panel');
 const layersPanel = document.getElementById('layers-panel');
 const timelineBar = document.getElementById('timeline-bar');
+document.title = `Sprite v${VERSION} (ALPHA)`;
 const helpTag = document.getElementById('help-tag');
 const toolTag = document.getElementById('tool-tag');
 helpTag.classList.add('panel');
