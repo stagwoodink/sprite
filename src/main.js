@@ -1290,13 +1290,25 @@ function redrawExportPanel() {
 // sense next to it). Switching to a new target while already open just
 // re-points it, rather than toggling closed: only the plain "E" shortcut
 // (toggleExportForActiveFile, below) toggles.
+let exportOpenedProject = false; // Export had to open the Project panel to sit beside it
 function openExport(target) {
   if (openProjectReveal.isPinned()) openProjectReveal.forceHide(); // same docked slot: mutually exclusive
   exportTarget = target;
+  if (!exportReveal.isPinned()) exportOpenedProject = !projectReveal.isPinned();
   projectReveal.setPinned(true);
   exportReveal.setPinned(true);
   redrawExportPanel();
 }
+
+// A click anywhere outside the Export panel closes it (and the Project panel too, if Export was what opened it).
+// The Project panel, menus and dialogs spawned from Export count as inside.
+document.addEventListener('pointerdown', (e) => {
+  if (!exportReveal || !exportReveal.isPinned()) return;
+  if (e.target.closest('#export-panel, #project-panel, .slide-out-bar, .modal-overlay')) return;
+  exportReveal.forceHide();
+  if (exportOpenedProject) projectReveal.forceHide();
+  exportOpenedProject = false;
+}, true);
 
 function toggleExportForActiveFile() {
   if (exportReveal.isPinned()) { exportReveal.forceHide(); return; }
@@ -2074,7 +2086,7 @@ function deleteSelectionOrHover() {
       }
     }
   } else if (hoverPixel) {
-    setPixel(model, hoverPixel.x, hoverPixel.y, null);
+    for (const [x, y] of mirroredPoints(model, hoverPixel.x, hoverPixel.y, paintOptions.symmetry)) setPixel(model, x, y, null);
   }
   const { before, after } = diffFromSnapshot(model, snapshot);
   history.commit({ type: 'pixelEdit', before, after });

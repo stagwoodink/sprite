@@ -45,7 +45,7 @@ export function createInputController(canvas, model, colors, onPlace, history, g
   }
 
   function eraseAt(x, y) {
-    paintAt(model, x, y, { size: getBrushSize(), erase: true, mask: getSelectionMask() });
+    paintAt(model, x, y, { symmetry: paintOptions.symmetry, size: getBrushSize(), erase: true, mask: getSelectionMask() });
   }
 
   function onPointerDown(e) {
