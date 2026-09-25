@@ -516,7 +516,7 @@ try {
       project = await loadProject(backend, mostRecent.id);
     }
   }
-  if (!project) project = createProject('My Project');
+  if (!project) project = (await loadStarterProject()) || createProject('My Project');
 } catch (err) {
   console.error('Storage backend unavailable, autosave disabled:', err);
   backend = { write: async () => {}, read: async () => null, delete: async () => {}, list: async () => [] };
@@ -1380,23 +1380,41 @@ async function splitProject() {
 // same field defaults/migrations every other saved project gets on load.
 const importProject = () => pickFile('.sprite,.json,application/json', importProjectFile);
 
+// The project inside a `.sprite` archive (or a pre-archive plain JSON export), as saved data.
+function projectFromArchive(bytes) {
+  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B; // 'PK': zip local-file-header signature
+  if (!isZip) {
+    const data = JSON.parse(new TextDecoder().decode(bytes));
+    data.files = data.files.map((f) => parseFile(f, null));
+    return data;
+  }
+  const entries = unzipSync(bytes);
+  const decode = (name) => JSON.parse(new TextDecoder().decode(entries[name]));
+  const meta = decode('project.json');
+  return {
+    name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex,
+    collections: meta.collections, files: meta.fileNames.map((name) => parseFile(decode(`${name}.sprite`), (kind, id) => entries[kind === 'chunk' ? `${name}.sprite.${id}` : kind === 'frame' ? `${name}.sprite.frame-${id}` : `${name}.sprite.bin`] ?? null)),
+  };
+}
+
+// First run: the project that ships with the app (starter/), saved as the user's own copy.
+// Null if it cannot be fetched or read, and the caller starts an empty project instead.
+async function loadStarterProject() {
+  try {
+    const res = await fetch('starter/sprite-ui.sprite');
+    if (!res.ok) return null;
+    const starter = { ...projectFromArchive(new Uint8Array(await res.arrayBuffer())), id: crypto.randomUUID() };
+    await saveProject(backend, starter);
+    return await loadProject(backend, starter.id);
+  } catch (err) {
+    console.error('Could not load the starter project:', err);
+    return null;
+  }
+}
+
 async function importProjectFile(file) {
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B; // 'PK': zip local-file-header signature
-    let data;
-    if (isZip) {
-      const entries = unzipSync(bytes);
-      const decode = (name) => JSON.parse(new TextDecoder().decode(entries[name]));
-      const meta = decode('project.json');
-      data = {
-        name: meta.name, palette: meta.palette, activeFileIndex: meta.activeFileIndex,
-        collections: meta.collections, files: meta.fileNames.map((name) => parseFile(decode(`${name}.sprite`), (kind, id) => entries[kind === 'chunk' ? `${name}.sprite.${id}` : kind === 'frame' ? `${name}.sprite.frame-${id}` : `${name}.sprite.bin`] ?? null)),
-      };
-    } else {
-      data = JSON.parse(new TextDecoder().decode(bytes));
-      data.files = data.files.map((f) => parseFile(f, null));
-    }
+    const data = projectFromArchive(new Uint8Array(await file.arrayBuffer()));
     // Fresh id: importing an exported copy of a still-open (or
     // previously-imported) project shouldn't collide with it in the registry.
     const imported = { ...data, id: crypto.randomUUID() };
