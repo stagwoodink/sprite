@@ -1403,7 +1403,7 @@ async function loadStarterProject() {
   try {
     const res = await fetch('starter/sprite-ui.sprite');
     if (!res.ok) return null;
-    const starter = { ...projectFromArchive(new Uint8Array(await res.arrayBuffer())), id: crypto.randomUUID() };
+    const starter = { ...projectFromArchive(new Uint8Array(await res.arrayBuffer())), id: crypto.randomUUID(), name: 'Sprite UI' };
     await saveProject(backend, starter);
     return await loadProject(backend, starter.id);
   } catch (err) {
