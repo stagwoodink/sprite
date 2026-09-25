@@ -6,7 +6,7 @@ import { button, setIcon, hoverTip, showTip, makeReorderable, startInlineEdit } 
 import { layerOrder, compositeLayerAt } from './sprite-file.js';
 import { visibleOrder } from './ordering.js';
 import { referencesOf, isResolved } from './references.js';
-import { openSlideOut } from './slide-out.js';
+import { openSlideOut, closeSlideOut } from './slide-out.js';
 
 const THUMB_H = BLOCK * 2; // layer tiles are 2 blocks tall
 
@@ -46,6 +46,8 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     },
     onContextMenu: (e) => { e.preventDefault(); callbacks.onAddGroup(); },
   });
+  // Double click: a new layer straight away, like the project panel's new canvas.
+  addBtn.addEventListener('dblclick', () => { closeSlideOut(); callbacks.onAddLayer(); });
 
   function buildLayerRow(layer, i, pos, nested) {
     const row = document.createElement('div');
@@ -124,12 +126,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
       startInlineEdit(label, layer.name, (v) => { if (v) { layer.name = v; callbacks.onRename(); } });
     });
 
-    const del = button({
-      glyph: '✕', icon: true, className: 'btn--reveal', title: 'Delete layer',
-      onClick: (e) => { e.stopPropagation(); callbacks.onDelete(i); },
-    });
-
-    row.append(thumbWrap, handle, label, del);
+    row.append(thumbWrap, handle, label);
     row.addEventListener('click', (e) => {
       // Shift/Alt-click build a multi-layer selection instead of switching
       // the active layer: same pattern as the file list's rows.
@@ -162,6 +159,7 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
       listEl: stack,
       boundsEl: container,
       onReorder: (from, to) => callbacks.onReorder(from, to),
+      onRemove: () => callbacks.onDeleteGroup(group.id), // its layers move to the first group
     });
 
     const eyePip = document.createElement('div');
@@ -188,13 +186,8 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
       startInlineEdit(label, group.name, (v) => { if (v) { group.name = v; callbacks.onRename(); } });
     });
 
-    const deleteBtn = button({
-      glyph: '✕', icon: true, className: 'btn--reveal', title: 'Delete group (layers move to the first group)',
-      onClick: (e) => { e.stopPropagation(); callbacks.onDeleteGroup(group.id); },
-    });
-
     // Fold arrow directly between the grab handle and the name.
-    row.append(handle, arrow, label, eyePip, deleteBtn);
+    row.append(handle, arrow, label, eyePip);
     // A click selects the group. A double click on empty space in the row folds or
     // unfolds it; on the name's text it renames instead (above).
     row.addEventListener('click', () => { if (group.id !== focusedGroupId) callbacks.onSelectGroup(group.id); });
@@ -242,20 +235,29 @@ export function renderLayersPanel(container, file, callbacks, focusedGroupId, la
     header.append(title);
 
     section.append(header);
-    for (const ref of referencesOf(file)) {
+    referencesOf(file).forEach((ref, refIndex) => {
       const row = document.createElement('div');
       row.className = 'layer-row tile reveal-on-hover' + (ref.id === activeReferenceId ? ' selected' : '');
       const label = document.createElement('div');
       label.className = 'layer-label';
       label.textContent = isResolved(ref) ? ref.name : `${ref.name} (click to relink)`;
+      const handle = document.createElement('div');
+      handle.className = 'drag-handle';
+      setIcon(handle, '⋮');
+      makeReorderable(handle, row, refIndex, {
+        listEl: section,
+        boundsEl: container,
+        onReorder: (from, to) => callbacks.onReorderReference(from, to),
+        onRemove: () => callbacks.onRemoveReference(ref.id),
+      });
       row.append(
+        handle,
         label,
         button({ glyph: '⤢', icon: true, className: 'btn--reveal', title: 'Fit to canvas / full size (:)', onClick: (e) => { e.stopPropagation(); callbacks.onToggleReferenceMode(ref.id); } }),
-        button({ glyph: '✕', icon: true, className: 'btn--reveal', title: 'Remove reference', onClick: (e) => { e.stopPropagation(); callbacks.onRemoveReference(ref.id); } }),
       );
       row.addEventListener('click', () => callbacks.onSelectReference(ref.id));
       section.append(row);
-    }
+    });
     return section;
   }
 }

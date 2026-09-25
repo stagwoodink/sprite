@@ -30,6 +30,13 @@ export async function addReference(file, image, handle) {
   return ref;
 }
 
+// Same splice-then-reinsert convention as the other reorders; later references draw over earlier ones.
+export function reorderReference(file, from, to) {
+  const refs = referencesOf(file);
+  const [moved] = refs.splice(from, 1);
+  refs.splice(to, 0, moved);
+}
+
 export function removeReference(file, id) {
   const refs = referencesOf(file);
   refs.splice(refs.findIndex((r) => r.id === id), 1);
