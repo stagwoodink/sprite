@@ -6,6 +6,5 @@ export const VERSION = '0.5.4';
 
 export const GITHUB_ISSUES_URL = 'https://github.com/stagwoodink/sprite/issues/new?template=bug_report.yml';
 export const ITCH_IO_URL = 'https://xanderstagwood.itch.io/sprite';
-// ponytail: placeholder page, replace with the real Ko-fi URL.
 export const KOFI_URL = 'https://ko-fi.com/xanderstagwood';
 export const DISCORD_URL = 'https://discord.gg/TFvXQdrjYM';
